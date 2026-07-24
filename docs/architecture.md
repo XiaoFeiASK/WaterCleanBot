@@ -1,21 +1,21 @@
-# Architecture
+# 架构
 
-This document explains the first deployable shape of the platform.
+本文档说明平台第一个可部署版本的形态。
 
 ```text
-Robot -> MQTT Broker -> Go backend -> PostgreSQL/PostGIS
-                              |
-                              -> Management dashboard API
+机器人 -> MQTT 消息代理 -> Go 后端 -> PostgreSQL/PostGIS
+                                 |
+                                 -> 管理看板 API
 ```
 
-## Components
+## 组件
 
-- Robot firmware publishes telemetry and subscribes to command topics.
-- MQTT Broker routes telemetry, command, and acknowledgement messages.
-- Go backend validates messages and writes to PostgreSQL.
-- PostgreSQL/PostGIS stores business, historical telemetry, and spatial data.
-- Management dashboard calls HTTPS APIs exposed by the Go backend.
+- 机器人固件发布遥测，并订阅命令主题。
+- MQTT 消息代理负责路由遥测、命令和确认消息。
+- Go 后端校验消息并写入 PostgreSQL。
+- PostgreSQL/PostGIS 存储业务数据、历史遥测和空间数据。
+- 管理看板调用 Go 后端暴露的 HTTPS API。
 
-## First-Version Rule
+## 首版规则
 
-Keep the first version as one Go backend service. Do not split microservices until the telemetry path and operational needs are proven.
+首版保持为一个 Go 后端服务。在遥测链路和运维需求得到验证前，不拆分微服务。

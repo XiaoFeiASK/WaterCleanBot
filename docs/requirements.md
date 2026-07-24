@@ -1,21 +1,21 @@
-# Requirements Notes
+# 需求说明
 
-This file captures product and database questions that must be confirmed before production design is frozen.
+本文档记录在生产设计冻结前必须确认的产品和数据库问题。
 
-## Questions To Confirm
+## 待确认问题
 
-- How many robots are expected in the first batch?
-- How many robots are expected after one year?
-- How often does each robot report telemetry?
-- Which telemetry fields are mandatory: location, battery, speed, trash weight, water quality, fault code?
-- How long should raw telemetry be retained?
-- Which aggregate data must be retained long term?
-- What are the RPO and RTO targets?
-- Which roles can view, control, and maintain robots?
+- 首批预计接入多少台机器人？
+- 一年后预计接入多少台机器人？
+- 每台机器人多久上报一次遥测？
+- 哪些遥测字段是必填项：位置、电量、速度、垃圾重量、水质、故障码？
+- 原始遥测数据需要保留多久？
+- 哪些聚合数据需要长期保留？
+- RPO 和 RTO 目标分别是多少？
+- 哪些角色可以查看、控制和维护机器人？
 
-## Initial Assumptions
+## 初始假设
 
-- Coordinates use WGS84 / EPSG:4326.
-- PostgreSQL stores all timestamps as `timestamptz`.
-- Robots never connect to PostgreSQL directly.
-- The backend performs validation, deduplication, and transactional writes.
+- 坐标使用 WGS84 / EPSG:4326。
+- PostgreSQL 使用 `timestamptz` 存储所有时间戳。
+- 机器人绝不直接连接 PostgreSQL。
+- 后端负责校验、去重和事务写入。

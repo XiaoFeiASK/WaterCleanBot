@@ -1,23 +1,23 @@
-# Database Design
+# 数据库设计
 
-This document describes the first database model.
+本文档描述首版数据库模型。
 
-## Core Tables
+## 核心表
 
-- `robots`: physical robot records.
-- `missions`: planned cleaning missions.
-- `mission_waypoints`: planned mission path points.
-- `mission_runs`: actual execution records for missions.
-- `telemetry_samples`: historical telemetry records.
-- `robot_shadow`: latest state per robot.
-- `alarms`: robot and mission alarms.
-- `commands`: backend commands sent to robots.
+- `robots`：实体机器人记录。
+- `missions`：计划清洁任务。
+- `mission_waypoints`：计划任务路径点。
+- `mission_runs`：任务实际执行记录。
+- `telemetry_samples`：历史遥测记录。
+- `robot_shadow`：每台机器人的最新状态。
+- `alarms`：机器人和任务告警。
+- `commands`：后端发送给机器人的命令。
 
-## Design Rules
+## 设计规则
 
-- Use UUID primary keys for backend records.
-- Use unique robot codes such as `H20-001`.
-- Use PostGIS point columns for location.
-- Use `robot_id + boot_id + seq_no` for telemetry idempotency.
-- Insert telemetry history and update `robot_shadow` in one transaction.
-- Add indexes for `(robot_id, reported_at DESC)` and spatial queries.
+- 后端记录使用 UUID 主键。
+- 使用唯一机器人编码，例如 `H20-001`。
+- 位置字段使用 PostGIS 点列。
+- 使用 `robot_id + boot_id + seq_no` 保证遥测幂等。
+- 在同一个事务中插入遥测历史并更新 `robot_shadow`。
+- 为 `(robot_id, reported_at DESC)` 和空间查询添加索引。

@@ -1,8 +1,8 @@
-# MQTT Contract
+# MQTT 协议约定
 
-This document defines MQTT topics and payload rules.
+本文档定义 MQTT 主题和载荷规则。
 
-## Topics
+## 主题
 
 ```text
 v1/robots/{robotCode}/telemetry
@@ -10,14 +10,14 @@ v1/robots/{robotCode}/commands
 v1/robots/{robotCode}/acks
 ```
 
-The backend subscribes to:
+后端订阅以下主题：
 
 ```text
 v1/robots/+/telemetry
 v1/robots/+/acks
 ```
 
-## Telemetry Payload
+## 遥测载荷
 
 ```json
 {
@@ -36,10 +36,10 @@ v1/robots/+/acks
 }
 ```
 
-## Validation Rules
+## 校验规则
 
-- Topic robot code must match the payload robot code.
-- `boot_id` and `seq_no` are required for deduplication.
-- Latitude must be between -90 and 90.
-- Longitude must be between -180 and 180.
-- Battery percentage must be between 0 and 100.
+- 主题中的机器人编码必须与载荷中的机器人编码一致。
+- `boot_id` 和 `seq_no` 是去重必填字段。
+- 纬度必须在 -90 到 90 之间。
+- 经度必须在 -180 到 180 之间。
+- 电量百分比必须在 0 到 100 之间。

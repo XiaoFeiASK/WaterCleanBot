@@ -1,21 +1,21 @@
-# Deployment Checklist
+# 部署检查清单
 
-Use this checklist before staging or production deployment.
+在预发或生产部署前使用此清单。
 
-## Staging
+## 预发环境
 
-- Environment variables are configured outside Git.
-- PostgreSQL/PostGIS starts successfully.
-- All migrations run from an empty database.
-- Seed data is limited to development or staging only.
-- MQTT broker is reachable by backend and test robot clients.
+- 环境变量已在 Git 之外配置。
+- PostgreSQL/PostGIS 能够成功启动。
+- 所有迁移都能从空数据库开始执行。
+- 种子数据仅限开发或预发环境使用。
+- 后端和测试机器人客户端都能访问 MQTT 消息代理。
 
-## Production
+## 生产环境
 
-- PostgreSQL port 5432 is not exposed to the public internet.
-- API uses HTTPS.
-- MQTT uses TLS on port 8883.
-- Robot credentials and ACL rules are configured.
-- Database backup has run successfully.
-- Backup restore has been tested in an isolated environment.
-- Logs and basic alerts are enabled.
+- PostgreSQL 的 5432 端口未暴露到公网。
+- API 使用 HTTPS。
+- MQTT 在 8883 端口使用 TLS。
+- 已配置机器人凭据和 ACL 规则。
+- 数据库备份已成功运行。
+- 已在隔离环境测试备份恢复。
+- 已启用日志和基础告警。

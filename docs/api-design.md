@@ -1,38 +1,38 @@
-# API Design
+# API 设计
 
-This document lists the first HTTP APIs for the management dashboard.
+本文档列出管理看板首批需要使用的 HTTP API。
 
-## Health
+## 健康检查
 
 ```text
 GET /health
 ```
 
-Returns whether the backend process and database configuration are usable.
+返回后端进程和数据库配置是否可用。
 
-## Robots
+## 机器人
 
 ```text
 GET /api/robots
 GET /api/robots/{robotCode}
 ```
 
-Returns robot records and status summaries.
+返回机器人记录和状态摘要。
 
-## Telemetry
+## 遥测
 
 ```text
 GET /api/robots/{robotCode}/telemetry/latest
 GET /api/robots/{robotCode}/telemetry/history
 ```
 
-Returns latest robot state and historical trajectory data.
+返回机器人最新状态和历史轨迹数据。
 
-## Commands
+## 命令
 
 ```text
 POST /api/robots/{robotCode}/commands
 GET /api/commands/{commandID}
 ```
 
-Creates robot commands and checks command execution status.
+创建机器人命令并检查命令执行状态。
