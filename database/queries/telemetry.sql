@@ -1,5 +1,5 @@
--- Recent telemetry query for one robot.
--- Bind the robot code and time window from application code.
+-- 单台机器人的最近遥测查询。
+-- 从应用代码绑定机器人编码和时间窗口。
 SELECT t.reported_at,
        ST_Y(t.location::geometry) AS latitude,
        ST_X(t.location::geometry) AS longitude,

@@ -1,5 +1,5 @@
--- robot_shadow stores the latest known state for each robot.
--- It should be updated in the same transaction that inserts telemetry_samples.
+-- robot_shadow 存储每台机器人的最新已知状态。
+-- 它应与插入 telemetry_samples 在同一个事务中更新。
 CREATE TABLE IF NOT EXISTS robot_shadow (
     robot_id uuid PRIMARY KEY REFERENCES robots(id) ON DELETE CASCADE,
     last_telemetry_id uuid REFERENCES telemetry_samples(id) ON DELETE SET NULL,

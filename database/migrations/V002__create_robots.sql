@@ -1,4 +1,4 @@
--- robots stores the backend record for each physical cleaning robot.
+-- robots 存储每台实体清洁机器人的后端记录。
 CREATE TABLE IF NOT EXISTS robots (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     code text NOT NULL UNIQUE,
@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS robots (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Robot status is frequently used by dashboard filters.
+-- 管理看板过滤器会频繁使用机器人状态。
 CREATE INDEX IF NOT EXISTS idx_robots_status ON robots (status);

@@ -1,26 +1,26 @@
-# Local environment files contain secrets and must never be committed.
+# 本地环境文件包含密钥，绝不能提交。
 .env
 .env.*
 !.env.example
 
-# Go build outputs and coverage files are generated locally.
+# Go 构建产物和覆盖率文件在本地生成。
 bin/
 dist/
 .tmp-go-cache/
 coverage.out
 *.test
 
-# Editor and operating-system noise should stay out of version control.
+# 编辑器和操作系统噪声不应进入版本控制。
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Local database dumps may contain real robot or customer data.
+# 本地数据库转储可能包含真实机器人或客户数据。
 *.dump
 *.backup
 *.sql.gz
 
-# Temporary files created during local experiments.
+# 本地实验期间创建的临时文件。
 tmp/
 logs/

@@ -2,8 +2,8 @@ package telemetry
 
 import "errors"
 
-// ValidateSample protects the database from malformed robot telemetry.
-// Keep validation close to the telemetry model so MQTT and HTTP ingestion share the same rules.
+// ValidateSample 保护数据库免受畸形机器人遥测影响。
+// 将校验靠近遥测模型，便于 MQTT 和 HTTP 接入共享相同规则。
 func ValidateSample(sample Sample) error {
 	if sample.RobotCode == "" {
 		return errors.New("robot code is required")

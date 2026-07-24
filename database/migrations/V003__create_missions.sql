@@ -1,4 +1,4 @@
--- missions stores planned cleaning work assigned to robots.
+-- missions 存储分配给机器人的计划清洁任务。
 CREATE TABLE IF NOT EXISTS missions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_id uuid REFERENCES robots(id) ON DELETE SET NULL,
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS missions (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- mission_waypoints stores the planned path for a mission.
+-- mission_waypoints 存储任务的计划路径。
 CREATE TABLE IF NOT EXISTS mission_waypoints (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     mission_id uuid NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS mission_waypoints (
     UNIQUE (mission_id, sequence_no)
 );
 
--- mission_runs stores actual mission execution attempts.
+-- mission_runs 存储实际任务执行尝试。
 CREATE TABLE IF NOT EXISTS mission_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     mission_id uuid NOT NULL REFERENCES missions(id) ON DELETE CASCADE,

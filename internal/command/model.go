@@ -2,7 +2,7 @@ package command
 
 import "time"
 
-// Command records a backend command sent to a robot and its current execution state.
+// Command 记录后端发送给机器人的命令及其当前执行状态。
 type Command struct {
 	ID          string
 	RobotCode   string

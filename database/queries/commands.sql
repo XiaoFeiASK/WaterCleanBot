@@ -1,4 +1,4 @@
--- Latest command status query for one command.
+-- 单条命令的最新命令状态查询。
 SELECT c.id,
        r.code AS robot_code,
        c.type,

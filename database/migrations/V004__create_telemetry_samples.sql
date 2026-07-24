@@ -1,5 +1,5 @@
--- telemetry_samples stores immutable historical telemetry reported by robots.
--- A later migration can convert this table to daily or monthly partitions when volume grows.
+-- telemetry_samples 存储机器人上报的不可变历史遥测。
+-- 数据量增长后，后续迁移可将此表改为按日或按月分区。
 CREATE TABLE IF NOT EXISTS telemetry_samples (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_id uuid NOT NULL REFERENCES robots(id) ON DELETE CASCADE,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS telemetry_samples (
     UNIQUE (robot_id, boot_id, seq_no)
 );
 
--- This index supports recent-track queries for one robot.
+-- 此索引用于支持单台机器人的近期轨迹查询。
 CREATE INDEX IF NOT EXISTS idx_telemetry_robot_reported ON telemetry_samples (robot_id, reported_at DESC);
 
--- This index supports map distance and bounding-area queries.
+-- 此索引用于支持地图距离和边界区域查询。
 CREATE INDEX IF NOT EXISTS idx_telemetry_location ON telemetry_samples USING gist (location);

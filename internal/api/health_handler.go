@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// healthStore describes the database check required by the health endpoint.
+// healthStore 描述健康检查端点所需的数据库检查能力。
 type healthStore interface {
 	Ping(ctx context.Context) error
 }
 
-// HealthHandler reports whether the HTTP service and database configuration are usable.
+// HealthHandler 报告 HTTP 服务和数据库配置是否可用。
 func HealthHandler(store healthStore, log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

@@ -2,17 +2,17 @@ package robot
 
 import "context"
 
-// Service owns robot business rules between HTTP handlers and the repository.
+// Service 管理 HTTP 处理器和仓储层之间的机器人业务规则。
 type Service struct {
 	repository Repository
 }
 
-// NewService creates the robot service.
+// NewService 创建机器人服务。
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository}
 }
 
-// List returns all robots visible to the caller.
+// List 返回调用方可见的所有机器人。
 func (s *Service) List(ctx context.Context) ([]Robot, error) {
 	return s.repository.List(ctx)
 }

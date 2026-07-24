@@ -2,23 +2,23 @@ package telemetry
 
 import "context"
 
-// Repository defines the database operations needed for telemetry ingestion.
-// The real implementation should insert telemetry_samples and upsert robot_shadow in one transaction.
+// Repository 定义遥测接入所需的数据库操作。
+// 真实实现应在一个事务中插入 telemetry_samples 并写入或更新 robot_shadow。
 type Repository interface {
 	SaveSample(ctx context.Context, sample Sample) error
 }
 
-// Service coordinates telemetry validation and persistence.
+// Service 协调遥测校验和持久化。
 type Service struct {
 	repository Repository
 }
 
-// NewService creates the telemetry service.
+// NewService 创建遥测服务。
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository}
 }
 
-// Ingest validates and stores one telemetry sample.
+// Ingest 校验并存储一条遥测样本。
 func (s *Service) Ingest(ctx context.Context, sample Sample) error {
 	if err := ValidateSample(sample); err != nil {
 		return err

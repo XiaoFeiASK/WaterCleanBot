@@ -1,5 +1,5 @@
--- Development-only seed data.
--- Do not load this file in production environments.
+-- 仅用于开发的种子数据。
+-- 不要在生产环境加载此文件。
 INSERT INTO robots (code, model, status)
 VALUES
     ('H20-001', 'prototype-a', 'online'),

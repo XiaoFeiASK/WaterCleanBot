@@ -2,17 +2,17 @@ package mqtt
 
 import "fmt"
 
-// TelemetryTopic returns the topic a robot publishes telemetry to.
+// TelemetryTopic 返回机器人发布遥测的主题。
 func TelemetryTopic(robotCode string) string {
 	return fmt.Sprintf("v1/robots/%s/telemetry", robotCode)
 }
 
-// CommandTopic returns the topic a robot subscribes to for backend commands.
+// CommandTopic 返回机器人订阅后端命令的主题。
 func CommandTopic(robotCode string) string {
 	return fmt.Sprintf("v1/robots/%s/commands", robotCode)
 }
 
-// AckTopic returns the topic a robot publishes command acknowledgements to.
+// AckTopic 返回机器人发布命令确认的主题。
 func AckTopic(robotCode string) string {
 	return fmt.Sprintf("v1/robots/%s/acks", robotCode)
 }

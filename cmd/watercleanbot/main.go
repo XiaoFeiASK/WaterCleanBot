@@ -16,8 +16,8 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
 )
 
-// main wires the first backend template together.
-// Real database and MQTT implementations will be added behind these packages.
+// main 组装首个后端模板。
+// 真实数据库和 MQTT 实现后续会接入这些包中。
 func main() {
 	cfg := config.Load()
 	log := logger.New(cfg.AppEnv)

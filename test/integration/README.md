@@ -1,10 +1,10 @@
-# Integration Tests
+# 集成测试
 
-This folder will contain tests that start PostgreSQL/PostGIS, apply migrations, and verify backend behavior.
+本目录将包含用于启动 PostgreSQL/PostGIS、执行迁移并验证后端行为的测试。
 
-Initial scenarios to add:
+待添加的初始场景：
 
-- Duplicate telemetry is ignored by `robot_id + boot_id + seq_no`.
-- `robot_shadow` is updated when a newer telemetry sample arrives.
-- Recent trajectory queries return points in timestamp order.
-- Spatial queries can find robots inside a selected area.
+- 通过 `robot_id + boot_id + seq_no` 忽略重复遥测。
+- 当收到更新的遥测样本时更新 `robot_shadow`。
+- 最近轨迹查询按时间戳顺序返回点。
+- 空间查询可以查找选定区域内的机器人。

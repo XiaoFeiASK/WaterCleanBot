@@ -1,4 +1,4 @@
--- commands stores control commands requested by users or backend automation.
+-- commands 存储用户或后端自动化请求的控制命令。
 CREATE TABLE IF NOT EXISTS commands (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_id uuid NOT NULL REFERENCES robots(id) ON DELETE CASCADE,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS commands (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- command_acks stores acknowledgement messages returned by robots.
+-- command_acks 存储机器人返回的确认消息。
 CREATE TABLE IF NOT EXISTS command_acks (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     command_id uuid NOT NULL REFERENCES commands(id) ON DELETE CASCADE,

@@ -2,7 +2,7 @@ package robot
 
 import "time"
 
-// Robot is the backend's basic record for one physical cleaning robot.
+// Robot 是后端中一台实体清洁机器人的基础记录。
 type Robot struct {
 	ID        string
 	Code      string

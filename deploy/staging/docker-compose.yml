@@ -1,5 +1,5 @@
-# Staging deployment template.
-# Replace example values with server-managed secrets before use.
+# 预发部署模板。
+# 使用前请将示例值替换为服务器托管的密钥。
 services:
   backend:
     image: watercleanbot-backend:staging

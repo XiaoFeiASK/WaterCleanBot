@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-// LatestTelemetryHandler will return each robot's latest state from robot_shadow.
-// Keep latest-state queries separate from historical telemetry queries.
+// LatestTelemetryHandler 将从 robot_shadow 返回每台机器人的最新状态。
+// 将最新状态查询与历史遥测查询分开。
 func LatestTelemetryHandler(log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		log.Debug("latest telemetry endpoint called")

@@ -2,8 +2,8 @@ package telemetry
 
 import "time"
 
-// Sample represents one historical telemetry message from a robot.
-// The database version should store Location as a PostGIS geography/geometry point.
+// Sample 表示来自机器人的一条历史遥测消息。
+// 数据库版本应将 Location 存储为 PostGIS 地理或几何点类型。
 type Sample struct {
 	RobotCode      string
 	BootID         string

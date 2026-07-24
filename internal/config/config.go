@@ -2,8 +2,8 @@ package config
 
 import "os"
 
-// Config contains runtime settings read from environment variables.
-// Keep this package boring and explicit so staging/production are easy to audit.
+// Config 包含从环境变量读取的运行时设置。
+// 保持此包简单且显式，便于审计预发/生产配置。
 type Config struct {
 	HTTPAddr           string
 	DatabaseURL        string
@@ -12,7 +12,7 @@ type Config struct {
 	AppEnv             string
 }
 
-// Load reads configuration from the environment and applies safe local defaults.
+// Load 从环境读取配置，并应用安全的本地默认值。
 func Load() Config {
 	return Config{
 		HTTPAddr:           getenv("HTTP_ADDR", ":8080"),

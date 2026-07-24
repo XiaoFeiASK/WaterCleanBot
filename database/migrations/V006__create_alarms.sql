@@ -1,4 +1,4 @@
--- alarms stores robot, mission, and device fault events.
+-- alarms 存储机器人、任务和设备故障事件。
 CREATE TABLE IF NOT EXISTS alarms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     robot_id uuid REFERENCES robots(id) ON DELETE SET NULL,

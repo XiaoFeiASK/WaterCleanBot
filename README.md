@@ -1,42 +1,42 @@
 # WaterCleanBot
 
-WaterCleanBot is the backend template for a water-surface trash cleaning robot platform.
+WaterCleanBot 是一个用于水面垃圾清理机器人平台的后端模板。
 
-The first backend milestone is intentionally small:
+首个后端里程碑刻意保持小范围：
 
-- Start a Go HTTP service.
-- Start PostgreSQL with PostGIS locally.
-- Define database migrations for robots, missions, telemetry, and current robot state.
-- Receive robot telemetry through MQTT in a later step.
-- Store historical telemetry in `telemetry_samples`.
-- Update the latest robot state in `robot_shadow`.
+- 启动 Go HTTP 服务。
+- 在本地启动带 PostGIS 的 PostgreSQL。
+- 为机器人、任务、遥测和当前机器人状态定义数据库迁移。
+- 在后续步骤中通过 MQTT 接收机器人遥测。
+- 将历史遥测存储到 `telemetry_samples`。
+- 更新 `robot_shadow` 中的最新机器人状态。
 
-## Architecture
+## 架构
 
 ```text
-Robot
-  -> MQTT Broker
-  -> Go backend service
+机器人
+  -> MQTT 消息代理
+  -> Go 后端服务
   -> PostgreSQL + PostGIS
-  -> Management dashboard API
+  -> 管理看板 API
 ```
 
-Robots should not connect to PostgreSQL directly. The backend service validates messages, applies idempotency rules, and writes data through SQL transactions.
+机器人不应直接连接 PostgreSQL。后端服务负责校验消息、应用幂等规则，并通过 SQL 事务写入数据。
 
-## Repository Layout
+## 仓库结构
 
 ```text
-cmd/                  Application entry points.
-internal/             Private Go packages for this backend service.
-database/migrations/  Versioned SQL migration files.
-database/seeds/       Development-only seed data.
-docs/                 Requirements, architecture, MQTT, API, and deployment notes.
-scripts/              Local helper scripts for database and deployment work.
-test/                 Integration-test fixtures and future test packages.
-deploy/               Staging and production deployment templates.
+cmd/                  应用程序入口。
+internal/             该后端服务的私有 Go 包。
+database/migrations/  带版本号的 SQL 迁移文件。
+database/seeds/       仅用于开发的种子数据。
+docs/                 需求、架构、MQTT、API 和部署说明。
+scripts/              数据库和部署工作的本地辅助脚本。
+test/                 集成测试夹具和未来测试包。
+deploy/               预发和生产部署模板。
 ```
 
-## Local Development
+## 本地开发
 
 ```powershell
 copy .env.example .env
@@ -44,12 +44,12 @@ docker compose up -d
 go run ./cmd/watercleanbot
 ```
 
-The service starts with a basic health endpoint:
+服务启动后提供基础健康检查端点：
 
 ```text
 GET http://localhost:8080/health
 ```
 
-## Current Status
+## 当前状态
 
-This repository is currently a scaffold. The files include comments that explain where each project part belongs and what should be implemented next.
+当前仓库是一个脚手架。文件中的注释说明了项目各部分的归属以及下一步应实现的内容。

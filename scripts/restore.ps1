@@ -1,5 +1,5 @@
-# Restores a PostgreSQL backup into a target database.
-# Review the target DATABASE_URL carefully before running this script.
+# 将 PostgreSQL 备份恢复到目标数据库。
+# 运行此脚本前请仔细核对目标 DATABASE_URL。
 param(
     [Parameter(Mandatory=$true)]
     [string]$BackupPath

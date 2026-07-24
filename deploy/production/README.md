@@ -1,12 +1,12 @@
-# Production Deployment Notes
+# 生产部署说明
 
-Production deployment is not automated yet.
+生产部署尚未自动化。
 
-Before production launch:
+上线前：
 
-- Use managed secrets instead of `.env` files committed to Git.
-- Keep PostgreSQL on a private network.
-- Enable TLS for API and MQTT.
-- Require per-robot MQTT credentials and ACL rules.
-- Run database backups and restore drills.
-- Document rollback steps for every release.
+- 使用托管密钥，而不是提交到 Git 的 `.env` 文件。
+- 将 PostgreSQL 保持在私有网络中。
+- 为 API 和 MQTT 启用 TLS。
+- 要求每台机器人使用独立的 MQTT 凭据和 ACL 规则。
+- 执行数据库备份和恢复演练。
+- 为每次发布记录回滚步骤。

@@ -5,20 +5,20 @@ import (
 	"errors"
 )
 
-// PostgresStore is the future home for PostgreSQL/PostGIS access.
-// It is a placeholder today so the project template can compile without third-party dependencies.
+// PostgresStore 是 PostgreSQL/PostGIS 访问逻辑未来的存放位置。
+// 目前它是占位实现，使项目模板无需第三方依赖也能编译。
 type PostgresStore struct {
 	databaseURL string
 }
 
-// NewPostgresStore records the connection string.
-// The next implementation step should create a pgx connection pool here.
+// NewPostgresStore 记录连接字符串。
+// 下一步实现应在这里创建 pgx 连接池。
 func NewPostgresStore(databaseURL string) *PostgresStore {
 	return &PostgresStore{databaseURL: databaseURL}
 }
 
-// Ping verifies that database configuration exists.
-// Replace this with an actual SELECT 1 query after pgx is introduced.
+// Ping 验证数据库配置是否存在。
+// 引入 pgx 后，将这里替换为实际的 SELECT 1 查询。
 func (s *PostgresStore) Ping(_ context.Context) error {
 	if s.databaseURL == "" {
 		return errors.New("DATABASE_URL is empty")

@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-// RobotsHandler will return robot records from the robots table.
-// It is intentionally a 501 placeholder until the repository layer is implemented.
+// RobotsHandler 将从 robots 表返回机器人记录。
+// 在仓储层实现前，它有意保持为 501 占位处理器。
 func RobotsHandler(log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		log.Debug("robots endpoint called")
