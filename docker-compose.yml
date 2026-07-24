@@ -1,0 +1,32 @@
+# Local development stack.
+# This file is intentionally small: PostgreSQL/PostGIS first, then MQTT broker.
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: watercleanbot-postgres
+    environment:
+      POSTGRES_DB: waterbot
+      POSTGRES_USER: waterbot
+      POSTGRES_PASSWORD: waterbot_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waterbot -d waterbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: watercleanbot-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+volumes:
+  postgres_data:
+    # Named volume keeps local database data across container restarts.

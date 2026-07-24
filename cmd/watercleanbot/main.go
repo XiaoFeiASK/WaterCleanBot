@@ -1,0 +1,51 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/api"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/config"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/db"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
+)
+
+// main wires the first backend template together.
+// Real database and MQTT implementations will be added behind these packages.
+func main() {
+	cfg := config.Load()
+	log := logger.New(cfg.AppEnv)
+	store := db.NewPostgresStore(cfg.DatabaseURL)
+
+	server := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           api.NewRouter(cfg, store, log),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		log.Info("starting watercleanbot backend", slog.String("addr", cfg.HTTPAddr))
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("http server stopped unexpectedly", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}()
+
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-shutdownCtx.Done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Error("graceful shutdown failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	log.Info("watercleanbot backend stopped")
+}

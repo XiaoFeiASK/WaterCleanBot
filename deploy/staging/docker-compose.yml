@@ -1,0 +1,12 @@
+# Staging deployment template.
+# Replace example values with server-managed secrets before use.
+services:
+  backend:
+    image: watercleanbot-backend:staging
+    environment:
+      APP_ENV: staging
+      HTTP_ADDR: :8080
+      DATABASE_URL: ${DATABASE_URL}
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL}
+    ports:
+      - "8080:8080"

@@ -1,0 +1,26 @@
+# Local environment files contain secrets and must never be committed.
+.env
+.env.*
+!.env.example
+
+# Go build outputs and coverage files are generated locally.
+bin/
+dist/
+.tmp-go-cache/
+coverage.out
+*.test
+
+# Editor and operating-system noise should stay out of version control.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local database dumps may contain real robot or customer data.
+*.dump
+*.backup
+*.sql.gz
+
+# Temporary files created during local experiments.
+tmp/
+logs/
