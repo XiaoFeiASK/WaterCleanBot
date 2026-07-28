@@ -1,102 +1,107 @@
-<!-- 文件作用：说明 WaterCleanBot 项目目标、文件架构、开发边界和核心数据链路。 -->
+<!-- 文件作用：说明 WaterCleanBot 当前最小后端范围、文件架构和实时定位链路。 -->
 
 # WaterCleanBot
 
-WaterCleanBot 是水面垃圾清洁机器人的前后端与数据接入项目。当前阶段先搭建**清晰的工程骨架**，前端页面原型保持稳定，后端暂不深入实现业务接口，优先把目录职责、数据链路和后续扩展位置固定下来。
+WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**只暴露一个接口，只运行一个任务，目标是实时定位机器人位置**。
 
-## 当前开发边界
+前端页面原型已经基本定型，仍保留在 `web/2026-07-10-11-51-01/`，当前不改页面结构和交互内容。
 
-- 前端：现有 `web/2026-07-10-11-51-01/` 页面基本定型，当前不改页面结构和交互内容。
-- 后端：先保留 Go 服务骨架、包分层、模型和接口位置，不急着补完整 API 实现。
-- 数据库：以 PostgreSQL + PostGIS 为主，迁移脚本先定义核心业务表、遥测表和最新状态表。
-- 通信：机器人数据通过 MQTT 到达后端，由后端校验后写入 PostgreSQL，前端只通过 HTTP API 访问后端。
+## 当前后端范围
 
-## 推荐文件架构
+当前后端只做一件事：
+
+```text
+后台实时定位任务
+  -> 维护机器人最新位置
+  -> HTTP 接口查询机器人最新位置
+```
+
+当前唯一接口：
+
+```text
+GET /api/robots/{robotCode}/location
+```
+
+示例：
+
+```text
+GET http://localhost:8080/api/robots/H20-001/location
+```
+
+## 当前文件架构
 
 ```text
 WaterCleanBot/
-├─ web/                              # 前端相关文件
-│  ├─ 2026-07-10-11-51-01/            # 已定型的 HTML 高保真原型，暂不改页面
-│  ├─ 2026-07-10-11-51-51-01/         # 前端原型辅助/烟测脚本
-│  ├─ app/                            # 未来正式前端工程位置，如 Vue/React/Vite
-│  └─ README.md                       # 前端目录说明
-│
 ├─ cmd/
-│  └─ watercleanbot/                  # Go 后端启动入口
+│  └─ watercleanbot/
+│     └─ main.go                    # 后端启动入口
 │
-├─ internal/                          # Go 后端内部包，不对外复用
-│  ├─ api/                            # HTTP API 路由和 Handler 占位
-│  ├─ auth/                           # 账号、角色、权限相关骨架
-│  ├─ robot/                          # 机器人档案和状态业务骨架
-│  ├─ mission/                        # 清洁任务、航点、执行记录骨架
-│  ├─ waterarea/                      # 水域、边界、空间区域业务骨架
-│  ├─ telemetry/                      # 遥测数据模型、校验、入库服务骨架
-│  ├─ alarm/                          # 告警规则和告警事件业务骨架
-│  ├─ command/                        # 命令下发和 ACK 状态业务骨架
-│  ├─ mqtt/                           # MQTT 连接、订阅、Topic 规则骨架
-│  ├─ db/                             # PostgreSQL/PostGIS 连接和迁移说明
-│  ├─ config/                         # 环境变量和配置读取
-│  └─ logger/                         # 日志初始化
+├─ internal/
+│  ├─ api/
+│  │  ├─ router.go                  # 注册实时定位接口
+│  │  └─ location_handler.go        # 返回机器人最新位置
+│  │
+│  ├─ config/
+│  │  └─ config.go                  # 读取 HTTP 端口、环境、定位任务间隔
+│  │
+│  ├─ location/
+│  │  ├─ model.go                   # 实时位置数据结构
+│  │  ├─ store.go                   # 内存保存机器人最新位置
+│  │  └─ task.go                    # 实时定位后台任务
+│  │
+│  └─ logger/
+│     └─ logger.go                  # 日志初始化
 │
-├─ database/
-│  ├─ migrations/                     # SQL 建表、索引、扩展迁移
-│  ├─ seeds/                          # 开发测试种子数据
-│  └─ queries/                        # 常用 SQL 查询草稿
-│
-├─ docker/                            # 本地中间件配置，如 Mosquitto
-├─ docs/                              # 需求、架构、数据库、MQTT、API、部署文档
-├─ scripts/                           # 本地迁移、种子、备份、恢复脚本
-├─ test/                              # 测试说明和样例数据
-├─ deploy/                            # 测试/生产部署模板
-├─ docker-compose.yml                 # 本地 PostgreSQL/PostGIS + MQTT Broker
-├─ .env.example                       # 环境变量模板，不保存真实密钥
-└─ README.md                          # 当前项目总说明
+├─ web/                             # 已有前端页面和未来正式前端目录
+├─ database/                        # 后续 PostgreSQL/PostGIS 迁移仍保留
+├─ docs/                            # 项目设计文档
+├─ docker-compose.yml               # 本地 PostgreSQL/PostGIS + MQTT Broker
+├─ .env.example                     # 本地运行配置模板
+└─ README.md                        # 当前说明
 ```
 
-## 核心数据链路
+## 实时定位链路
+
+当前最小实现：
 
 ```text
-机器人传感器
-  -> 机器人程序组装 JSON
-  -> MQTT 发布 v1/robots/{robotCode}/telemetry
-  -> MQTT Broker 转发
-  -> Go 后端订阅 v1/robots/+/telemetry
-  -> 校验 robot_id / boot_id / seq_no / 时间 / 经纬度 / 电量
-  -> PostgreSQL 事务
-       1. 写入 telemetry_samples 历史遥测
-       2. 更新 robot_shadow 最新状态
-  -> 前端通过 HTTP API 查询机器人状态和轨迹
+location.Task
+  -> 周期性刷新 H20-001 演示位置
+  -> location.Store 保存最新位置
+  -> api.LocationHandler 读取最新位置
+  -> 前端或调试工具通过 HTTP 获取位置
 ```
 
-命令下发链路：
+后续真实实现时，可以把 `location.Task` 替换成：
 
 ```text
-前端管理页面
-  -> Go 后端 HTTP API
-  -> 写入 commands 命令记录
-  -> MQTT 发布 v1/robots/{robotCode}/commands
-  -> 机器人执行
-  -> MQTT 发布 v1/robots/{robotCode}/acks
-  -> 后端更新命令状态
+MQTT 订阅机器人定位消息
+  -> 校验定位数据
+  -> 写入 PostgreSQL/PostGIS
+  -> 更新最新位置缓存
+  -> HTTP 接口返回最新位置
 ```
 
-## 本地开发
+## 本地运行
 
 ```powershell
 copy .env.example .env
-docker compose up -d
 go run ./cmd/watercleanbot
 ```
 
-健康检查：
+访问：
 
 ```text
-GET http://localhost:8080/health
+http://localhost:8080/api/robots/H20-001/location
 ```
 
-## 后续实现顺序
+## 当前刻意不做
 
-1. 保持前端原型稳定，只在 `web/app/` 新建正式前端工程。
-2. 后端先补 PostgreSQL 连接池和迁移执行方式。
-3. 再补 MQTT 遥测订阅、JSON 校验和事务入库。
-4. 最后补前端需要的查询 API、命令下发 API、权限和部署监控。
+- 不做账号权限。
+- 不做任务管理。
+- 不做告警管理。
+- 不做命令下发。
+- 不做完整 MQTT 入库。
+- 不做完整 PostgreSQL 读写。
+
+这些能力等实时定位链路跑通后，再逐步加回来。
