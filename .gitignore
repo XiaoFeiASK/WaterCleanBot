@@ -24,3 +24,7 @@ Thumbs.db
 # 本地实验期间创建的临时文件。
 tmp/
 logs/
+
+# 本地助手或生成工具的记忆文件，不属于应用源码。
+.workbuddy/
+**/.workbuddy/
