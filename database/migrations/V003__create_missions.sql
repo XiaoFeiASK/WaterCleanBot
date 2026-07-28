@@ -1,3 +1,5 @@
+-- 文件作用：创建清洁任务、任务航点和任务执行记录表。
+
 -- missions 存储分配给机器人的计划清洁任务。
 CREATE TABLE IF NOT EXISTS missions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,3 +1,5 @@
+-- 文件作用：创建机器人历史遥测表和轨迹查询索引。
+
 -- telemetry_samples 存储机器人上报的不可变历史遥测。
 -- 数据量增长后，后续迁移可将此表改为按日或按月分区。
 CREATE TABLE IF NOT EXISTS telemetry_samples (

@@ -1,3 +1,5 @@
+// 文件作用：定义机器人上报的遥测样本模型。
+
 package telemetry
 
 import "time"

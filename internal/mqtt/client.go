@@ -1,3 +1,5 @@
+// 文件作用：预留 MQTT 客户端连接、订阅和发布能力的位置。
+
 package mqtt
 
 import "context"

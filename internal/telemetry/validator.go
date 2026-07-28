@@ -1,3 +1,5 @@
+// 文件作用：定义遥测数据入库前的基础校验规则。
+
 package telemetry
 
 import "errors"

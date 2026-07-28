@@ -1,3 +1,5 @@
+// 文件作用：保存前端原型辅助烟测脚本。
+
 const fs = require('fs');
 const vm = require('vm');
 

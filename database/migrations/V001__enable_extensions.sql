@@ -1,3 +1,5 @@
+-- 文件作用：启用 PostgreSQL 扩展，包含 PostGIS 和 UUID 生成能力。
+
 -- 启用水面清理机器人平台所需的数据库扩展。
 -- PostGIS 用于存储并查询机器人坐标、任务区域和告警位置。
 CREATE EXTENSION IF NOT EXISTS postgis;

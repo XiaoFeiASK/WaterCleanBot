@@ -1,3 +1,5 @@
+// 文件作用：预留机器人模块访问数据库的位置。
+
 package robot
 
 import "context"

@@ -1,3 +1,5 @@
+-- 文件作用：创建机器人最新状态表，用于后台快速读取。
+
 -- robot_shadow 存储每台机器人的最新已知状态。
 -- 它应与插入 telemetry_samples 在同一个事务中更新。
 CREATE TABLE IF NOT EXISTS robot_shadow (

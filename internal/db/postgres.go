@@ -1,3 +1,5 @@
+// 文件作用：预留 PostgreSQL/PostGIS 连接和数据写入实现位置。
+
 package db
 
 import (

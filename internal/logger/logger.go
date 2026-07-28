@@ -1,3 +1,5 @@
+// 文件作用：创建本地和服务器环境使用的结构化日志器。
+
 package logger
 
 import (

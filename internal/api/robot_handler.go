@@ -1,3 +1,5 @@
+// 文件作用：定义机器人相关 HTTP Handler 占位。
+
 package api
 
 import (

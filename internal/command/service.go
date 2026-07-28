@@ -1,3 +1,5 @@
+// 文件作用：预留命令创建、发布和 ACK 状态更新的业务逻辑位置。
+
 package command
 
 import "context"

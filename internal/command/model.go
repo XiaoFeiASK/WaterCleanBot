@@ -1,3 +1,5 @@
+// 文件作用：定义后端下发给机器人的控制命令模型。
+
 package command
 
 import "time"

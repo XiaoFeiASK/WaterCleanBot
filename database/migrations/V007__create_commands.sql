@@ -1,3 +1,5 @@
+-- 文件作用：创建控制命令和命令 ACK 表。
+
 -- commands 存储用户或后端自动化请求的控制命令。
 CREATE TABLE IF NOT EXISTS commands (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

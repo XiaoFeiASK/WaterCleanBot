@@ -1,3 +1,5 @@
+// 文件作用：记录数据库迁移目录常量，供后续迁移工具接入。
+
 package db
 
 // MigrationsDir 记录 SQL 迁移文件所在位置。

@@ -1,3 +1,5 @@
+// 文件作用：预留机器人业务逻辑位置。
+
 package robot
 
 import "context"

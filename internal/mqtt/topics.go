@@ -1,3 +1,5 @@
+// 文件作用：集中定义机器人遥测、命令和 ACK 的 MQTT Topic 规则。
+
 package mqtt
 
 import "fmt"

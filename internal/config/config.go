@@ -1,3 +1,5 @@
+// 文件作用：集中读取后端运行所需环境变量和默认配置。
+
 package config
 
 import "os"

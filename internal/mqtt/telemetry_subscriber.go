@@ -1,3 +1,5 @@
+// 文件作用：预留 MQTT 遥测订阅和消息分发位置。
+
 package mqtt
 
 import (

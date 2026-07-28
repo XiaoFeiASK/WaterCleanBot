@@ -1,3 +1,5 @@
+// 文件作用：预留命令模块访问数据库的位置。
+
 package command
 
 import "context"

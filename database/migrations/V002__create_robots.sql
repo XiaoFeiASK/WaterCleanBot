@@ -1,3 +1,5 @@
+-- 文件作用：创建机器人基础档案表和状态索引。
+
 -- robots 存储每台实体清洁机器人的后端记录。
 CREATE TABLE IF NOT EXISTS robots (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

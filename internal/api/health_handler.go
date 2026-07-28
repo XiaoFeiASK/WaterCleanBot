@@ -1,3 +1,5 @@
+// 文件作用：定义健康检查接口 Handler 骨架。
+
 package api
 
 import (

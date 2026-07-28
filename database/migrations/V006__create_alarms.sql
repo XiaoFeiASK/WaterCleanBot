@@ -1,3 +1,5 @@
+-- 文件作用：创建机器人和任务告警表及查询索引。
+
 -- alarms 存储机器人、任务和设备故障事件。
 CREATE TABLE IF NOT EXISTS alarms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

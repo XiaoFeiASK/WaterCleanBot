@@ -1,3 +1,5 @@
+# 文件作用：定义本地开发用 PostgreSQL/PostGIS 和 MQTT Broker 容器。
+
 # 本地开发栈。
 # 此文件刻意保持小范围：先配置 PostgreSQL/PostGIS，再配置 MQTT 消息代理。
 services:

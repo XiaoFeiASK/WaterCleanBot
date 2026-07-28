@@ -1,3 +1,5 @@
+// 文件作用：集中注册 Go 后端 HTTP 路由。
+
 package api
 
 import (

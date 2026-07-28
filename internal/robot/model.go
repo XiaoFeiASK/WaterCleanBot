@@ -1,3 +1,5 @@
+// 文件作用：定义机器人基础档案模型。
+
 package robot
 
 import "time"

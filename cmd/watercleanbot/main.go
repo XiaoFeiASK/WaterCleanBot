@@ -1,3 +1,5 @@
+// 文件作用：作为 Go 后端服务启动入口，组装配置、日志、数据库和 HTTP 路由。
+
 package main
 
 import (

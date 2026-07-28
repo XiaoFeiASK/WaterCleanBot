@@ -1,3 +1,5 @@
+// 文件作用：预留遥测校验和持久化的业务服务位置。
+
 package telemetry
 
 import "context"
