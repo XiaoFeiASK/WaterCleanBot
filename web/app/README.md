@@ -1,7 +1,20 @@
-<!-- 文件作用：占位说明未来正式前端工程目录，当前不影响已定型页面原型。 -->
+<!-- 文件作用：说明正式前端工程的运行方式和数据边界。 -->
 
-# Frontend App Placeholder
+# WaterCleanBot Frontend
 
-这里预留给未来正式前端工程。
+正式前端基于 React + Vite，视觉结构参考 `../1/` 原型，业务数据只通过后端 HTTP API 获取。
 
-当前阶段不初始化框架，避免影响已经定型的 HTML 原型。后续可以在这里创建 Vue、React 或其他前端项目。
+## 开发
+
+```bash
+npm install
+npm run dev
+```
+
+开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。机器人位置页面调用：
+
+```text
+GET /api/robots/{robotCode}/location
+```
+
+当前后端只提供单机器人位置查询接口，因此设备列表、统计、告警和任务模块会显示无数据状态，不使用前端模拟数据。
