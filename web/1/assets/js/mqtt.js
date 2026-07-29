@@ -2,7 +2,8 @@
 
 /* ============ MQTT 通信模块 (mqtt.js) ============
  * 与 broker 通信，向各无人艇下发控制指令。
- * broker 地址: 192.168.4.20（需开启 WebSocket 监听）
+ * 本地 broker 地址: localhost（docker-compose 已开放 WebSocket 9001）
+ * 连接真实设备网络时，可把 MQTT_CONFIG.host 改成实际 Broker 地址。
  * topic 规范:  USV/USV-{mqttId}/web   （mqttId 见 data.js 的 mockDevices）
  * payload:     JSON { cmd, usv, device, ts, seq }
  * 依赖: data.js（mockDevices / getCurrentDevice）与 mqtt CDN 全局对象 mqtt
@@ -10,7 +11,7 @@
 
 // ---- 可配置项（如 broker 类型/端口不同，请改这里）----
 const MQTT_CONFIG = {
-  host: '192.168.4.20',
+  host: 'localhost',
   username: '',       // 若 broker 需要认证请填写
   password: '',
   clientId: 'AquaCleanWeb_' + Math.random().toString(16).slice(2, 10),

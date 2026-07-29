@@ -4,7 +4,7 @@
 
 WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**只暴露一个接口，只运行一个任务，目标是实时定位机器人位置**。
 
-前端页面原型已经基本定型，仍保留在 `web/2026-07-10-11-51-01/`，当前不改页面结构和交互内容。
+前端页面原型已经基本定型，仍保留在 `web/1/`，当前不改页面结构和交互内容。
 
 ## 当前后端范围
 
@@ -53,8 +53,8 @@ WaterCleanBot/
 │     └─ logger.go                  # 日志初始化
 │
 ├─ web/                             # 已有前端页面和未来正式前端目录
-├─ database/                        # 后续 PostgreSQL/PostGIS 迁移仍保留
-├─ docs/                            # 项目设计文档
+├─ database/                        # 本地 PostgreSQL/PostGIS 初始化 SQL
+├─ docker/                          # 本地 MQTT Broker 配置
 ├─ docker-compose.yml               # 本地 PostgreSQL/PostGIS + MQTT Broker
 ├─ .env.example                     # 本地运行配置模板
 └─ README.md                        # 当前说明
@@ -83,6 +83,21 @@ MQTT 订阅机器人定位消息
 ```
 
 ## 本地运行
+
+启动本地 PostgreSQL/PostGIS 和 MQTT Broker：
+
+```powershell
+docker compose up -d
+```
+
+MQTT 本地端口：
+
+```text
+TCP: 1883
+WebSocket: 9001
+```
+
+启动 Go 后端：
 
 ```powershell
 copy .env.example .env

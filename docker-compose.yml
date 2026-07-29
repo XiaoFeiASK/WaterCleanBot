@@ -14,7 +14,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+      - ./database/build_extensions.sql:/docker-entrypoint-initdb.d/001_build_extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U waterbot -d waterbot"]
       interval: 10s
@@ -26,9 +26,13 @@ services:
     container_name: watercleanbot-mqtt
     ports:
       - "1883:1883"
+      - "9001:9001"
     volumes:
       - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
 
 volumes:
   postgres_data:
     # 命名卷会在容器重启后保留本地数据库数据。
+  mosquitto_data:
+    # 命名卷会在容器重启后保留本地 MQTT 持久化数据。
