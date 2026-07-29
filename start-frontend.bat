@@ -1,42 +1,42 @@
 @echo off
 setlocal
 
-rem 一键启动 web/app 前端开发服务器。
 cd /d "%~dp0"
 
 if not exist "web\app\package.json" (
-  echo [ERROR] 未找到 web\app\package.json
+  echo [ERROR] web\app\package.json was not found.
   pause
   exit /b 1
 )
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo [ERROR] 未检测到 Node.js，请先安装 Node.js。
+  echo [ERROR] Node.js was not found. Please install Node.js first.
   pause
   exit /b 1
 )
 
 where npm >nul 2>nul
 if errorlevel 1 (
-  echo [ERROR] 未检测到 npm，请确认 Node.js 已正确安装。
+  echo [ERROR] npm was not found. Please check the Node.js installation.
   pause
   exit /b 1
 )
 
-if not exist "web\app\node_modules" (
-  echo [INFO] 首次启动，正在安装前端依赖...
-  call npm install --prefix "web\app"
+cd /d "%~dp0web\app"
+
+if not exist "node_modules" (
+  echo [INFO] Installing frontend dependencies...
+  call npm install
   if errorlevel 1 (
-    echo [ERROR] 前端依赖安装失败。
+    echo [ERROR] Frontend dependency installation failed.
     pause
     exit /b 1
   )
 )
 
-echo [INFO] 前端启动地址：http://127.0.0.1:5173
-echo [INFO] 按 Ctrl+C 可以停止前端服务。
-cd /d "%~dp0web\app"
+echo [INFO] Frontend URL: http://127.0.0.1:5173
+echo [INFO] Press Ctrl+C to stop the frontend server.
 call npm run dev -- --host 127.0.0.1
 
 pause
