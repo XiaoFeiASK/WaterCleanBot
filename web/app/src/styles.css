@@ -83,6 +83,7 @@ h1 { margin-bottom: 5px; color: #1b2531; font-size: 22px; line-height: 1.25; }
 .input-with-icon svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); }
 .input-with-icon input { width: 100%; height: 36px; padding: 0 12px 0 34px; border: 1px solid #cfd6dd; border-radius: 5px; outline: none; color: #283442; background: #fafbfc; }
 .input-with-icon input:focus { border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px rgba(24,95,165,.1); }
+.query-hint { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
 .button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid transparent; border-radius: 5px; font-size: 12px; font-weight: 600; }
 .button-primary { color: #fff; background: var(--blue); }
 .button-primary:hover { background: #0c447c; }
@@ -112,6 +113,9 @@ h1 { margin-bottom: 5px; color: #1b2531; font-size: 22px; line-height: 1.25; }
 .empty-module h2 { margin-bottom: 6px; color: #465363; font-size: 14px; }
 .empty-module p, .empty-module span { margin-bottom: 0; color: var(--muted); font-size: 12px; }
 .empty-module span { margin-top: 5px; color: #a0aab4; font-size: 11px; }
+.toast { position: fixed; top: 78px; left: 50%; z-index: 100; max-width: min(420px, calc(100vw - 32px)); padding: 10px 16px; transform: translateX(-50%); border-radius: 6px; color: #fff; background: rgba(31,41,55,.96); box-shadow: 0 7px 22px rgba(0,0,0,.2); font-size: 13px; line-height: 1.4; text-align: center; }
+.toast-success { background: rgba(15,110,86,.96); }
+.toast-error { background: rgba(194,59,59,.96); }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .sidebar-scrim { display: none; }

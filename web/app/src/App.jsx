@@ -16,9 +16,8 @@ import {
   Settings2,
   ShipWheel,
   Wifi,
-  X,
 } from 'lucide-react';
-import { fetchRobotLocation } from './api';
+import { fetchRobotLocation, getLocationErrorMessage, getRobotCodeForDevice } from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 
@@ -52,30 +51,17 @@ const pageNames = Object.fromEntries(
   navGroups.flatMap((group) => group.items.map((item) => [item.id, item.label])),
 );
 
-function formatTime(value) {
-  if (!value) return '暂无数据';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '时间格式不可用' : date.toLocaleString('zh-CN', { hour12: false });
-}
-
 function formatNumber(value, digits = 4) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '暂无数据';
-}
-
-function locationIsFresh(position) {
-  if (!position?.updated_at) return false;
-  const updatedAt = new Date(position.updated_at).getTime();
-  return Number.isFinite(updatedAt) && Date.now() - updatedAt <= POLL_INTERVAL_MS * 2;
 }
 
 function StatusBadge({ position, loading }) {
   if (loading) return <span className="status-badge status-pending">读取中</span>;
   if (!position) return <span className="status-badge status-empty">未查询</span>;
-  const fresh = locationIsFresh(position);
   return (
-    <span className={`status-badge ${fresh ? 'status-online' : 'status-stale'}`}>
+    <span className="status-badge status-online">
       <span className="status-dot" />
-      {fresh ? '位置正常' : '数据可能过期'}
+      位置已获取
     </span>
   );
 }
@@ -86,10 +72,8 @@ function LocationMap({ position }) {
   useEffect(() => {
     if (!position || !mapNode.current) return undefined;
 
-    const lat = Number(position.latitude);
-    const lng = Number(position.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
-
+    const lat = position.lat;
+    const lng = position.lng;
     const map = L.map(mapNode.current, { zoomControl: true }).setView([lat, lng], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
@@ -100,7 +84,7 @@ function LocationMap({ position }) {
       weight: 3,
       fillColor: '#0f6e56',
       fillOpacity: 1,
-    }).addTo(map);
+    }).addTo(map).bindTooltip(`${position.usvId} · 航向 ${position.heading}°`);
 
     const resizeTimer = window.setTimeout(() => map.invalidateSize(), 0);
     return () => {
@@ -114,7 +98,7 @@ function LocationMap({ position }) {
       <div className="map-empty">
         <MapPinned size={28} strokeWidth={1.5} />
         <strong>暂无位置数据</strong>
-        <span>输入机器人编号并查询后显示地图位置</span>
+        <span>查询成功后显示机器人真实位置</span>
       </div>
     );
   }
@@ -122,7 +106,7 @@ function LocationMap({ position }) {
   return <div ref={mapNode} className="location-map" aria-label="机器人实时位置地图" />;
 }
 
-function LocationPanel({ robotCode, setRobotCode, position, loading, error, onSubmit, onRefresh }) {
+function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubmit, onRefresh }) {
   return (
     <section className="location-section">
       <div className="section-heading">
@@ -134,19 +118,19 @@ function LocationPanel({ robotCode, setRobotCode, position, loading, error, onSu
       </div>
 
       <form className="location-query" onSubmit={onSubmit}>
-        <label htmlFor="robot-code">机器人编号</label>
+        <label htmlFor="device-code">设备编号</label>
         <div className="query-controls">
           <div className="input-with-icon">
             <Search size={16} aria-hidden="true" />
             <input
-              id="robot-code"
-              value={robotCode}
-              onChange={(event) => setRobotCode(event.target.value)}
-              placeholder="输入机器人编号"
+              id="device-code"
+              value={deviceId}
+              onChange={(event) => setDeviceId(event.target.value)}
+              placeholder="输入设备编号，如 AC-001"
               autoComplete="off"
             />
           </div>
-          <button className="button button-primary" type="submit" disabled={!robotCode.trim() || loading}>
+          <button className="button button-primary" type="submit" disabled={!deviceId.trim() || loading}>
             <Search size={16} />
             查询位置
           </button>
@@ -154,44 +138,40 @@ function LocationPanel({ robotCode, setRobotCode, position, loading, error, onSu
             className="icon-button"
             type="button"
             onClick={onRefresh}
-            disabled={!robotCode.trim() || loading}
+            disabled={!deviceId.trim() || loading}
             title="刷新位置"
             aria-label="刷新位置"
           >
             <RefreshCw size={17} className={loading ? 'spin' : ''} />
           </button>
         </div>
+        <p className="query-hint">当前已配置设备映射：AC-001</p>
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
       <div className="location-grid">
-        <div className="map-frame">
-          <LocationMap position={position} />
-        </div>
+        <div className="map-frame"><LocationMap position={position} /></div>
         <div className="position-details">
           <div className="detail-header">
             <div>
-              <span className="detail-label">当前设备</span>
-              <h3>{position?.robot_code || '暂无设备'}</h3>
+              <span className="detail-label">后端机器人</span>
+              <h3>{position?.usvId || '暂无设备'}</h3>
             </div>
             <Wifi size={20} className={position ? 'icon-green' : 'icon-muted'} />
           </div>
           <div className="detail-list">
-            <DetailRow icon={MapPinned} label="纬度" value={formatNumber(position?.latitude)} />
-            <DetailRow icon={MapPinned} label="经度" value={formatNumber(position?.longitude)} />
-            <DetailRow icon={Gauge} label="速度" value={typeof position?.speed_mps === 'number' ? `${position.speed_mps} m/s` : '暂无数据'} />
-            <DetailRow icon={NavigationIcon} label="航向" value={typeof position?.heading === 'number' ? `${position.heading}°` : '暂无数据'} />
-            <DetailRow icon={Clock3} label="设备上报时间" value={formatTime(position?.updated_at)} />
+            <DetailRow icon={MapPinned} label="纬度" value={formatNumber(position?.lat)} />
+            <DetailRow icon={MapPinned} label="经度" value={formatNumber(position?.lng)} />
+            <DetailRow icon={Gauge} label="速度" value={typeof position?.speed === 'number' ? `${position.speed} m/s` : '暂无数据'} />
+            <DetailRow icon={Gauge} label="电量" value={typeof position?.battery === 'number' ? `${position.battery}%` : '暂无数据'} />
+            <DetailRow icon={MapPinned} label="航向" value={typeof position?.heading === 'number' ? `${position.heading}°` : '暂无数据'} />
+            <DetailRow icon={Clock3} label="状态码" value={typeof position?.status === 'number' ? String(position.status) : '暂无数据'} />
           </div>
-          <p className="data-note">位置数据来自后端接口，页面不会生成或补充设备数据。</p>
+          <p className="data-note">位置数据来自已确认的后端接口，查询失败时不会使用模拟位置。</p>
         </div>
       </div>
     </section>
   );
-}
-
-function NavigationIcon(props) {
-  return <MapPinned {...props} />;
 }
 
 function DetailRow({ icon: Icon, label, value }) {
@@ -216,6 +196,11 @@ function EmptyModule({ title }) {
 
 function DatabaseIcon() {
   return <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 12v7c0 1.66 3.58 3 8 3s8-1.34 8-3v-7" /></svg>;
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  return <div className={`toast toast-${toast.type}`} role="status">{toast.message}</div>;
 }
 
 function Dashboard({ locationProps }) {
@@ -260,41 +245,72 @@ function StatCard({ icon: Icon, label }) {
 function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [robotCode, setRobotCode] = useState('');
-  const [activeRobotCode, setActiveRobotCode] = useState('');
+  const [deviceId, setDeviceId] = useState('AC-001');
+  const [activeDeviceId, setActiveDeviceId] = useState('');
   const [position, setPosition] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
+  const loadingRef = useRef(false);
+  const toastTimerRef = useRef(null);
 
-  async function loadLocation(code = robotCode) {
-    const normalizedCode = code.trim();
-    if (!normalizedCode) {
-      setError('请输入机器人编号');
+  function showToast(message, type = 'error') {
+    setToast({ message, type });
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 2800);
+  }
+
+  async function loadLocation(code = deviceId, options = {}) {
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode || !getRobotCodeForDevice(normalizedCode)) {
+      setError('机器人编号无效');
+      setPosition(null);
+      showToast('机器人编号无效');
       return;
     }
+    if (loadingRef.current) return;
 
+    loadingRef.current = true;
     setLoading(true);
     setError('');
-    setActiveRobotCode(normalizedCode);
-    const controller = new AbortController();
     try {
-      const nextPosition = await fetchRobotLocation(normalizedCode, controller.signal);
+      const nextPosition = await fetchRobotLocation(normalizedCode);
       setPosition(nextPosition);
+      if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
-      if (requestError.name !== 'AbortError') {
-        setPosition(null);
-        setError(requestError.message || '无法读取机器人位置');
-      }
+      setPosition(null);
+      const message = getLocationErrorMessage(requestError);
+      setError(message);
+      showToast(message);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }
 
+  function requestLocation(code = deviceId) {
+    const normalizedCode = code.trim().toUpperCase();
+    setDeviceId(normalizedCode);
+    if (!getRobotCodeForDevice(normalizedCode)) {
+      setActiveDeviceId('');
+      loadLocation(normalizedCode);
+      return;
+    }
+    setActiveDeviceId(normalizedCode);
+    loadLocation(normalizedCode);
+  }
+
   useEffect(() => {
-    if (!activeRobotCode) return undefined;
-    const timer = window.setInterval(() => loadLocation(activeRobotCode), POLL_INTERVAL_MS);
+    if (!activeDeviceId) return undefined;
+    const timer = window.setInterval(() => loadLocation(activeDeviceId, { silent: true }), POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [activeRobotCode]);
+  }, [activeDeviceId]);
+
+  useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
+
+  function showNotImplemented() {
+    showToast('该功能接口尚未实现，当前不可用');
+  }
 
   function navigate(page) {
     setActivePage(page);
@@ -302,23 +318,23 @@ function App() {
   }
 
   const locationProps = {
-    robotCode,
-    setRobotCode,
+    deviceId,
+    setDeviceId,
     position,
     loading,
     error,
     onSubmit: (event) => {
       event.preventDefault();
-      loadLocation();
+      requestLocation();
     },
-    onRefresh: () => loadLocation(),
+    onRefresh: () => requestLocation(),
   };
 
   const pageContent = activePage === 'dashboard' ? (
     <Dashboard locationProps={locationProps} />
   ) : activePage === 'device-detail' ? (
     <>
-      <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情</h1><p className="page-description">查询指定机器人的实时位置。</p></div></div>
+      <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情</h1><p className="page-description">查询指定设备的实时位置。</p></div></div>
       <LocationPanel {...locationProps} />
     </>
   ) : (
@@ -327,6 +343,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <Toast toast={toast} />
       {sidebarOpen && <button className="sidebar-scrim" onClick={() => setSidebarOpen(false)} aria-label="关闭菜单" />}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand-row">
@@ -355,7 +372,7 @@ function App() {
           <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} title="打开菜单" aria-label="打开菜单"><Menu size={20} /></button>
           <div className="breadcrumb"><span>首页</span><ChevronRight size={14} />{pageNames[activePage] || '页面'}</div>
           <div className="topbar-actions">
-            <button className="icon-button" title="通知" aria-label="通知"><Bell size={18} /></button>
+            <button className="icon-button" onClick={showNotImplemented} title="通知" aria-label="通知"><Bell size={18} /></button>
             <div className="user-chip"><span className="avatar"><Settings2 size={15} /></span><span className="user-label">账号未接入</span></div>
           </div>
         </header>

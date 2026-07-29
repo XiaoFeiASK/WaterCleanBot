@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Task 周期性刷新机器人实时位置。
+// Task 周期性刷新无人船实时位置。
 type Task struct {
 	store    *Store
 	interval time.Duration
@@ -25,7 +25,7 @@ func NewTask(store *Store, interval time.Duration, log *slog.Logger) *Task {
 }
 
 // Start 启动实时定位任务。
-// 当前阶段只维护一台演示机器人 H20-001 的位置，便于前端和接口联调。
+// 当前阶段只维护一台演示无人船 USV-001 的位置，便于前端和接口联调。
 func (t *Task) Start(ctx context.Context) {
 	if t.interval <= 0 {
 		t.interval = 5 * time.Second
@@ -47,14 +47,14 @@ func (t *Task) Start(ctx context.Context) {
 }
 
 func (t *Task) refreshDemoPosition() {
-	now := time.Now().UTC()
 	t.store.Update(Position{
-		RobotCode: "H20-001",
-		Latitude:  31.2304,
-		Longitude: 121.4737,
-		SpeedMPS:  0.8,
-		Heading:   90,
-		UpdatedAt: now,
+		USVID:   "USV-001",
+		Lat:     39.9087,
+		Lng:     116.3975,
+		Heading: 135.0,
+		Speed:   2.3,
+		Battery: 68.0,
+		Status:  1,
 	})
-	t.log.Debug("robot location refreshed", slog.String("robot_code", "H20-001"), slog.Time("updated_at", now))
+	t.log.Debug("usv location refreshed", slog.String("usv_id", "USV-001"))
 }
