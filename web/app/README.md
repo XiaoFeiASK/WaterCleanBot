@@ -23,8 +23,8 @@ GET /api/robots/{robotCode}/location
 
 ```json
 {
-  "lat": 39.9087,
-  "lng": 116.3975,
+  "lat": 31.07,
+  "lng": 120.88,
   "heading": 135.0,
   "speed": 2.3,
   "battery": 68.0,

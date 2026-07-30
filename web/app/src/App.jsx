@@ -100,14 +100,31 @@ function StatusBadge({ position, loading }) {
 
 function LocationMap({ position }) {
   const mapNode = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
   const [mapError, setMapError] = useState('');
 
+  useEffect(() => () => {
+    markerRef.current = null;
+    mapRef.current?.destroy();
+    mapRef.current = null;
+  }, []);
+
   useEffect(() => {
-    if (!position || !mapNode.current) return undefined;
+    if (!position) {
+      markerRef.current = null;
+      mapRef.current?.destroy();
+      mapRef.current = null;
+      setMapError('');
+      return undefined;
+    }
+
+    if (!mapNode.current) return undefined;
 
     const lat = position.lat;
     const lng = position.lng;
-    let map;
+    const nextPosition = [lng, lat];
+    const markerTitle = `${position.usvId} · 航向 ${position.heading}°`;
     let resizeTimer;
     let cancelled = false;
     setMapError('');
@@ -116,17 +133,34 @@ function LocationMap({ position }) {
       .then((AMap) => {
         if (cancelled || !mapNode.current) return;
 
-        map = new AMap.Map(mapNode.current, {
-          center: [lng, lat],
-          zoom: 15,
-          resizeEnable: true,
-        });
-        new AMap.Marker({
-          map,
-          position: [lng, lat],
-          title: `${position.usvId} · 航向 ${position.heading}°`,
-        });
-        resizeTimer = window.setTimeout(() => map?.resize(), 0);
+        if (!mapRef.current) {
+          mapRef.current = new AMap.Map(mapNode.current, {
+            center: nextPosition,
+            zoom: 15,
+            resizeEnable: true,
+          });
+          markerRef.current = new AMap.Marker({
+            map: mapRef.current,
+            position: nextPosition,
+            title: markerTitle,
+          });
+          resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
+          return;
+        }
+
+        if (!markerRef.current) {
+          markerRef.current = new AMap.Marker({
+            map: mapRef.current,
+            position: nextPosition,
+            title: markerTitle,
+          });
+          return;
+        }
+
+        markerRef.current.setPosition(nextPosition);
+        if (typeof markerRef.current.setTitle === 'function') {
+          markerRef.current.setTitle(markerTitle);
+        }
       })
       .catch(() => {
         if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
@@ -135,7 +169,6 @@ function LocationMap({ position }) {
     return () => {
       cancelled = true;
       window.clearTimeout(resizeTimer);
-      map?.destroy();
     };
   }, [position]);
 
@@ -215,8 +248,8 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
             <Wifi size={20} className={position ? 'icon-green' : 'icon-muted'} />
           </div>
           <div className="detail-list">
-            <DetailRow icon={MapPinned} label="纬度" value={formatNumber(position?.lat)} />
-            <DetailRow icon={MapPinned} label="经度" value={formatNumber(position?.lng)} />
+            <DetailRow icon={MapPinned} label="纬度" value={formatNumber(position?.lat, 2)} />
+            <DetailRow icon={MapPinned} label="经度" value={formatNumber(position?.lng, 2)} />
             <DetailRow icon={Gauge} label="速度" value={typeof position?.speed === 'number' ? `${position.speed} m/s` : '暂无数据'} />
             <DetailRow icon={Gauge} label="电量" value={typeof position?.battery === 'number' ? `${position.battery}%` : '暂无数据'} />
             <DetailRow icon={MapPinned} label="航向" value={typeof position?.heading === 'number' ? `${position.heading}°` : '暂无数据'} />

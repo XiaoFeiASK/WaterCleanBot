@@ -49,8 +49,8 @@ func (t *Task) Start(ctx context.Context) {
 func (t *Task) refreshDemoPosition() {
 	t.store.Update(Position{
 		USVID:   "USV-001",
-		Lat:     39.9087,
-		Lng:     116.3975,
+		Lat:     31.07,
+		Lng:     120.88,
 		Heading: 135.0,
 		Speed:   2.3,
 		Battery: 68.0,
