@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
 import {
   Bell,
   ChevronRight,
@@ -20,6 +19,39 @@ import {
 import { fetchRobotLocation, getLocationErrorMessage, getRobotCodeForDevice } from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
+const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
+const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
+
+let amapPromise;
+
+function loadAMap() {
+  if (window.AMap) return Promise.resolve(window.AMap);
+  if (amapPromise) return amapPromise;
+
+  amapPromise = new Promise((resolve, reject) => {
+    if (!AMAP_KEY) {
+      reject(new Error('Missing AMap API key'));
+      return;
+    }
+
+    if (AMAP_SECURITY_CODE) {
+      window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_KEY)}`;
+    script.async = true;
+    script.dataset.amapLoader = 'true';
+    script.onload = () => {
+      if (window.AMap) resolve(window.AMap);
+      else reject(new Error('AMap loaded without a global API'));
+    };
+    script.onerror = () => reject(new Error('Failed to load AMap'));
+    document.head.appendChild(script);
+  });
+
+  return amapPromise;
+}
 
 const navGroups = [
   {
@@ -68,28 +100,42 @@ function StatusBadge({ position, loading }) {
 
 function LocationMap({ position }) {
   const mapNode = useRef(null);
+  const [mapError, setMapError] = useState('');
 
   useEffect(() => {
     if (!position || !mapNode.current) return undefined;
 
     const lat = position.lat;
     const lng = position.lng;
-    const map = L.map(mapNode.current, { zoomControl: true }).setView([lat, lng], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
-    L.circleMarker([lat, lng], {
-      radius: 9,
-      color: '#ffffff',
-      weight: 3,
-      fillColor: '#0f6e56',
-      fillOpacity: 1,
-    }).addTo(map).bindTooltip(`${position.usvId} · 航向 ${position.heading}°`);
+    let map;
+    let resizeTimer;
+    let cancelled = false;
+    setMapError('');
 
-    const resizeTimer = window.setTimeout(() => map.invalidateSize(), 0);
+    loadAMap()
+      .then((AMap) => {
+        if (cancelled || !mapNode.current) return;
+
+        map = new AMap.Map(mapNode.current, {
+          center: [lng, lat],
+          zoom: 15,
+          resizeEnable: true,
+        });
+        new AMap.Marker({
+          map,
+          position: [lng, lat],
+          title: `${position.usvId} · 航向 ${position.heading}°`,
+        });
+        resizeTimer = window.setTimeout(() => map?.resize(), 0);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
+      });
+
     return () => {
+      cancelled = true;
       window.clearTimeout(resizeTimer);
-      map.remove();
+      map?.destroy();
     };
   }, [position]);
 
@@ -99,6 +145,15 @@ function LocationMap({ position }) {
         <MapPinned size={28} strokeWidth={1.5} />
         <strong>暂无位置数据</strong>
         <span>查询成功后显示机器人真实位置</span>
+      </div>
+    );
+  }
+
+  if (mapError) {
+    return (
+      <div className="map-empty map-error" role="alert">
+        <MapPinned size={28} strokeWidth={1.5} />
+        <strong>{mapError}</strong>
       </div>
     );
   }

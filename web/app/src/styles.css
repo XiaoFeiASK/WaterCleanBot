@@ -94,6 +94,7 @@ h1 { margin-bottom: 5px; color: #1b2531; font-size: 22px; line-height: 1.25; }
 .map-empty { height: 385px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #9ba7b3; background-image: linear-gradient(#e4eaee 1px, transparent 1px), linear-gradient(90deg, #e4eaee 1px, transparent 1px); background-size: 42px 42px; }
 .map-empty strong { color: #526171; font-size: 14px; }
 .map-empty span { font-size: 12px; }
+.map-error strong { max-width: 280px; color: var(--red); text-align: center; line-height: 1.5; }
 .position-details { padding: 17px; border: 1px solid var(--line); border-radius: 6px; background: #fbfcfd; }
 .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .detail-label { color: var(--muted); font-size: 11px; }
