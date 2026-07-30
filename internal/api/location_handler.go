@@ -13,10 +13,10 @@ import (
 // RobotLocationHandler 返回指定机器人当前最新位置。
 func RobotLocationHandler(store *location.Store, log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		robotCode := r.PathValue("robotCode")
-		position, ok := store.Get(robotCode)
+		robotName := r.PathValue("robotName")
+		position, ok := store.Get(robotName)
 		if !ok {
-			log.Debug("robot location not found", slog.String("robot_code", robotCode))
+			log.Debug("robot location not found", slog.String("robot_name", robotName))
 			writeJSON(w, http.StatusNotFound, map[string]string{
 				"error": "robot location not found",
 			})

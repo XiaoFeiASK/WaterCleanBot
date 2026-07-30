@@ -14,10 +14,10 @@ npm run dev
 开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。机器人位置页面调用唯一已确认接口：
 
 ```text
-GET /api/robots/{robotCode}/location
+GET /api/robots/{robotName}/location
 ```
 
-当前前端设备映射集中在 `src/api.js`：`AC-001` -> `USV-001`。`VITE_API_BASE_URL` 可覆盖 API 基地址，当前部署应使用 HTTP 地址，HTTPS 由反向代理负责。
+当前前端设备映射集中在 `src/api.js`：`清澜一号` -> `清澜一号`。`VITE_API_BASE_URL` 可覆盖 API 基地址，当前部署应使用 HTTP 地址，HTTPS 由反向代理负责。
 
 位置响应格式：
 
@@ -29,7 +29,7 @@ GET /api/robots/{robotCode}/location
   "speed": 2.3,
   "battery": 68.0,
   "status": 1,
-  "usvId": "USV-001"
+  "robotName": "清澜一号"
 }
 ```
 

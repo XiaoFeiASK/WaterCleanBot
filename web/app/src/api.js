@@ -4,13 +4,13 @@ const API_BASE_URL = (
 ).replace(/\/$/, '');
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
 
-// 当前前端设备与后端无人船的唯一已确认映射。
+// 当前前端设备与后端机器人的唯一已确认映射。
 export const DEVICE_ROBOT_MAPPING = Object.freeze({
-  'AC-001': 'USV-001',
+  '清澜一号': '清澜一号',
 });
 
 export const LOCATION_ERROR_MESSAGES = Object.freeze({
-  INVALID_ROBOT_CODE: '机器人编号无效',
+  INVALID_ROBOT_CODE: '设备名称无效',
   NOT_FOUND: '未找到该机器人位置',
   REQUEST_FAILED: '位置查询失败，请检查服务是否正常',
   SERVER_ERROR: '服务器异常，请稍后重试',
@@ -22,23 +22,23 @@ function createLocationError(code) {
   return error;
 }
 
-export function getRobotCodeForDevice(deviceId) {
-  return DEVICE_ROBOT_MAPPING[deviceId] || '';
+export function getRobotNameForDevice(deviceName) {
+  return DEVICE_ROBOT_MAPPING[deviceName] || '';
 }
 
-function validateLocationPayload(payload, expectedRobotCode) {
+function validateLocationPayload(payload, expectedRobotName) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw createLocationError('REQUEST_FAILED');
   }
 
-  const requiredFields = ['lat', 'lng', 'heading', 'speed', 'battery', 'status', 'usvId'];
+  const requiredFields = ['lat', 'lng', 'heading', 'speed', 'battery', 'status', 'robotName'];
   if (requiredFields.some((field) => !(field in payload))) {
     throw createLocationError('REQUEST_FAILED');
   }
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
   if (
-    payload.usvId !== expectedRobotCode ||
+    payload.robotName !== expectedRobotName ||
     !isNumber(payload.lat) || payload.lat < -90 || payload.lat > 90 ||
     !isNumber(payload.lng) || payload.lng < -180 || payload.lng > 180 ||
     !isNumber(payload.speed) || payload.speed < 0 ||
@@ -52,9 +52,9 @@ function validateLocationPayload(payload, expectedRobotCode) {
   return payload;
 }
 
-export async function fetchRobotLocation(deviceId, signal) {
-  const robotCode = getRobotCodeForDevice(deviceId);
-  if (!robotCode) throw createLocationError('INVALID_ROBOT_CODE');
+export async function fetchRobotLocation(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createLocationError('INVALID_ROBOT_CODE');
 
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), LOCATION_REQUEST_TIMEOUT_MS);
@@ -62,7 +62,7 @@ export async function fetchRobotLocation(deviceId, signal) {
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotCode)}/location`,
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/location`,
       { signal: requestSignal, cache: 'no-store' },
     );
 
@@ -77,7 +77,7 @@ export async function fetchRobotLocation(deviceId, signal) {
       throw createLocationError('REQUEST_FAILED');
     }
 
-    return validateLocationPayload(payload, robotCode);
+    return validateLocationPayload(payload, robotName);
   } catch (error) {
     if (error.code) throw error;
     if (error.name === 'AbortError') throw createLocationError('REQUEST_FAILED');

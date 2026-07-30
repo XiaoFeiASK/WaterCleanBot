@@ -19,13 +19,13 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 当前唯一接口：
 
 ```text
-GET /api/robots/{robotCode}/location
+GET /api/robots/{robotName}/location
 ```
 
 示例：
 
 ```text
-GET http://localhost:8080/api/robots/H20-001/location
+GET http://localhost:8080/api/robots/清澜一号/location
 ```
 
 ## 当前文件架构
@@ -66,7 +66,7 @@ WaterCleanBot/
 
 ```text
 location.Task
-  -> 周期性刷新 H20-001 演示位置
+  -> 周期性刷新“清澜一号”演示位置
   -> location.Store 保存最新位置
   -> api.LocationHandler 读取最新位置
   -> 前端或调试工具通过 HTTP 获取位置
@@ -107,7 +107,7 @@ go run ./cmd/watercleanbot
 访问：
 
 ```text
-http://localhost:8080/api/robots/H20-001/location
+http://localhost:8080/api/robots/清澜一号/location
 ```
 
 ## 当前刻意不做

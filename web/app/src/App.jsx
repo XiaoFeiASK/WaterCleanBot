@@ -16,11 +16,12 @@ import {
   ShipWheel,
   Wifi,
 } from 'lucide-react';
-import { fetchRobotLocation, getLocationErrorMessage, getRobotCodeForDevice } from './api';
+import { fetchRobotLocation, getLocationErrorMessage, getRobotNameForDevice } from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
+const DEFAULT_DEVICE_ID = '清澜一号';
 
 let amapPromise;
 
@@ -124,7 +125,7 @@ function LocationMap({ position }) {
     const lat = position.lat;
     const lng = position.lng;
     const nextPosition = [lng, lat];
-    const markerTitle = `${position.usvId} · 航向 ${position.heading}°`;
+    const markerTitle = `${position.robotName} · 航向 ${position.heading}°`;
     let resizeTimer;
     let cancelled = false;
     setMapError('');
@@ -206,7 +207,7 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
       </div>
 
       <form className="location-query" onSubmit={onSubmit}>
-        <label htmlFor="device-code">设备编号</label>
+        <label htmlFor="device-code">设备名称</label>
         <div className="query-controls">
           <div className="input-with-icon">
             <Search size={16} aria-hidden="true" />
@@ -214,7 +215,7 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
               id="device-code"
               value={deviceId}
               onChange={(event) => setDeviceId(event.target.value)}
-              placeholder="输入设备编号，如 AC-001"
+              placeholder="输入设备名称，如 清澜一号"
               autoComplete="off"
             />
           </div>
@@ -233,7 +234,7 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
             <RefreshCw size={17} className={loading ? 'spin' : ''} />
           </button>
         </div>
-        <p className="query-hint">当前已配置设备映射：AC-001</p>
+        <p className="query-hint">当前已配置设备：清澜一号</p>
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
@@ -242,8 +243,8 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
         <div className="position-details">
           <div className="detail-header">
             <div>
-              <span className="detail-label">后端机器人</span>
-              <h3>{position?.usvId || '暂无设备'}</h3>
+              <span className="detail-label">机器人名称</span>
+              <h3>{position?.robotName || '暂无设备'}</h3>
             </div>
             <Wifi size={20} className={position ? 'icon-green' : 'icon-muted'} />
           </div>
@@ -333,8 +334,8 @@ function StatCard({ icon: Icon, label }) {
 function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [deviceId, setDeviceId] = useState('AC-001');
-  const [activeDeviceId, setActiveDeviceId] = useState('');
+  const [deviceId, setDeviceId] = useState(DEFAULT_DEVICE_ID);
+  const [activeDeviceId, setActiveDeviceId] = useState(DEFAULT_DEVICE_ID);
   const [position, setPosition] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -350,10 +351,10 @@ function App() {
 
   async function loadLocation(code = deviceId, options = {}) {
     const normalizedCode = code.trim().toUpperCase();
-    if (!normalizedCode || !getRobotCodeForDevice(normalizedCode)) {
-      setError('机器人编号无效');
+    if (!normalizedCode || !getRobotNameForDevice(normalizedCode)) {
+      setError('设备名称无效');
       setPosition(null);
-      showToast('机器人编号无效');
+      showToast('设备名称无效');
       return;
     }
     if (loadingRef.current) return;
@@ -379,7 +380,7 @@ function App() {
   function requestLocation(code = deviceId) {
     const normalizedCode = code.trim().toUpperCase();
     setDeviceId(normalizedCode);
-    if (!getRobotCodeForDevice(normalizedCode)) {
+    if (!getRobotNameForDevice(normalizedCode)) {
       setActiveDeviceId('');
       loadLocation(normalizedCode);
       return;
@@ -390,6 +391,7 @@ function App() {
 
   useEffect(() => {
     if (!activeDeviceId) return undefined;
+    loadLocation(activeDeviceId, { silent: true });
     const timer = window.setInterval(() => loadLocation(activeDeviceId, { silent: true }), POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [activeDeviceId]);

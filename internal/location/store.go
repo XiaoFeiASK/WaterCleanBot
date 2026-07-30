@@ -21,7 +21,7 @@ func NewStore() *Store {
 func (s *Store) Update(position Position) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.positions[position.USVID] = position
+	s.positions[position.RobotName] = position
 }
 
 // Get 读取一台无人船的最新位置。

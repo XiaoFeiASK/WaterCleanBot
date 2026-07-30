@@ -25,7 +25,7 @@ func NewTask(store *Store, interval time.Duration, log *slog.Logger) *Task {
 }
 
 // Start 启动实时定位任务。
-// 当前阶段只维护一台演示无人船 USV-001 的位置，便于前端和接口联调。
+// 当前阶段只维护一台演示机器人“清澜一号”的位置，便于前端和接口联调。
 func (t *Task) Start(ctx context.Context) {
 	if t.interval <= 0 {
 		t.interval = 5 * time.Second
@@ -48,13 +48,13 @@ func (t *Task) Start(ctx context.Context) {
 
 func (t *Task) refreshDemoPosition() {
 	t.store.Update(Position{
-		USVID:   "USV-001",
-		Lat:     31.07,
-		Lng:     120.88,
-		Heading: 135.0,
-		Speed:   2.3,
-		Battery: 68.0,
-		Status:  1,
+		RobotName: "清澜一号",
+		Lat:       31.07,
+		Lng:       120.88,
+		Heading:   135.0,
+		Speed:     2.3,
+		Battery:   68.0,
+		Status:    1,
 	})
-	t.log.Debug("usv location refreshed", slog.String("usv_id", "USV-001"))
+	t.log.Debug("robot location refreshed", slog.String("robot_name", "清澜一号"))
 }
