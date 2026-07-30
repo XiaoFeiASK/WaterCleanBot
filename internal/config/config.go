@@ -3,7 +3,9 @@
 package config
 
 import (
+	"bufio"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -12,14 +14,54 @@ type Config struct {
 	HTTPAddr               string
 	AppEnv                 string
 	LocationUpdateInterval time.Duration
+	DatabaseURL            string
+	MQTTBrokerURL          string
+	MQTTUsername           string
+	MQTTPassword           string
 }
 
-// Load 从环境变量读取配置，并应用本地开发默认值。
+// Load 从 .env 和环境变量读取配置，并应用本地开发默认值。
 func Load() Config {
+	loadDotEnv(".env")
+
 	return Config{
 		HTTPAddr:               getenv("HTTP_ADDR", ":8080"),
 		AppEnv:                 getenv("APP_ENV", "local"),
 		LocationUpdateInterval: getDuration("LOCATION_UPDATE_INTERVAL", 5*time.Second),
+		DatabaseURL:            getenv("DATABASE_URL", "postgres://waterbot:waterbot_dev_password@localhost:5432/waterbot?sslmode=disable"),
+		MQTTBrokerURL:          getenv("MQTT_BROKER_URL", "tcp://localhost:1883"),
+		MQTTUsername:           getenv("MQTT_USERNAME", ""),
+		MQTTPassword:           getenv("MQTT_PASSWORD", ""),
+	}
+}
+
+func loadDotEnv(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+
+		key = strings.TrimSpace(key)
+		if key == "" || os.Getenv(key) != "" {
+			continue
+		}
+
+		value = strings.TrimSpace(value)
+		value = strings.Trim(value, "\"'")
+		_ = os.Setenv(key, value)
 	}
 }
 
