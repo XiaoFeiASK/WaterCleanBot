@@ -92,28 +92,39 @@ function formatBattery(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
 }
 
-function getFleetBubbleScale(zoom = 13) {
-  if (zoom <= 7) return 0.45;
-  if (zoom <= 10) return 0.58;
-  if (zoom <= 13) return 0.76;
-  if (zoom <= 15) return 0.9;
-  return 1;
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getFleetBubbleStyle(zoom = 13) {
+  const progress = clamp((zoom - 5) / 11, 0, 1);
+  const easedProgress = progress ** 0.85;
+  return {
+    scale: Number((0.32 + 0.68 * easedProgress).toFixed(3)),
+    opacity: Number((0.35 + 0.65 * progress).toFixed(3)),
+  };
 }
 
 function getMapZoom(map) {
   return typeof map?.getZoom === 'function' ? map.getZoom() : 13;
 }
 
+function applyFleetBubbleStyle(content, zoom) {
+  const bubbleStyle = getFleetBubbleStyle(zoom);
+  content.style.setProperty('--fleet-bubble-scale', bubbleStyle.scale);
+  content.style.setProperty('--fleet-bubble-opacity', bubbleStyle.opacity);
+}
+
 function updateFleetMarkerBubbleScales(markerGroups, zoom) {
   markerGroups.forEach((markerGroup) => {
-    markerGroup.content.style.setProperty('--fleet-bubble-scale', getFleetBubbleScale(zoom));
+    applyFleetBubbleStyle(markerGroup.content, zoom);
   });
 }
 
 function createFleetMarkerContent(position, zoom, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
-  marker.style.setProperty('--fleet-bubble-scale', getFleetBubbleScale(zoom));
+  applyFleetBubbleStyle(marker, zoom);
   if (onClick) {
     marker.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -270,6 +281,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
     markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
     markersRef.current.clear();
     if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+      mapRef.current.off('zoomchange', zoomHandlerRef.current);
       mapRef.current.off('zoomend', zoomHandlerRef.current);
     }
     zoomHandlerRef.current = null;
@@ -282,6 +294,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
       markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
       markersRef.current.clear();
       if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+        mapRef.current.off('zoomchange', zoomHandlerRef.current);
         mapRef.current.off('zoomend', zoomHandlerRef.current);
       }
       zoomHandlerRef.current = null;
@@ -312,6 +325,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
             zoomHandlerRef.current = () => {
               updateFleetMarkerBubbleScales(markersRef.current, getMapZoom(mapRef.current));
             };
+            mapRef.current.on('zoomchange', zoomHandlerRef.current);
             mapRef.current.on('zoomend', zoomHandlerRef.current);
           }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
