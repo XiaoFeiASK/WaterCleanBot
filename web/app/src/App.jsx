@@ -110,10 +110,16 @@ function updateFleetMarkerBubbleScales(markerGroups, zoom) {
   });
 }
 
-function createFleetMarkerContent(position, zoom) {
+function createFleetMarkerContent(position, zoom, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
   marker.style.setProperty('--fleet-bubble-scale', getFleetBubbleScale(zoom));
+  if (onClick) {
+    marker.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onClick(position.robotName);
+    });
+  }
 
   const bubble = document.createElement('div');
   bubble.className = 'fleet-map-marker-bubble';
@@ -253,7 +259,7 @@ function LocationMap({ position }) {
   return <div ref={mapNode} className="location-map" aria-label="机器人实时位置地图" />;
 }
 
-function FleetMap({ positions }) {
+function FleetMap({ positions, onOpenDeviceDetail }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
@@ -317,7 +323,7 @@ function FleetMap({ positions }) {
           const markerKey = position.robotName;
           const nextPosition = [position.lng, position.lat];
           const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)}`;
-          const markerContent = createFleetMarkerContent(position, currentZoom);
+          const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
           activeNames.add(markerKey);
 
           const existingMarkerGroup = markersRef.current.get(markerKey);
@@ -388,7 +394,7 @@ function FleetStatusBadge({ positions, loading }) {
   );
 }
 
-function FleetOverview({ positions, loading, error }) {
+function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   return (
     <section className="location-section fleet-section">
       <div className="section-heading">
@@ -401,11 +407,17 @@ function FleetOverview({ positions, loading, error }) {
 
       {error && <p className="form-error" role="alert">{error}</p>}
 
-      <div className="map-frame fleet-map-frame"><FleetMap positions={positions} /></div>
+      <div className="map-frame fleet-map-frame"><FleetMap positions={positions} onOpenDeviceDetail={onOpenDeviceDetail} /></div>
 
       <div className="fleet-list" aria-label="全域设备位置列表">
         {positions.map((position) => (
-          <div className="fleet-device-card" key={position.robotName}>
+          <button
+            className="fleet-device-card"
+            type="button"
+            key={position.robotName}
+            onClick={() => onOpenDeviceDetail(position.robotName)}
+            aria-label={`查看${position.robotName}设备详情`}
+          >
             <div>
               <strong>{position.robotName}</strong>
               <span>经纬度 {formatNumber(position.lng, 2)}, {formatNumber(position.lat, 2)}</span>
@@ -414,7 +426,7 @@ function FleetOverview({ positions, loading, error }) {
               <span>电量 {formatBattery(position.battery)}</span>
               <span>{typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无速度'}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </section>
@@ -518,7 +530,7 @@ function Toast({ toast }) {
   return <div className={`toast toast-${toast.type}`} role="status">{toast.message}</div>;
 }
 
-function Dashboard({ fleetPositions, fleetLoading, fleetError }) {
+function Dashboard({ fleetPositions, fleetLoading, fleetError, onOpenDeviceDetail }) {
   const averageSpeed = getAverage(fleetPositions.map((position) => position.speed));
   const averageBattery = getAverage(fleetPositions.map((position) => position.battery));
   const abnormalCount = fleetPositions.filter((position) => position.status !== 1).length;
@@ -541,7 +553,12 @@ function Dashboard({ fleetPositions, fleetLoading, fleetError }) {
         <StatCard icon={Gauge} label="平均电量" value={averageBattery === null ? '暂无数据' : `${Math.round(averageBattery)}%`} />
       </div>
 
-      <FleetOverview positions={fleetPositions} loading={fleetLoading} error={fleetError} />
+      <FleetOverview
+        positions={fleetPositions}
+        loading={fleetLoading}
+        error={fleetError}
+        onOpenDeviceDetail={onOpenDeviceDetail}
+      />
 
       <div className="lower-grid">
         <EmptyModule title="关键系统通知" />
@@ -647,6 +664,16 @@ function App() {
     loadLocation(normalizedCode);
   }
 
+  function openDeviceDetail(robotName) {
+    const normalizedName = robotName.trim();
+    if (!normalizedName) return;
+    setDeviceId(normalizedName);
+    setActiveDeviceId(normalizedName);
+    setActivePage('device-detail');
+    setSidebarOpen(false);
+    loadLocation(normalizedName, { silent: true });
+  }
+
   useEffect(() => {
     if (!activeDeviceId) return undefined;
     loadLocation(activeDeviceId, { silent: true });
@@ -685,7 +712,12 @@ function App() {
   };
 
   const pageContent = activePage === 'dashboard' ? (
-    <Dashboard fleetPositions={fleetPositions} fleetLoading={fleetLoading} fleetError={fleetError} />
+    <Dashboard
+      fleetPositions={fleetPositions}
+      fleetLoading={fleetLoading}
+      fleetError={fleetError}
+      onOpenDeviceDetail={openDeviceDetail}
+    />
   ) : activePage === 'device-detail' ? (
     <>
       <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情</h1><p className="page-description">查询指定设备的实时位置。</p></div></div>
