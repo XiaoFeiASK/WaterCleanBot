@@ -27,6 +27,13 @@ func RobotLocationHandler(store *location.Store, log *slog.Logger) http.HandlerF
 	}
 }
 
+// RobotLocationsHandler 返回所有机器人当前最新位置。
+func RobotLocationsHandler(store *location.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, store.List())
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

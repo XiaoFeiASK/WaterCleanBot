@@ -38,7 +38,7 @@ function validateLocationPayload(payload, expectedRobotName) {
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
   if (
-    payload.robotName !== expectedRobotName ||
+    (expectedRobotName && payload.robotName !== expectedRobotName) ||
     !isNumber(payload.lat) || payload.lat < -90 || payload.lat > 90 ||
     !isNumber(payload.lng) || payload.lng < -180 || payload.lng > 180 ||
     !isNumber(payload.speed) || payload.speed < 0 ||
@@ -78,6 +78,38 @@ export async function fetchRobotLocation(deviceName, signal) {
     }
 
     return validateLocationPayload(payload, robotName);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createLocationError('REQUEST_FAILED');
+    throw createLocationError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function fetchAllRobotLocations(signal) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), LOCATION_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/locations`,
+      { signal: requestSignal, cache: 'no-store' },
+    );
+
+    if (response.status >= 500) throw createLocationError('SERVER_ERROR');
+    if (!response.ok) throw createLocationError('REQUEST_FAILED');
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throw createLocationError('REQUEST_FAILED');
+    }
+
+    if (!Array.isArray(payload)) throw createLocationError('REQUEST_FAILED');
+    return payload.map((position) => validateLocationPayload(position));
   } catch (error) {
     if (error.code) throw error;
     if (error.name === 'AbortError') throw createLocationError('REQUEST_FAILED');

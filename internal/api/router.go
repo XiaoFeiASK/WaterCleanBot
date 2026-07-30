@@ -12,6 +12,7 @@ import (
 // NewRouter 注册当前阶段唯一对外接口：查询机器人实时位置。
 func NewRouter(store *location.Store, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/robots/locations", RobotLocationsHandler(store))
 	mux.HandleFunc("GET /api/robots/{robotName}/location", RobotLocationHandler(store, log))
 	return mux
 }

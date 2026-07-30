@@ -16,7 +16,7 @@ import {
   ShipWheel,
   Wifi,
 } from 'lucide-react';
-import { fetchRobotLocation, getLocationErrorMessage, getRobotNameForDevice } from './api';
+import { fetchAllRobotLocations, fetchRobotLocation, getLocationErrorMessage, getRobotNameForDevice } from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
@@ -86,6 +86,30 @@ const pageNames = Object.fromEntries(
 
 function formatNumber(value, digits = 4) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '暂无数据';
+}
+
+function formatBattery(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
+}
+
+function createFleetMarkerContent(position) {
+  const marker = document.createElement('div');
+  marker.className = 'fleet-map-marker';
+
+  const name = document.createElement('strong');
+  name.textContent = position.robotName;
+
+  const battery = document.createElement('span');
+  battery.textContent = `电量 ${formatBattery(position.battery)}`;
+
+  marker.append(name, battery);
+  return marker;
+}
+
+function getAverage(values) {
+  const validValues = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+  if (!validValues.length) return null;
+  return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
 }
 
 function StatusBadge({ position, loading }) {
@@ -195,6 +219,157 @@ function LocationMap({ position }) {
   return <div ref={mapNode} className="location-map" aria-label="机器人实时位置地图" />;
 }
 
+function FleetMap({ positions }) {
+  const mapNode = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef(new Map());
+  const [mapError, setMapError] = useState('');
+
+  useEffect(() => () => {
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current.clear();
+    mapRef.current?.destroy();
+    mapRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!positions.length) {
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current.clear();
+      mapRef.current?.destroy();
+      mapRef.current = null;
+      setMapError('');
+      return undefined;
+    }
+
+    if (!mapNode.current) return undefined;
+
+    let resizeTimer;
+    let cancelled = false;
+    setMapError('');
+
+    loadAMap()
+      .then((AMap) => {
+        if (cancelled || !mapNode.current) return;
+
+        const firstPosition = [positions[0].lng, positions[0].lat];
+        if (!mapRef.current) {
+          mapRef.current = new AMap.Map(mapNode.current, {
+            center: firstPosition,
+            zoom: 13,
+            resizeEnable: true,
+          });
+          resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
+        }
+
+        const activeNames = new Set();
+        positions.forEach((position) => {
+          const markerKey = position.robotName;
+          const nextPosition = [position.lng, position.lat];
+          const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)}`;
+          const markerContent = createFleetMarkerContent(position);
+          activeNames.add(markerKey);
+
+          const existingMarker = markersRef.current.get(markerKey);
+          if (existingMarker) {
+            existingMarker.setPosition(nextPosition);
+            if (typeof existingMarker.setTitle === 'function') existingMarker.setTitle(markerTitle);
+            if (typeof existingMarker.setContent === 'function') existingMarker.setContent(markerContent);
+            return;
+          }
+
+          const marker = new AMap.Marker({
+            map: mapRef.current,
+            position: nextPosition,
+            title: markerTitle,
+            content: markerContent,
+            offset: new AMap.Pixel(-58, -52),
+          });
+          markersRef.current.set(markerKey, marker);
+        });
+
+        markersRef.current.forEach((marker, markerKey) => {
+          if (activeNames.has(markerKey)) return;
+          marker.setMap(null);
+          markersRef.current.delete(markerKey);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(resizeTimer);
+    };
+  }, [positions]);
+
+  if (!positions.length) {
+    return (
+      <div className="map-empty">
+        <MapPinned size={28} strokeWidth={1.5} />
+        <strong>暂无全域位置数据</strong>
+        <span>获取到设备位置后显示实时分布</span>
+      </div>
+    );
+  }
+
+  if (mapError) {
+    return (
+      <div className="map-empty map-error" role="alert">
+        <MapPinned size={28} strokeWidth={1.5} />
+        <strong>{mapError}</strong>
+      </div>
+    );
+  }
+
+  return <div ref={mapNode} className="location-map fleet-map" aria-label="全域实时轨迹分布地图" />;
+}
+
+function FleetStatusBadge({ positions, loading }) {
+  if (loading && !positions.length) return <span className="status-badge status-pending">同步中</span>;
+  if (!positions.length) return <span className="status-badge status-empty">暂无数据</span>;
+  return (
+    <span className="status-badge status-online">
+      <span className="status-dot" />
+      已同步 {positions.length} 台
+    </span>
+  );
+}
+
+function FleetOverview({ positions, loading, error }) {
+  return (
+    <section className="location-section fleet-section">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">全域监控</p>
+          <h2>全域实时轨迹分布</h2>
+        </div>
+        <FleetStatusBadge positions={positions} loading={loading} />
+      </div>
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+
+      <div className="map-frame fleet-map-frame"><FleetMap positions={positions} /></div>
+
+      <div className="fleet-list" aria-label="全域设备位置列表">
+        {positions.map((position) => (
+          <div className="fleet-device-card" key={position.robotName}>
+            <div>
+              <strong>{position.robotName}</strong>
+              <span>经纬度 {formatNumber(position.lng, 2)}, {formatNumber(position.lat, 2)}</span>
+            </div>
+            <div className="fleet-device-meta">
+              <span>电量 {formatBattery(position.battery)}</span>
+              <span>{typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无速度'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubmit, onRefresh }) {
   return (
     <section className="location-section">
@@ -292,41 +467,50 @@ function Toast({ toast }) {
   return <div className={`toast toast-${toast.type}`} role="status">{toast.message}</div>;
 }
 
-function Dashboard({ locationProps }) {
+function Dashboard({ fleetPositions, fleetLoading, fleetError }) {
+  const averageSpeed = getAverage(fleetPositions.map((position) => position.speed));
+  const averageBattery = getAverage(fleetPositions.map((position) => position.battery));
+  const abnormalCount = fleetPositions.filter((position) => position.status !== 1).length;
+
   return (
     <>
       <div className="page-intro">
         <div>
           <p className="eyebrow">监控中心</p>
           <h1>总览看板</h1>
-          <p className="page-description">查看机器人实时位置与服务状态。</p>
+          <p className="page-description">查看全域实时轨迹分布、设备电量和运行状态。</p>
         </div>
         <div className="api-state"><span className="status-dot status-dot-muted" />实时数据接口</div>
       </div>
 
       <div className="stat-grid">
-        <StatCard icon={ShipWheel} label="运行设备数" />
-        <StatCard icon={MapPinned} label="实时位置" />
-        <StatCard icon={CircleAlert} label="未处理预警" />
-        <StatCard icon={Gauge} label="平均速度" />
+        <StatCard icon={ShipWheel} label="在线设备数" value={fleetPositions.length ? `${fleetPositions.length} 台` : '暂无数据'} />
+        <StatCard icon={MapPinned} label="实时位置点" value={fleetPositions.length ? `${fleetPositions.length} 个` : '暂无数据'} />
+        <StatCard icon={CircleAlert} label="异常设备数" value={fleetPositions.length ? `${abnormalCount} 台` : '暂无数据'} />
+        <StatCard icon={Gauge} label="平均电量" value={averageBattery === null ? '暂无数据' : `${Math.round(averageBattery)}%`} />
       </div>
 
-      <LocationPanel {...locationProps} />
+      <FleetOverview positions={fleetPositions} loading={fleetLoading} error={fleetError} />
 
       <div className="lower-grid">
         <EmptyModule title="关键系统通知" />
-        <EmptyModule title="环境指数监测" />
+        <section className="empty-module fleet-summary-module">
+          <div className="empty-icon"><Gauge size={24} /></div>
+          <h2>全域运行摘要</h2>
+          <p>平均速度：{averageSpeed === null ? '暂无数据' : `${averageSpeed.toFixed(1)} m/s`}</p>
+          <span>地图标记已展示设备名称和电量信息。</span>
+        </section>
       </div>
     </>
   );
 }
 
-function StatCard({ icon: Icon, label }) {
+function StatCard({ icon: Icon, label, value = '暂无数据' }) {
   return (
-    <div className="stat-card stat-card-empty">
+    <div className={`stat-card ${value === '暂无数据' ? 'stat-card-empty' : ''}`}>
       <div className="stat-icon"><Icon size={20} /></div>
       <span className="stat-label">{label}</span>
-      <strong>暂无数据</strong>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -337,16 +521,39 @@ function App() {
   const [deviceId, setDeviceId] = useState(DEFAULT_DEVICE_ID);
   const [activeDeviceId, setActiveDeviceId] = useState(DEFAULT_DEVICE_ID);
   const [position, setPosition] = useState(null);
+  const [fleetPositions, setFleetPositions] = useState([]);
+  const [fleetLoading, setFleetLoading] = useState(false);
+  const [fleetError, setFleetError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
   const loadingRef = useRef(false);
+  const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
 
   function showToast(message, type = 'error') {
     setToast({ message, type });
     window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 2800);
+  }
+
+  async function loadFleetLocations(options = {}) {
+    if (fleetLoadingRef.current) return;
+
+    fleetLoadingRef.current = true;
+    setFleetLoading(true);
+    try {
+      const nextPositions = await fetchAllRobotLocations();
+      setFleetPositions(nextPositions);
+      setFleetError('');
+    } catch (requestError) {
+      const message = getLocationErrorMessage(requestError);
+      setFleetError(message);
+      if (!options.silent) showToast(message);
+    } finally {
+      fleetLoadingRef.current = false;
+      setFleetLoading(false);
+    }
   }
 
   async function loadLocation(code = deviceId, options = {}) {
@@ -396,6 +603,12 @@ function App() {
     return () => window.clearInterval(timer);
   }, [activeDeviceId]);
 
+  useEffect(() => {
+    loadFleetLocations({ silent: true });
+    const timer = window.setInterval(() => loadFleetLocations({ silent: true }), POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
   useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
 
   function showNotImplemented() {
@@ -421,7 +634,7 @@ function App() {
   };
 
   const pageContent = activePage === 'dashboard' ? (
-    <Dashboard locationProps={locationProps} />
+    <Dashboard fleetPositions={fleetPositions} fleetLoading={fleetLoading} fleetError={fleetError} />
   ) : activePage === 'device-detail' ? (
     <>
       <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情</h1><p className="page-description">查询指定设备的实时位置。</p></div></div>

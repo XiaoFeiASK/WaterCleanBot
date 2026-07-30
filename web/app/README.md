@@ -11,9 +11,10 @@ npm install
 npm run dev
 ```
 
-开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。机器人位置页面调用唯一已确认接口：
+开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。机器人位置页面调用已确认的位置接口：
 
 ```text
+GET /api/robots/locations
 GET /api/robots/{robotName}/location
 ```
 
@@ -33,4 +34,4 @@ GET /api/robots/{robotName}/location
 }
 ```
 
-当前后端只提供单机器人位置查询接口，因此设备列表、统计、告警和任务模块会显示无数据状态，不使用前端模拟数据。
+当前后端提供全量和单机器人位置查询接口；设备列表、告警和任务模块仍会显示无数据状态，不使用前端模拟数据。

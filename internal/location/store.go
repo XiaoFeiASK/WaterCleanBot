@@ -2,7 +2,10 @@
 
 package location
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // Store 保存每台无人船的最新位置。
 type Store struct {
@@ -25,9 +28,24 @@ func (s *Store) Update(position Position) {
 }
 
 // Get 读取一台无人船的最新位置。
-func (s *Store) Get(usvID string) (Position, bool) {
+func (s *Store) Get(robotName string) (Position, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	position, ok := s.positions[usvID]
+	position, ok := s.positions[robotName]
 	return position, ok
+}
+
+// List 读取所有机器人最新位置。
+func (s *Store) List() []Position {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	positions := make([]Position, 0, len(s.positions))
+	for _, position := range s.positions {
+		positions = append(positions, position)
+	}
+	sort.Slice(positions, func(i, j int) bool {
+		return positions[i].RobotName < positions[j].RobotName
+	})
+	return positions
 }
