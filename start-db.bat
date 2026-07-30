@@ -1,18 +1,31 @@
 @echo off
-rem 文件作用：一键启动本地 PostgreSQL/PostGIS 数据库容器。
+setlocal
 
 cd /d "%~dp0"
 
-docker compose up -d postgres
-if errorlevel 1 (
-    echo.
-    echo 数据库启动失败，请确认 Docker Desktop 已启动。
-    pause
-    exit /b 1
+if not exist "docker-compose.yml" (
+  echo [ERROR] docker-compose.yml was not found.
+  pause
+  exit /b 1
 )
 
-docker compose ps postgres
+where docker >nul 2>nul
+if errorlevel 1 (
+  echo [ERROR] Docker was not found. Please install or start Docker Desktop first.
+  pause
+  exit /b 1
+)
+
+echo [INFO] Starting PostgreSQL/PostGIS database...
+call docker compose up -d postgres
+if errorlevel 1 (
+  echo [ERROR] Database startup failed. Please make sure Docker Desktop is running.
+  pause
+  exit /b 1
+)
+
+call docker compose ps postgres
 
 echo.
-echo 数据库启动命令已执行完成。
+echo [INFO] Database startup command completed.
 pause
