@@ -85,6 +85,12 @@ MQTT 订阅机器人定位消息
 
 ## 本地运行
 
+一键启动本地 PostgreSQL/PostGIS 数据库：
+
+```powershell
+.\start-db.bat
+```
+
 启动本地 PostgreSQL/PostGIS 和 MQTT Broker：
 
 ```powershell
