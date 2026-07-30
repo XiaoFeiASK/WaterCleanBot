@@ -124,6 +124,7 @@ function updateFleetMarkerBubbleScales(markerGroups, zoom) {
 function createFleetMarkerContent(position, zoom, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
+  if (onClick) marker.classList.add('fleet-map-marker-clickable');
   applyFleetBubbleStyle(marker, zoom);
   if (onClick) {
     marker.addEventListener('click', (event) => {
@@ -178,17 +179,33 @@ function LocationMap({ position }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const markerContentRef = useRef(null);
+  const zoomHandlerRef = useRef(null);
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
+    markerRef.current?.setMap(null);
     markerRef.current = null;
+    markerContentRef.current = null;
+    if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+      mapRef.current.off('zoomchange', zoomHandlerRef.current);
+      mapRef.current.off('zoomend', zoomHandlerRef.current);
+    }
+    zoomHandlerRef.current = null;
     mapRef.current?.destroy();
     mapRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!position) {
+      markerRef.current?.setMap(null);
       markerRef.current = null;
+      markerContentRef.current = null;
+      if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+        mapRef.current.off('zoomchange', zoomHandlerRef.current);
+        mapRef.current.off('zoomend', zoomHandlerRef.current);
+      }
+      zoomHandlerRef.current = null;
       mapRef.current?.destroy();
       mapRef.current = null;
       setMapError('');
@@ -200,7 +217,7 @@ function LocationMap({ position }) {
     const lat = position.lat;
     const lng = position.lng;
     const nextPosition = [lng, lat];
-    const markerTitle = `${position.robotName} · 航向 ${position.heading}°`;
+    const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)} · 航向 ${position.heading}°`;
     let resizeTimer;
     let cancelled = false;
     setMapError('');
@@ -212,24 +229,29 @@ function LocationMap({ position }) {
         if (!mapRef.current) {
           mapRef.current = new AMap.Map(mapNode.current, {
             center: nextPosition,
-            zoom: 15,
+            zoom: 14,
             resizeEnable: true,
           });
-          markerRef.current = new AMap.Marker({
-            map: mapRef.current,
-            position: nextPosition,
-            title: markerTitle,
-          });
+          if (typeof mapRef.current.on === 'function') {
+            zoomHandlerRef.current = () => {
+              if (markerContentRef.current) applyFleetBubbleStyle(markerContentRef.current, getMapZoom(mapRef.current));
+            };
+            mapRef.current.on('zoomchange', zoomHandlerRef.current);
+            mapRef.current.on('zoomend', zoomHandlerRef.current);
+          }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
-          return;
         }
 
+        const markerContent = createFleetMarkerContent(position, getMapZoom(mapRef.current));
         if (!markerRef.current) {
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
             title: markerTitle,
+            content: markerContent,
+            offset: new AMap.Pixel(-64, -88),
           });
+          markerContentRef.current = markerContent;
           return;
         }
 
@@ -237,6 +259,10 @@ function LocationMap({ position }) {
         if (typeof markerRef.current.setTitle === 'function') {
           markerRef.current.setTitle(markerTitle);
         }
+        if (typeof markerRef.current.setContent === 'function') {
+          markerRef.current.setContent(markerContent);
+        }
+        markerContentRef.current = markerContent;
       })
       .catch(() => {
         if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
