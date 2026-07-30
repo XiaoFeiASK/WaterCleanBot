@@ -92,9 +92,31 @@ function formatBattery(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
 }
 
-function createFleetMarkerContent(position) {
+function getFleetBubbleScale(zoom = 13) {
+  if (zoom <= 7) return 0.45;
+  if (zoom <= 10) return 0.58;
+  if (zoom <= 13) return 0.76;
+  if (zoom <= 15) return 0.9;
+  return 1;
+}
+
+function getMapZoom(map) {
+  return typeof map?.getZoom === 'function' ? map.getZoom() : 13;
+}
+
+function updateFleetMarkerBubbleScales(markerGroups, zoom) {
+  markerGroups.forEach((markerGroup) => {
+    markerGroup.content.style.setProperty('--fleet-bubble-scale', getFleetBubbleScale(zoom));
+  });
+}
+
+function createFleetMarkerContent(position, zoom) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
+  marker.style.setProperty('--fleet-bubble-scale', getFleetBubbleScale(zoom));
+
+  const bubble = document.createElement('div');
+  bubble.className = 'fleet-map-marker-bubble';
 
   const name = document.createElement('strong');
   name.textContent = position.robotName;
@@ -102,7 +124,19 @@ function createFleetMarkerContent(position) {
   const battery = document.createElement('span');
   battery.textContent = `电量 ${formatBattery(position.battery)}`;
 
-  marker.append(name, battery);
+  const icon = document.createElement('div');
+  icon.className = 'fleet-map-marker-icon';
+  icon.title = `${position.robotName} 定位点`;
+
+  const iconText = document.createElement('span');
+  iconText.textContent = '艇';
+
+  const pulse = document.createElement('div');
+  pulse.className = 'fleet-map-marker-pulse';
+
+  bubble.append(name, battery);
+  icon.append(iconText);
+  marker.append(bubble, pulse, icon);
   return marker;
 }
 
@@ -223,19 +257,28 @@ function FleetMap({ positions }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
+  const zoomHandlerRef = useRef(null);
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
-    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
     markersRef.current.clear();
+    if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+      mapRef.current.off('zoomend', zoomHandlerRef.current);
+    }
+    zoomHandlerRef.current = null;
     mapRef.current?.destroy();
     mapRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!positions.length) {
-      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
       markersRef.current.clear();
+      if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
+        mapRef.current.off('zoomend', zoomHandlerRef.current);
+      }
+      zoomHandlerRef.current = null;
       mapRef.current?.destroy();
       mapRef.current = null;
       setMapError('');
@@ -259,22 +302,30 @@ function FleetMap({ positions }) {
             zoom: 13,
             resizeEnable: true,
           });
+          if (typeof mapRef.current.on === 'function') {
+            zoomHandlerRef.current = () => {
+              updateFleetMarkerBubbleScales(markersRef.current, getMapZoom(mapRef.current));
+            };
+            mapRef.current.on('zoomend', zoomHandlerRef.current);
+          }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
 
+        const currentZoom = getMapZoom(mapRef.current);
         const activeNames = new Set();
         positions.forEach((position) => {
           const markerKey = position.robotName;
           const nextPosition = [position.lng, position.lat];
           const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)}`;
-          const markerContent = createFleetMarkerContent(position);
+          const markerContent = createFleetMarkerContent(position, currentZoom);
           activeNames.add(markerKey);
 
-          const existingMarker = markersRef.current.get(markerKey);
-          if (existingMarker) {
-            existingMarker.setPosition(nextPosition);
-            if (typeof existingMarker.setTitle === 'function') existingMarker.setTitle(markerTitle);
-            if (typeof existingMarker.setContent === 'function') existingMarker.setContent(markerContent);
+          const existingMarkerGroup = markersRef.current.get(markerKey);
+          if (existingMarkerGroup) {
+            existingMarkerGroup.marker.setPosition(nextPosition);
+            if (typeof existingMarkerGroup.marker.setTitle === 'function') existingMarkerGroup.marker.setTitle(markerTitle);
+            if (typeof existingMarkerGroup.marker.setContent === 'function') existingMarkerGroup.marker.setContent(markerContent);
+            existingMarkerGroup.content = markerContent;
             return;
           }
 
@@ -283,14 +334,14 @@ function FleetMap({ positions }) {
             position: nextPosition,
             title: markerTitle,
             content: markerContent,
-            offset: new AMap.Pixel(-58, -52),
+            offset: new AMap.Pixel(-64, -88),
           });
-          markersRef.current.set(markerKey, marker);
+          markersRef.current.set(markerKey, { marker, content: markerContent });
         });
 
-        markersRef.current.forEach((marker, markerKey) => {
+        markersRef.current.forEach((markerGroup, markerKey) => {
           if (activeNames.has(markerKey)) return;
-          marker.setMap(null);
+          markerGroup.marker.setMap(null);
           markersRef.current.delete(markerKey);
         });
       })
