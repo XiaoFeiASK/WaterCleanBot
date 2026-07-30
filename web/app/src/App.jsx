@@ -22,6 +22,7 @@ const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS |
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = '清澜一号';
+const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 
 let amapPromise;
 
@@ -83,6 +84,15 @@ const navGroups = [
 const pageNames = Object.fromEntries(
   navGroups.flatMap((group) => group.items.map((item) => [item.id, item.label])),
 );
+
+function getStoredActivePage() {
+  const storedPage = window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY);
+  return storedPage && pageNames[storedPage] ? storedPage : 'dashboard';
+}
+
+function saveActivePage(page) {
+  window.localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, page);
+}
 
 function formatNumber(value, digits = 4) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '暂无数据';
@@ -624,7 +634,7 @@ function StatCard({ icon: Icon, label, value = '暂无数据' }) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState('dashboard');
+  const [activePage, setActivePage] = useState(getStoredActivePage);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deviceId, setDeviceId] = useState(DEFAULT_DEVICE_ID);
   const [activeDeviceId, setActiveDeviceId] = useState(DEFAULT_DEVICE_ID);
@@ -709,6 +719,7 @@ function App() {
     if (!normalizedName) return;
     setDeviceId(normalizedName);
     setActiveDeviceId(normalizedName);
+    saveActivePage('device-detail');
     setActivePage('device-detail');
     setSidebarOpen(false);
     loadLocation(normalizedName, { silent: true });
@@ -734,6 +745,7 @@ function App() {
   }
 
   function navigate(page) {
+    saveActivePage(page);
     setActivePage(page);
     setSidebarOpen(false);
   }
