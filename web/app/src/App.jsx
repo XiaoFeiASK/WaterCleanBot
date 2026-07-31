@@ -629,6 +629,7 @@ function StatCard({ icon: Icon, label, value = '暂无数据' }) {
       <div className="stat-icon"><Icon size={20} /></div>
       <span className="stat-label">{label}</span>
       <strong>{value}</strong>
+      <span className="stat-rule" />
     </div>
   );
 }
