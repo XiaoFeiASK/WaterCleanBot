@@ -2,7 +2,7 @@
 
 # WaterCleanBot
 
-WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**只暴露一个接口，只运行一个任务，目标是实时定位机器人位置**。
+WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**只暴露定位接口，只运行一个定位刷新任务，目标是从数据库读取机器人最新位置**。
 
 前端页面原型已经基本定型，仍保留在 `web/1/`，当前不改页面结构和交互内容。
 
@@ -12,7 +12,7 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 
 ```text
 后台实时定位任务
-  -> 维护机器人最新位置
+  -> 查询数据库中的机器人最新位置
   -> HTTP 接口查询机器人最新位置
 ```
 
@@ -67,13 +67,13 @@ WaterCleanBot/
 
 ```text
 location.Task
-  -> 周期性刷新“清澜一号”演示位置
-  -> location.Store 保存最新位置
+  -> 周期性查询 robot_current_locations 表
+  -> location.Store 缓存最新位置
   -> api.LocationHandler 读取单台或全量最新位置
   -> 前端或调试工具通过 HTTP 获取位置
 ```
 
-后续真实实现时，可以把 `location.Task` 替换成：
+后续接入 MQTT 后，可以把链路扩展成：
 
 ```text
 MQTT 订阅机器人定位消息
@@ -125,6 +125,6 @@ http://localhost:8080/api/robots/清澜一号/location
 - 不做告警管理。
 - 不做命令下发。
 - 不做完整 MQTT 入库。
-- 不做完整 PostgreSQL 读写。
+- 不做完整 PostgreSQL 业务读写。
 
 这些能力等实时定位链路跑通后，再逐步加回来。

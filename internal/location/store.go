@@ -1,4 +1,4 @@
-// 文件作用：提供无人船实时位置的内存存储，后续可替换为 PostgreSQL/PostGIS 查询。
+// 文件作用：提供无人船实时位置的内存缓存，供 HTTP 接口快速读取。
 
 package location
 
@@ -25,6 +25,18 @@ func (s *Store) Update(position Position) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.positions[position.RobotName] = position
+}
+
+// ReplaceAll 用一批最新位置整体替换内存缓存。
+func (s *Store) ReplaceAll(positions []Position) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	next := make(map[string]Position, len(positions))
+	for _, position := range positions {
+		next[position.RobotName] = position
+	}
+	s.positions = next
 }
 
 // Get 读取一台无人船的最新位置。

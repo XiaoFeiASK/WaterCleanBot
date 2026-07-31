@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	_ "github.com/lib/pq"
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/api"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/config"
@@ -25,8 +28,24 @@ func main() {
 	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	db, err := sql.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		log.Error("open database failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	pingCtx, cancel := context.WithTimeout(appCtx, 5*time.Second)
+	if err := db.PingContext(pingCtx); err != nil {
+		cancel()
+		log.Error("connect database failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	cancel()
+
 	locationStore := location.NewStore()
-	locationTask := location.NewTask(locationStore, cfg.LocationUpdateInterval, log)
+	locationRepository := location.NewRepository(db)
+	locationTask := location.NewTask(locationStore, locationRepository, cfg.LocationUpdateInterval, log)
 	go locationTask.Start(appCtx)
 
 	server := &http.Server{
