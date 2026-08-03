@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS robot_current_locations (
   speed DOUBLE PRECISION NOT NULL,
   battery DOUBLE PRECISION NOT NULL,
   status INTEGER NOT NULL,
+  source_timestamp_ms BIGINT,
   geom GEOMETRY(Point, 4326) GENERATED ALWAYS AS (
     ST_SetSRID(ST_MakePoint(lng, lat), 4326)
   ) STORED,
@@ -19,7 +20,8 @@ CREATE TABLE IF NOT EXISTS robot_current_locations (
   CONSTRAINT robot_current_locations_heading_check CHECK (heading >= 0 AND heading <= 360),
   CONSTRAINT robot_current_locations_speed_check CHECK (speed >= 0),
   CONSTRAINT robot_current_locations_battery_check CHECK (battery >= 0 AND battery <= 100),
-  CONSTRAINT robot_current_locations_status_check CHECK (status >= 0)
+  CONSTRAINT robot_current_locations_status_check CHECK (status >= 0),
+  CONSTRAINT robot_current_locations_source_timestamp_ms_check CHECK (source_timestamp_ms IS NULL OR source_timestamp_ms > 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_robot_current_locations_geom
@@ -33,5 +35,6 @@ COMMENT ON COLUMN robot_current_locations.heading IS '航向角，单位为度�
 COMMENT ON COLUMN robot_current_locations.speed IS '当前速度，对应接口字段 speed。';
 COMMENT ON COLUMN robot_current_locations.battery IS '电量百分比，对应接口字段 battery。';
 COMMENT ON COLUMN robot_current_locations.status IS '机器人状态码，对应接口字段 status。';
+COMMENT ON COLUMN robot_current_locations.source_timestamp_ms IS '无人艇 MQTT 遥测报文中的原始毫秒时间戳，用于避免旧消息覆盖新位置。';
 COMMENT ON COLUMN robot_current_locations.geom IS '由 lng/lat 自动生成的 PostGIS 点位，SRID 4326。';
 COMMENT ON COLUMN robot_current_locations.updated_at IS '当前位置最后更新时间。';

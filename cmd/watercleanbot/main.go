@@ -19,6 +19,7 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/config"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/telemetry"
 )
 
 func main() {
@@ -47,6 +48,17 @@ func main() {
 	locationRepository := location.NewRepository(db)
 	locationTask := location.NewTask(locationStore, locationRepository, cfg.LocationUpdateInterval, log)
 	go locationTask.Start(appCtx)
+
+	telemetrySubscriber := telemetry.NewSubscriber(telemetry.SubscriberConfig{
+		BrokerURL: cfg.MQTTBrokerURL,
+		ClientID:  cfg.MQTTClientID,
+		Topic:     cfg.MQTTTelemetryTopic,
+		Username:  cfg.MQTTUsername,
+		Password:  cfg.MQTTPassword,
+	}, locationStore, locationRepository, log)
+	if err := telemetrySubscriber.Start(appCtx); err != nil {
+		log.Error("start mqtt telemetry subscriber failed", slog.Any("error", err))
+	}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

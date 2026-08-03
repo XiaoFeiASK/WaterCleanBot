@@ -9,7 +9,8 @@ INSERT INTO robot_current_locations (
   heading,
   speed,
   battery,
-  status
+  status,
+  source_timestamp_ms
 )
 VALUES (
   '清澜一号',
@@ -18,7 +19,8 @@ VALUES (
   135.0,
   2.3,
   68.0,
-  1
+  1,
+  1750000000000
 )
 ON CONFLICT (robot_name) DO UPDATE SET
   lat = EXCLUDED.lat,
@@ -27,4 +29,5 @@ ON CONFLICT (robot_name) DO UPDATE SET
   speed = EXCLUDED.speed,
   battery = EXCLUDED.battery,
   status = EXCLUDED.status,
+  source_timestamp_ms = EXCLUDED.source_timestamp_ms,
   updated_at = now();

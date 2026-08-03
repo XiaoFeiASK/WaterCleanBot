@@ -16,6 +16,8 @@ type Config struct {
 	LocationUpdateInterval time.Duration
 	DatabaseURL            string
 	MQTTBrokerURL          string
+	MQTTClientID           string
+	MQTTTelemetryTopic     string
 	MQTTUsername           string
 	MQTTPassword           string
 }
@@ -30,6 +32,8 @@ func Load() Config {
 		LocationUpdateInterval: getDuration("LOCATION_UPDATE_INTERVAL", 5*time.Second),
 		DatabaseURL:            getenv("DATABASE_URL", "postgres://waterbot:waterbot_dev_password@localhost:5432/waterbot?sslmode=disable"),
 		MQTTBrokerURL:          getenv("MQTT_BROKER_URL", "tcp://localhost:1883"),
+		MQTTClientID:           getenv("MQTT_CLIENT_ID", "watercleanbot-backend"),
+		MQTTTelemetryTopic:     getenv("MQTT_TELEMETRY_TOPIC", "usv/+/telemetry"),
 		MQTTUsername:           getenv("MQTT_USERNAME", ""),
 		MQTTPassword:           getenv("MQTT_PASSWORD", ""),
 	}
