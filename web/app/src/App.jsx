@@ -228,12 +228,13 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position }) {
+function LocationMap({ position, centerSeq }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const markerContentRef = useRef(null);
   const zoomHandlerRef = useRef(null);
+  const centeredSeqRef = useRef(centerSeq);
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
@@ -285,6 +286,7 @@ function LocationMap({ position }) {
             zoom: 14,
             resizeEnable: true,
           });
+          centeredSeqRef.current = centerSeq;
           if (typeof mapRef.current.on === 'function') {
             zoomHandlerRef.current = () => {
               if (markerContentRef.current) applyFleetBubbleStyle(markerContentRef.current, getMapZoom(mapRef.current));
@@ -295,8 +297,9 @@ function LocationMap({ position }) {
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
 
-        if (typeof mapRef.current.setCenter === 'function') {
+        if (centeredSeqRef.current !== centerSeq && typeof mapRef.current.setCenter === 'function') {
           mapRef.current.setCenter(nextPosition);
+          centeredSeqRef.current = centerSeq;
         }
 
         const markerContent = createFleetMarkerContent(position, getMapZoom(mapRef.current));
@@ -329,7 +332,7 @@ function LocationMap({ position }) {
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position]);
+  }, [position, centerSeq]);
 
   if (!position) {
     return (
@@ -530,7 +533,7 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, onSubmit, onSelectDevice }) {
+function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice }) {
   const [deviceListOpen, setDeviceListOpen] = useState(false);
   const deviceOptions = [
     ...new Set(fleetPositions.map((fleetPosition) => getRobotNameForDevice(fleetPosition.robotName)).filter(Boolean)),
@@ -601,7 +604,7 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
       </form>
 
       <div className="location-grid">
-        <div className="map-frame"><LocationMap position={position} /></div>
+        <div className="map-frame"><LocationMap position={position} centerSeq={mapCenterSeq} /></div>
         <div className="position-details">
           <div className="detail-header">
             <div>
@@ -865,8 +868,10 @@ function App() {
   const [fleetError, setFleetError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mapCenterSeq, setMapCenterSeq] = useState(0);
   const [toast, setToast] = useState(null);
   const locationRequestSeqRef = useRef(0);
+  const initialLocationLoadRef = useRef(false);
   const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
 
@@ -915,6 +920,7 @@ function App() {
       const nextPosition = await fetchRobotLocation(normalizedCode);
       if (requestSeq !== locationRequestSeqRef.current) return;
       setPosition(nextPosition);
+      if (options.centerMap) setMapCenterSeq((currentSeq) => currentSeq + 1);
       if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
       if (requestSeq !== locationRequestSeqRef.current) return;
@@ -936,7 +942,7 @@ function App() {
       return;
     }
     setActiveDeviceId(normalizedCode);
-    loadLocation(normalizedCode);
+    loadLocation(normalizedCode, { centerMap: true });
   }
 
   function openDeviceDetail(robotName) {
@@ -947,12 +953,15 @@ function App() {
     saveActivePage('device-detail');
     setActivePage('device-detail');
     setSidebarOpen(false);
-    loadLocation(normalizedName, { silent: true });
+    loadLocation(normalizedName, { silent: true, centerMap: true });
   }
 
   useEffect(() => {
     if (!activeDeviceId) return undefined;
-    loadLocation(activeDeviceId, { silent: true });
+    if (!initialLocationLoadRef.current) {
+      initialLocationLoadRef.current = true;
+      loadLocation(activeDeviceId, { silent: true, centerMap: true });
+    }
     const timer = window.setInterval(() => loadLocation(activeDeviceId, { silent: true }), POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [activeDeviceId]);
@@ -982,6 +991,7 @@ function App() {
     fleetPositions,
     loading,
     error,
+    mapCenterSeq,
     onSubmit: (event) => {
       event.preventDefault();
       requestLocation();
