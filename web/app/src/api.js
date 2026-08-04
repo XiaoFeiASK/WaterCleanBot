@@ -4,11 +4,6 @@ const API_BASE_URL = (
 ).replace(/\/$/, '');
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
 
-// 当前前端设备与后端机器人的唯一已确认映射。
-export const DEVICE_ROBOT_MAPPING = Object.freeze({
-  '清澜一号': '清澜一号',
-});
-
 export const LOCATION_ERROR_MESSAGES = Object.freeze({
   INVALID_ROBOT_CODE: '设备名称无效',
   NOT_FOUND: '未找到该机器人位置',
@@ -23,7 +18,7 @@ function createLocationError(code) {
 }
 
 export function getRobotNameForDevice(deviceName) {
-  return DEVICE_ROBOT_MAPPING[deviceName] || '';
+  return typeof deviceName === 'string' ? deviceName.trim() : '';
 }
 
 function validateLocationPayload(payload, expectedRobotName) {

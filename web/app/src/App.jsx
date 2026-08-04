@@ -503,7 +503,7 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
               id="device-code"
               value={deviceId}
               onChange={(event) => setDeviceId(event.target.value)}
-              placeholder="输入设备名称，如 清澜一号"
+              placeholder="输入设备名称，如 USV-001 或 清澜一号"
               autoComplete="off"
             />
           </div>
@@ -522,7 +522,7 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
             <RefreshCw size={17} className={loading ? 'spin' : ''} />
           </button>
         </div>
-        <p className="query-hint">当前已配置设备：清澜一号</p>
+        <p className="query-hint">支持查询总览接口返回的机器人名称。</p>
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
@@ -676,7 +676,7 @@ function App() {
   }
 
   async function loadLocation(code = deviceId, options = {}) {
-    const normalizedCode = code.trim().toUpperCase();
+    const normalizedCode = code.trim();
     if (!normalizedCode || !getRobotNameForDevice(normalizedCode)) {
       setError('设备名称无效');
       setPosition(null);
@@ -704,7 +704,7 @@ function App() {
   }
 
   function requestLocation(code = deviceId) {
-    const normalizedCode = code.trim().toUpperCase();
+    const normalizedCode = code.trim();
     setDeviceId(normalizedCode);
     if (!getRobotNameForDevice(normalizedCode)) {
       setActiveDeviceId('');
