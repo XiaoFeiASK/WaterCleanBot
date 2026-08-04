@@ -24,6 +24,29 @@ const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = '清澜一号';
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 
+const REMOTE_THROTTLE_COMMANDS = Object.freeze([
+  { cmd: 'THROTTLE_L', label: '左油门', hint: '正=正转，负=反转' },
+  { cmd: 'THROTTLE_R', label: '右油门', hint: '正=正转，负=反转' },
+]);
+
+const REMOTE_SWITCH_COMMANDS = Object.freeze([
+  { cmd: 'HATCH_CYLINDER', label: '舱盖电缸', onText: '开启', offText: '关闭' },
+  { cmd: 'DISC_CYLINDER', label: '推盘电缸', onText: '推', offText: '收回' },
+  { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
+  { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
+  { cmd: 'BRUSH_R', label: '右滚刷', onText: '开启', offText: '关闭' },
+]);
+
+const INITIAL_REMOTE_VALUES = Object.freeze({
+  THROTTLE_L: 0,
+  THROTTLE_R: 0,
+  HATCH_CYLINDER: 0,
+  DISC_CYLINDER: 0,
+  CONVEYOR: 0,
+  BRUSH_L: 0,
+  BRUSH_R: 0,
+});
+
 let amapPromise;
 
 function loadAMap() {
@@ -131,6 +154,26 @@ function updateFleetMarkerBubbleScales(markerGroups, zoom) {
   });
 }
 
+function safelyDestroyMap(map) {
+  if (map && typeof map.destroy === 'function') {
+    try {
+      map.destroy();
+    } catch (error) {
+      // Ignore third-party map cleanup failures so the React view stays mounted.
+    }
+  }
+}
+
+function safelyRemoveMarker(marker) {
+  if (marker && typeof marker.setMap === 'function') {
+    try {
+      marker.setMap(null);
+    } catch (error) {
+      // Ignore third-party marker cleanup failures so empty states can render.
+    }
+  }
+}
+
 function createFleetMarkerContent(position, zoom, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
@@ -194,7 +237,7 @@ function LocationMap({ position }) {
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
-    markerRef.current?.setMap(null);
+    safelyRemoveMarker(markerRef.current);
     markerRef.current = null;
     markerContentRef.current = null;
     if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -202,13 +245,13 @@ function LocationMap({ position }) {
       mapRef.current.off('zoomend', zoomHandlerRef.current);
     }
     zoomHandlerRef.current = null;
-    mapRef.current?.destroy();
+    safelyDestroyMap(mapRef.current);
     mapRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!position) {
-      markerRef.current?.setMap(null);
+      safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
       markerContentRef.current = null;
       if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -216,7 +259,7 @@ function LocationMap({ position }) {
         mapRef.current.off('zoomend', zoomHandlerRef.current);
       }
       zoomHandlerRef.current = null;
-      mapRef.current?.destroy();
+      safelyDestroyMap(mapRef.current);
       mapRef.current = null;
       setMapError('');
       return undefined;
@@ -250,6 +293,10 @@ function LocationMap({ position }) {
             mapRef.current.on('zoomend', zoomHandlerRef.current);
           }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
+        }
+
+        if (typeof mapRef.current.setCenter === 'function') {
+          mapRef.current.setCenter(nextPosition);
         }
 
         const markerContent = createFleetMarkerContent(position, getMapZoom(mapRef.current));
@@ -314,27 +361,27 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
-    markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
+    markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
     markersRef.current.clear();
     if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
       mapRef.current.off('zoomchange', zoomHandlerRef.current);
       mapRef.current.off('zoomend', zoomHandlerRef.current);
     }
     zoomHandlerRef.current = null;
-    mapRef.current?.destroy();
+    safelyDestroyMap(mapRef.current);
     mapRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!positions.length) {
-      markersRef.current.forEach((markerGroup) => markerGroup.marker.setMap(null));
+      markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
       markersRef.current.clear();
       if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
         mapRef.current.off('zoomchange', zoomHandlerRef.current);
         mapRef.current.off('zoomend', zoomHandlerRef.current);
       }
       zoomHandlerRef.current = null;
-      mapRef.current?.destroy();
+      safelyDestroyMap(mapRef.current);
       mapRef.current = null;
       setMapError('');
       return undefined;
@@ -397,7 +444,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
 
         markersRef.current.forEach((markerGroup, markerKey) => {
           if (activeNames.has(markerKey)) return;
-          markerGroup.marker.setMap(null);
+          safelyRemoveMarker(markerGroup.marker);
           markersRef.current.delete(markerKey);
         });
       })
@@ -483,7 +530,19 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubmit, onRefresh }) {
+function getRemoteDeviceOptions(deviceId, position, fleetPositions) {
+  const deviceNames = [
+    position?.robotName,
+    deviceId,
+    ...fleetPositions.map((fleetPosition) => fleetPosition.robotName),
+  ]
+    .map(getRobotNameForDevice)
+    .filter(Boolean);
+
+  return [...new Set(deviceNames.length ? deviceNames : [DEFAULT_DEVICE_ID])];
+}
+
+function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, onSubmit, onRefresh }) {
   return (
     <section className="location-section">
       <div className="section-heading">
@@ -545,6 +604,169 @@ function LocationPanel({ deviceId, setDeviceId, position, loading, error, onSubm
             <DetailRow icon={Clock3} label="状态码" value={typeof position?.status === 'number' ? String(position.status) : '暂无数据'} />
           </div>
           <p className="data-note">位置数据来自已确认的后端接口，查询失败时不会使用模拟位置。</p>
+        </div>
+      </div>
+
+      <RemoteControlPanel deviceId={deviceId} position={position} fleetPositions={fleetPositions} />
+    </section>
+  );
+}
+
+function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
+  const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
+  const [targetDeviceId, setTargetDeviceId] = useState(getRobotNameForDevice(deviceId) || DEFAULT_DEVICE_ID);
+  const [lastCommand, setLastCommand] = useState(null);
+  const deviceOptions = getRemoteDeviceOptions(deviceId, position, fleetPositions);
+  const deviceOptionsKey = deviceOptions.join('|');
+  const currentDeviceId = getRobotNameForDevice(position?.robotName) || getRobotNameForDevice(deviceId);
+  const remoteDeviceId = targetDeviceId || currentDeviceId || deviceOptions[0];
+  const topic = `usv/${remoteDeviceId}/test`;
+
+  useEffect(() => {
+    if (currentDeviceId) setTargetDeviceId(currentDeviceId);
+  }, [currentDeviceId]);
+
+  useEffect(() => {
+    setTargetDeviceId((currentTargetId) => (
+      deviceOptions.includes(currentTargetId) ? currentTargetId : deviceOptions[0]
+    ));
+  }, [deviceOptionsKey]);
+
+  function previewCommand(cmd, value, label, valueText) {
+    setLastCommand({
+      cmd,
+      topic,
+      target: remoteDeviceId,
+      label,
+      value,
+      valueText,
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    });
+  }
+
+  function updateThrottle(cmd, rawValue) {
+    const nextValue = clamp(Math.round(Number(rawValue) || 0), -100, 100);
+    setValues((currentValues) => ({ ...currentValues, [cmd]: nextValue }));
+  }
+
+  function sendThrottle(command) {
+    previewCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`);
+  }
+
+  function toggleSwitch(command) {
+    const nextValue = values[command.cmd] ? 0 : 1;
+    setValues((currentValues) => ({ ...currentValues, [command.cmd]: nextValue }));
+    previewCommand(command.cmd, nextValue, command.label, nextValue ? command.onText : command.offText);
+  }
+
+  function turnOffAll() {
+    setValues(INITIAL_REMOTE_VALUES);
+    previewCommand('TURN_OFF', 0, '全部关闭', '复位完成');
+  }
+
+  return (
+    <section className="remote-panel" aria-label="遥控调试面板">
+      <div className="section-heading remote-heading">
+        <div>
+          <p className="eyebrow">遥控调试</p>
+          <h2>遥控功能</h2>
+          <p className="remote-subtitle">选择控制对象后操作油门和执行机构；后端接入后由系统封装并下发指令。</p>
+        </div>
+        <span className="status-badge status-pending">待接入下发</span>
+      </div>
+
+      <div className="remote-target-card">
+        <label htmlFor="remote-device-select">控制对象</label>
+        <select
+          id="remote-device-select"
+          value={remoteDeviceId}
+          onChange={(event) => setTargetDeviceId(event.target.value)}
+        >
+          {deviceOptions.map((deviceName) => <option value={deviceName} key={deviceName}>{deviceName}</option>)}
+        </select>
+        <small>已隐藏底层 Topic 和 JSON 报文，避免操作员误读协议细节。</small>
+      </div>
+
+      <div className="remote-grid">
+        <div className="remote-card">
+          <div className="remote-card-header">
+            <Gauge size={18} />
+            <div><strong>双油门</strong><span>后退 / 停止 / 前进</span></div>
+          </div>
+          <div className="throttle-list">
+            {REMOTE_THROTTLE_COMMANDS.map((command) => (
+              <div className="throttle-control" key={command.cmd}>
+                <div className="throttle-meta">
+                  <strong>{command.label}</strong>
+                  <span>{command.hint}</span>
+                </div>
+                <div className="throttle-inputs">
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    step="1"
+                    value={values[command.cmd]}
+                    onChange={(event) => updateThrottle(command.cmd, event.target.value)}
+                    aria-label={`${command.label}百分比`}
+                  />
+                  <input
+                    className="throttle-value"
+                    type="number"
+                    min="-100"
+                    max="100"
+                    value={values[command.cmd]}
+                    onChange={(event) => updateThrottle(command.cmd, event.target.value)}
+                    aria-label={`${command.label}数值`}
+                  />
+                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)}>下发</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="remote-card">
+          <div className="remote-card-header">
+            <Settings2 size={18} />
+            <div><strong>执行机构</strong><span>点击切换设备状态</span></div>
+          </div>
+          <div className="switch-grid">
+            {REMOTE_SWITCH_COMMANDS.map((command) => {
+              const enabled = values[command.cmd] === 1;
+              return (
+                <button
+                  className={`switch-control ${enabled ? 'switch-control-on' : ''}`}
+                  type="button"
+                  key={command.cmd}
+                  onClick={() => toggleSwitch(command)}
+                  aria-pressed={enabled}
+                >
+                  <span><strong>{command.label}</strong><small>点击切换</small></span>
+                  <span className="switch-state">{enabled ? command.onText : command.offText}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button className="button button-danger" type="button" onClick={turnOffAll}>全部关闭 / 一键复位</button>
+        </div>
+
+        <div className="remote-card remote-status-card">
+          <div className="remote-card-header">
+            <Wifi size={18} />
+            <div><strong>操作状态</strong><span>{lastCommand ? '最近一次操作' : '等待操作'}</span></div>
+          </div>
+          {lastCommand ? (
+            <div className="command-status-list">
+              <div><span>控制对象</span><strong>{lastCommand.target}</strong></div>
+              <div><span>操作项目</span><strong>{lastCommand.label}</strong></div>
+              <div><span>目标状态</span><strong>{lastCommand.valueText}</strong></div>
+              <div><span>操作时间</span><strong>{lastCommand.time}</strong></div>
+            </div>
+          ) : (
+            <div className="remote-empty-state">请选择设备并操作遥控项。</div>
+          )}
+          <p className="remote-status-note">当前仅完成前端交互；正式下发时由后端按协议发布到对应设备通道。</p>
         </div>
       </div>
     </section>
@@ -646,7 +868,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
-  const loadingRef = useRef(false);
+  const locationRequestSeqRef = useRef(0);
   const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
 
@@ -676,30 +898,34 @@ function App() {
   }
 
   async function loadLocation(code = deviceId, options = {}) {
-    const normalizedCode = code.trim();
+    const normalizedCode = getRobotNameForDevice(code);
+    const requestSeq = locationRequestSeqRef.current + 1;
+    locationRequestSeqRef.current = requestSeq;
+
     if (!normalizedCode || !getRobotNameForDevice(normalizedCode)) {
       setError('设备名称无效');
       setPosition(null);
+      setLoading(false);
       showToast('设备名称无效');
       return;
     }
-    if (loadingRef.current) return;
 
-    loadingRef.current = true;
     setLoading(true);
     setError('');
+
     try {
       const nextPosition = await fetchRobotLocation(normalizedCode);
+      if (requestSeq !== locationRequestSeqRef.current) return;
       setPosition(nextPosition);
       if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
+      if (requestSeq !== locationRequestSeqRef.current) return;
       setPosition(null);
       const message = getLocationErrorMessage(requestError);
       setError(message);
       showToast(message);
     } finally {
-      loadingRef.current = false;
-      setLoading(false);
+      if (requestSeq === locationRequestSeqRef.current) setLoading(false);
     }
   }
 
@@ -755,6 +981,7 @@ function App() {
     deviceId,
     setDeviceId,
     position,
+    fleetPositions,
     loading,
     error,
     onSubmit: (event) => {
