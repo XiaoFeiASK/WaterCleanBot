@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   Clock3,
@@ -10,7 +11,6 @@ import {
   MapPinned,
   Menu,
   PanelLeftClose,
-  RefreshCw,
   Search,
   Settings2,
   ShipWheel,
@@ -530,19 +530,18 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function getRemoteDeviceOptions(deviceId, position, fleetPositions) {
-  const deviceNames = [
-    position?.robotName,
-    deviceId,
-    ...fleetPositions.map((fleetPosition) => fleetPosition.robotName),
-  ]
-    .map(getRobotNameForDevice)
-    .filter(Boolean);
+function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, onSubmit, onSelectDevice }) {
+  const [deviceListOpen, setDeviceListOpen] = useState(false);
+  const deviceOptions = [
+    ...new Set(fleetPositions.map((fleetPosition) => getRobotNameForDevice(fleetPosition.robotName)).filter(Boolean)),
+  ];
 
-  return [...new Set(deviceNames.length ? deviceNames : [DEFAULT_DEVICE_ID])];
-}
+  function selectDevice(deviceName) {
+    setDeviceListOpen(false);
+    setDeviceId(deviceName);
+    onSelectDevice(deviceName);
+  }
 
-function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, onSubmit, onRefresh }) {
   return (
     <section className="location-section">
       <div className="section-heading">
@@ -565,23 +564,39 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
               placeholder="输入设备名称，如 USV-001 或 清澜一号"
               autoComplete="off"
             />
+            <button
+              className={`device-list-toggle ${deviceListOpen ? 'device-list-toggle-open' : ''}`}
+              type="button"
+              onClick={() => setDeviceListOpen((isOpen) => !isOpen)}
+              disabled={!deviceOptions.length}
+              title="展开设备列表"
+              aria-label="展开设备列表"
+              aria-expanded={deviceListOpen}
+            >
+              <ChevronDown size={20} strokeWidth={2.8} />
+            </button>
+            {deviceListOpen && (
+              <div className="device-dropdown" role="listbox" aria-label="设备列表">
+                {deviceOptions.map((deviceName) => (
+                  <button
+                    className={`device-dropdown-item ${deviceName === position?.robotName ? 'device-dropdown-item-active' : ''}`}
+                    type="button"
+                    key={deviceName}
+                    onClick={() => selectDevice(deviceName)}
+                  >
+                    <span>{deviceName}</span>
+                    <small>{deviceName === position?.robotName ? '当前设备' : '点击切换'}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button className="button button-primary" type="submit" disabled={!deviceId.trim() || loading}>
             <Search size={16} />
             查询位置
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onRefresh}
-            disabled={!deviceId.trim() || loading}
-            title="刷新位置"
-            aria-label="刷新位置"
-          >
-            <RefreshCw size={17} className={loading ? 'spin' : ''} />
-          </button>
         </div>
-        <p className="query-hint">支持查询总览接口返回的机器人名称。</p>
+        <p className="query-hint">支持手动输入，也可点击搜索框右侧展开已同步设备。</p>
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
@@ -607,35 +622,21 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
         </div>
       </div>
 
-      <RemoteControlPanel deviceId={deviceId} position={position} fleetPositions={fleetPositions} />
+      <RemoteControlPanel position={position} />
     </section>
   );
 }
 
-function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
+function RemoteControlPanel({ position }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
-  const [targetDeviceId, setTargetDeviceId] = useState(getRobotNameForDevice(deviceId) || DEFAULT_DEVICE_ID);
   const [lastCommand, setLastCommand] = useState(null);
-  const deviceOptions = getRemoteDeviceOptions(deviceId, position, fleetPositions);
-  const deviceOptionsKey = deviceOptions.join('|');
-  const currentDeviceId = getRobotNameForDevice(position?.robotName) || getRobotNameForDevice(deviceId);
-  const remoteDeviceId = targetDeviceId || currentDeviceId || deviceOptions[0];
-  const topic = `usv/${remoteDeviceId}/test`;
-
-  useEffect(() => {
-    if (currentDeviceId) setTargetDeviceId(currentDeviceId);
-  }, [currentDeviceId]);
-
-  useEffect(() => {
-    setTargetDeviceId((currentTargetId) => (
-      deviceOptions.includes(currentTargetId) ? currentTargetId : deviceOptions[0]
-    ));
-  }, [deviceOptionsKey]);
+  const remoteDeviceId = getRobotNameForDevice(position?.robotName);
+  const hasRemoteTarget = Boolean(remoteDeviceId);
 
   function previewCommand(cmd, value, label, valueText) {
+    if (!hasRemoteTarget) return;
     setLastCommand({
       cmd,
-      topic,
       target: remoteDeviceId,
       label,
       value,
@@ -670,21 +671,15 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
         <div>
           <p className="eyebrow">遥控调试</p>
           <h2>遥控功能</h2>
-          <p className="remote-subtitle">选择控制对象后操作油门和执行机构；后端接入后由系统封装并下发指令。</p>
+          <p className="remote-subtitle">遥控对象与上方查询成功的机器人保持一致；后端接入后由系统封装并下发指令。</p>
         </div>
         <span className="status-badge status-pending">待接入下发</span>
       </div>
 
       <div className="remote-target-card">
-        <label htmlFor="remote-device-select">控制对象</label>
-        <select
-          id="remote-device-select"
-          value={remoteDeviceId}
-          onChange={(event) => setTargetDeviceId(event.target.value)}
-        >
-          {deviceOptions.map((deviceName) => <option value={deviceName} key={deviceName}>{deviceName}</option>)}
-        </select>
-        <small>已隐藏底层 Topic 和 JSON 报文，避免操作员误读协议细节。</small>
+        <span>控制对象</span>
+        <strong>{remoteDeviceId || '请先查询设备'}</strong>
+        <small>{hasRemoteTarget ? '下方遥控指令将只作用于当前设备。' : '查询到设备位置后即可进行遥控操作。'}</small>
       </div>
 
       <div className="remote-grid">
@@ -707,6 +702,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                     max="100"
                     step="1"
                     value={values[command.cmd]}
+                    disabled={!hasRemoteTarget}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}百分比`}
                   />
@@ -716,10 +712,11 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                     min="-100"
                     max="100"
                     value={values[command.cmd]}
+                    disabled={!hasRemoteTarget}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)}>下发</button>
+                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget}>下发</button>
                 </div>
               </div>
             ))}
@@ -740,6 +737,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                   type="button"
                   key={command.cmd}
                   onClick={() => toggleSwitch(command)}
+                  disabled={!hasRemoteTarget}
                   aria-pressed={enabled}
                 >
                   <span><strong>{command.label}</strong><small>点击切换</small></span>
@@ -748,7 +746,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
               );
             })}
           </div>
-          <button className="button button-danger" type="button" onClick={turnOffAll}>全部关闭 / 一键复位</button>
+          <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget}>全部关闭 / 一键复位</button>
         </div>
 
         <div className="remote-card remote-status-card">
@@ -764,7 +762,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
               <div><span>操作时间</span><strong>{lastCommand.time}</strong></div>
             </div>
           ) : (
-            <div className="remote-empty-state">请选择设备并操作遥控项。</div>
+            <div className="remote-empty-state">{hasRemoteTarget ? '操作遥控项后显示最近状态。' : '请先在上方查询设备位置。'}</div>
           )}
           <p className="remote-status-note">当前仅完成前端交互；正式下发时由后端按协议发布到对应设备通道。</p>
         </div>
@@ -988,7 +986,7 @@ function App() {
       event.preventDefault();
       requestLocation();
     },
-    onRefresh: () => requestLocation(),
+    onSelectDevice: (deviceName) => requestLocation(deviceName),
   };
 
   const pageContent = activePage === 'dashboard' ? (
