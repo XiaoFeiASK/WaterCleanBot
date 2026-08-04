@@ -870,10 +870,12 @@ function App() {
   const [error, setError] = useState('');
   const [mapCenterSeq, setMapCenterSeq] = useState(0);
   const [toast, setToast] = useState(null);
+  const activeDeviceIdRef = useRef(activeDeviceId);
   const locationRequestSeqRef = useRef(0);
   const initialLocationLoadRef = useRef(false);
   const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
+  activeDeviceIdRef.current = activeDeviceId;
 
   function showToast(message, type = 'error') {
     setToast({ message, type });
@@ -902,34 +904,42 @@ function App() {
 
   async function loadLocation(code = deviceId, options = {}) {
     const normalizedCode = getRobotNameForDevice(code);
-    const requestSeq = locationRequestSeqRef.current + 1;
-    locationRequestSeqRef.current = requestSeq;
+    const showInlineLoading = !options.silent;
+    const requestSeq = showInlineLoading ? locationRequestSeqRef.current + 1 : locationRequestSeqRef.current;
+    if (showInlineLoading) locationRequestSeqRef.current = requestSeq;
 
     if (!normalizedCode || !getRobotNameForDevice(normalizedCode)) {
-      setError('设备名称无效');
-      setPosition(null);
-      setLoading(false);
-      showToast('设备名称无效');
+      if (showInlineLoading) {
+        setError('设备名称无效');
+        setPosition(null);
+        setLoading(false);
+        showToast('设备名称无效');
+      }
       return;
     }
 
-    setLoading(true);
-    setError('');
+    if (showInlineLoading) {
+      setLoading(true);
+      setError('');
+    }
 
     try {
       const nextPosition = await fetchRobotLocation(normalizedCode);
-      if (requestSeq !== locationRequestSeqRef.current) return;
+      if (showInlineLoading && requestSeq !== locationRequestSeqRef.current) return;
+      if (!showInlineLoading && normalizedCode !== activeDeviceIdRef.current) return;
       setPosition(nextPosition);
       if (options.centerMap) setMapCenterSeq((currentSeq) => currentSeq + 1);
       if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
-      if (requestSeq !== locationRequestSeqRef.current) return;
-      setPosition(null);
-      const message = getLocationErrorMessage(requestError);
-      setError(message);
-      showToast(message);
+      if (showInlineLoading && requestSeq !== locationRequestSeqRef.current) return;
+      if (showInlineLoading) {
+        setPosition(null);
+        const message = getLocationErrorMessage(requestError);
+        setError(message);
+        showToast(message);
+      }
     } finally {
-      if (requestSeq === locationRequestSeqRef.current) setLoading(false);
+      if (showInlineLoading && requestSeq === locationRequestSeqRef.current) setLoading(false);
     }
   }
 
@@ -938,10 +948,12 @@ function App() {
     setDeviceId(normalizedCode);
     if (!getRobotNameForDevice(normalizedCode)) {
       setActiveDeviceId('');
+      activeDeviceIdRef.current = '';
       loadLocation(normalizedCode);
       return;
     }
     setActiveDeviceId(normalizedCode);
+    activeDeviceIdRef.current = normalizedCode;
     loadLocation(normalizedCode, { centerMap: true });
   }
 
@@ -950,6 +962,7 @@ function App() {
     if (!normalizedName) return;
     setDeviceId(normalizedName);
     setActiveDeviceId(normalizedName);
+    activeDeviceIdRef.current = normalizedName;
     saveActivePage('device-detail');
     setActivePage('device-detail');
     setSidebarOpen(false);
