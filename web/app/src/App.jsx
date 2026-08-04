@@ -16,7 +16,14 @@ import {
   ShipWheel,
   Wifi,
 } from 'lucide-react';
-import { fetchAllRobotLocations, fetchRobotLocation, getLocationErrorMessage, getRobotNameForDevice } from './api';
+import {
+  fetchAllRobotLocations,
+  fetchRobotLocation,
+  getLocationErrorMessage,
+  getRemoteCommandErrorMessage,
+  getRobotNameForDevice,
+  sendRobotCommand,
+} from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
@@ -533,7 +540,7 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice }) {
+function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice, onToast }) {
   const [deviceListOpen, setDeviceListOpen] = useState(false);
   const deviceOptions = [
     ...new Set(fleetPositions.map((fleetPosition) => getRobotNameForDevice(fleetPosition.robotName)).filter(Boolean)),
@@ -625,18 +632,20 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
         </div>
       </div>
 
-      <RemoteControlPanel position={position} />
+      <RemoteControlPanel position={position} onToast={onToast} />
     </section>
   );
 }
 
-function RemoteControlPanel({ position }) {
+function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
   const [lastCommand, setLastCommand] = useState(null);
+  const [sendingCommand, setSendingCommand] = useState('');
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
+  const isSending = Boolean(sendingCommand);
 
-  function previewCommand(cmd, value, label, valueText) {
+  function previewCommand(cmd, value, label, valueText, statusText = '发送中', commandId = '') {
     if (!hasRemoteTarget) return;
     setLastCommand({
       cmd,
@@ -644,8 +653,45 @@ function RemoteControlPanel({ position }) {
       label,
       value,
       valueText,
+      statusText,
+      commandId,
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
     });
+  }
+
+  async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
+    if (!hasRemoteTarget || isSending) return false;
+
+    const target = remoteDeviceId;
+    setSendingCommand(cmd);
+    previewCommand(cmd, value, label, valueText);
+
+    try {
+      const result = await sendRobotCommand(target, {
+        command: cmd,
+        value,
+        values: nextValues,
+        ttlMs: 800,
+      });
+      setLastCommand((currentCommand) => (
+        currentCommand?.cmd === cmd && currentCommand?.target === target
+          ? { ...currentCommand, statusText: '已发布', commandId: result.commandId }
+          : currentCommand
+      ));
+      onToast?.('遥控指令已发布', 'success');
+      return true;
+    } catch (error) {
+      const message = getRemoteCommandErrorMessage(error);
+      setLastCommand((currentCommand) => (
+        currentCommand?.cmd === cmd && currentCommand?.target === target
+          ? { ...currentCommand, statusText: '发送失败' }
+          : currentCommand
+      ));
+      onToast?.(message);
+      return false;
+    } finally {
+      setSendingCommand('');
+    }
   }
 
   function updateThrottle(cmd, rawValue) {
@@ -654,18 +700,24 @@ function RemoteControlPanel({ position }) {
   }
 
   function sendThrottle(command) {
-    previewCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`);
+    submitRemoteCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`, { ...values });
   }
 
-  function toggleSwitch(command) {
+  async function toggleSwitch(command) {
     const nextValue = values[command.cmd] ? 0 : 1;
-    setValues((currentValues) => ({ ...currentValues, [command.cmd]: nextValue }));
-    previewCommand(command.cmd, nextValue, command.label, nextValue ? command.onText : command.offText);
+    const previousValues = values;
+    const nextValues = { ...values, [command.cmd]: nextValue };
+    setValues(nextValues);
+    const sent = await submitRemoteCommand(command.cmd, nextValue, command.label, nextValue ? command.onText : command.offText, nextValues);
+    if (!sent) setValues(previousValues);
   }
 
-  function turnOffAll() {
-    setValues(INITIAL_REMOTE_VALUES);
-    previewCommand('TURN_OFF', 0, '全部关闭', '复位完成');
+  async function turnOffAll() {
+    const previousValues = values;
+    const nextValues = { ...INITIAL_REMOTE_VALUES };
+    setValues(nextValues);
+    const sent = await submitRemoteCommand('TURN_OFF', 0, '全部关闭', '复位完成', nextValues);
+    if (!sent) setValues(previousValues);
   }
 
   return (
@@ -676,7 +728,7 @@ function RemoteControlPanel({ position }) {
           <h2>遥控功能</h2>
           <p className="remote-subtitle">遥控对象与上方查询成功的机器人保持一致；后端接入后由系统封装并下发指令。</p>
         </div>
-        <span className="status-badge status-pending">待接入下发</span>
+        <span className="status-badge status-pending">MQTT 下发</span>
       </div>
 
       <div className="remote-target-card">
@@ -705,7 +757,7 @@ function RemoteControlPanel({ position }) {
                     max="100"
                     step="1"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget}
+                    disabled={!hasRemoteTarget || isSending}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}百分比`}
                   />
@@ -715,11 +767,11 @@ function RemoteControlPanel({ position }) {
                     min="-100"
                     max="100"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget}
+                    disabled={!hasRemoteTarget || isSending}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget}>下发</button>
+                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isSending}>{sendingCommand === command.cmd ? '发送中' : '下发'}</button>
                 </div>
               </div>
             ))}
@@ -740,7 +792,7 @@ function RemoteControlPanel({ position }) {
                   type="button"
                   key={command.cmd}
                   onClick={() => toggleSwitch(command)}
-                  disabled={!hasRemoteTarget}
+                  disabled={!hasRemoteTarget || isSending}
                   aria-pressed={enabled}
                 >
                   <span><strong>{command.label}</strong><small>点击切换</small></span>
@@ -749,7 +801,7 @@ function RemoteControlPanel({ position }) {
               );
             })}
           </div>
-          <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget}>全部关闭 / 一键复位</button>
+          <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget || isSending}>{sendingCommand === 'TURN_OFF' ? '发送中' : '全部关闭 / 一键复位'}</button>
         </div>
 
         <div className="remote-card remote-status-card">
@@ -762,12 +814,14 @@ function RemoteControlPanel({ position }) {
               <div><span>控制对象</span><strong>{lastCommand.target}</strong></div>
               <div><span>操作项目</span><strong>{lastCommand.label}</strong></div>
               <div><span>目标状态</span><strong>{lastCommand.valueText}</strong></div>
+              <div><span>发送状态</span><strong>{lastCommand.statusText}</strong></div>
+              {lastCommand.commandId && <div><span>指令编号</span><strong>{lastCommand.commandId}</strong></div>}
               <div><span>操作时间</span><strong>{lastCommand.time}</strong></div>
             </div>
           ) : (
             <div className="remote-empty-state">{hasRemoteTarget ? '操作遥控项后显示最近状态。' : '请先在上方查询设备位置。'}</div>
           )}
-          <p className="remote-status-note">当前仅完成前端交互；正式下发时由后端按协议发布到对应设备通道。</p>
+          <p className="remote-status-note">当前指令通过后端发布到 MQTT 设备通道；艇端 ACK 接入后可继续显示执行确认。</p>
         </div>
       </div>
     </section>
@@ -1010,6 +1064,7 @@ function App() {
       requestLocation();
     },
     onSelectDevice: (deviceName) => requestLocation(deviceName),
+    onToast: showToast,
   };
 
   const pageContent = activePage === 'dashboard' ? (

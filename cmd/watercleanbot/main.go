@@ -17,6 +17,7 @@ import (
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/api"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/config"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/control"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/telemetry"
@@ -60,9 +61,20 @@ func main() {
 		log.Error("start mqtt telemetry subscriber failed", slog.Any("error", err))
 	}
 
+	commandPublisher := control.NewPublisher(control.PublisherConfig{
+		BrokerURL:     cfg.MQTTBrokerURL,
+		ClientID:      cfg.MQTTCommandClientID,
+		TopicTemplate: cfg.MQTTCommandTopic,
+		Username:      cfg.MQTTUsername,
+		Password:      cfg.MQTTPassword,
+	}, log)
+	if err := commandPublisher.Start(appCtx); err != nil {
+		log.Error("start mqtt command publisher failed", slog.Any("error", err))
+	}
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

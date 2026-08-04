@@ -18,6 +18,8 @@ type Config struct {
 	MQTTBrokerURL          string
 	MQTTClientID           string
 	MQTTTelemetryTopic     string
+	MQTTCommandClientID    string
+	MQTTCommandTopic       string
 	MQTTUsername           string
 	MQTTPassword           string
 }
@@ -34,6 +36,8 @@ func Load() Config {
 		MQTTBrokerURL:          getenv("MQTT_BROKER_URL", "tcp://localhost:1883"),
 		MQTTClientID:           getenv("MQTT_CLIENT_ID", "watercleanbot-backend"),
 		MQTTTelemetryTopic:     getenv("MQTT_TELEMETRY_TOPIC", "usv/+/telemetry"),
+		MQTTCommandClientID:    getenv("MQTT_COMMAND_CLIENT_ID", "watercleanbot-command-publisher"),
+		MQTTCommandTopic:       getenv("MQTT_COMMAND_TOPIC", "usv/%s/command"),
 		MQTTUsername:           getenv("MQTT_USERNAME", ""),
 		MQTTPassword:           getenv("MQTT_PASSWORD", ""),
 	}
