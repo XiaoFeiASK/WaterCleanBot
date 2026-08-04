@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   Clock3,
@@ -10,13 +11,19 @@ import {
   MapPinned,
   Menu,
   PanelLeftClose,
-  RefreshCw,
   Search,
   Settings2,
   ShipWheel,
   Wifi,
 } from 'lucide-react';
-import { fetchAllRobotLocations, fetchRobotLocation, getLocationErrorMessage, getRobotNameForDevice } from './api';
+import {
+  fetchAllRobotLocations,
+  fetchRobotLocation,
+  getLocationErrorMessage,
+  getRemoteCommandErrorMessage,
+  getRobotNameForDevice,
+  sendRobotCommand,
+} from './api';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
@@ -228,12 +235,13 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position }) {
+function LocationMap({ position, centerSeq }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const markerContentRef = useRef(null);
   const zoomHandlerRef = useRef(null);
+  const centeredSeqRef = useRef(centerSeq);
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
@@ -285,6 +293,7 @@ function LocationMap({ position }) {
             zoom: 14,
             resizeEnable: true,
           });
+          centeredSeqRef.current = centerSeq;
           if (typeof mapRef.current.on === 'function') {
             zoomHandlerRef.current = () => {
               if (markerContentRef.current) applyFleetBubbleStyle(markerContentRef.current, getMapZoom(mapRef.current));
@@ -295,8 +304,9 @@ function LocationMap({ position }) {
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
 
-        if (typeof mapRef.current.setCenter === 'function') {
+        if (centeredSeqRef.current !== centerSeq && typeof mapRef.current.setCenter === 'function') {
           mapRef.current.setCenter(nextPosition);
+          centeredSeqRef.current = centerSeq;
         }
 
         const markerContent = createFleetMarkerContent(position, getMapZoom(mapRef.current));
@@ -329,7 +339,7 @@ function LocationMap({ position }) {
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position]);
+  }, [position, centerSeq]);
 
   if (!position) {
     return (
@@ -530,19 +540,18 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function getRemoteDeviceOptions(deviceId, position, fleetPositions) {
-  const deviceNames = [
-    position?.robotName,
-    deviceId,
-    ...fleetPositions.map((fleetPosition) => fleetPosition.robotName),
-  ]
-    .map(getRobotNameForDevice)
-    .filter(Boolean);
+function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice, onToast }) {
+  const [deviceListOpen, setDeviceListOpen] = useState(false);
+  const deviceOptions = [
+    ...new Set(fleetPositions.map((fleetPosition) => getRobotNameForDevice(fleetPosition.robotName)).filter(Boolean)),
+  ];
 
-  return [...new Set(deviceNames.length ? deviceNames : [DEFAULT_DEVICE_ID])];
-}
+  function selectDevice(deviceName) {
+    setDeviceListOpen(false);
+    setDeviceId(deviceName);
+    onSelectDevice(deviceName);
+  }
 
-function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, onSubmit, onRefresh }) {
   return (
     <section className="location-section">
       <div className="section-heading">
@@ -565,28 +574,44 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
               placeholder="输入设备名称，如 USV-001 或 清澜一号"
               autoComplete="off"
             />
+            <button
+              className={`device-list-toggle ${deviceListOpen ? 'device-list-toggle-open' : ''}`}
+              type="button"
+              onClick={() => setDeviceListOpen((isOpen) => !isOpen)}
+              disabled={!deviceOptions.length}
+              title="展开设备列表"
+              aria-label="展开设备列表"
+              aria-expanded={deviceListOpen}
+            >
+              <ChevronDown size={20} strokeWidth={2.8} />
+            </button>
+            {deviceListOpen && (
+              <div className="device-dropdown" role="listbox" aria-label="设备列表">
+                {deviceOptions.map((deviceName) => (
+                  <button
+                    className={`device-dropdown-item ${deviceName === position?.robotName ? 'device-dropdown-item-active' : ''}`}
+                    type="button"
+                    key={deviceName}
+                    onClick={() => selectDevice(deviceName)}
+                  >
+                    <span>{deviceName}</span>
+                    <small>{deviceName === position?.robotName ? '当前设备' : '点击切换'}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button className="button button-primary" type="submit" disabled={!deviceId.trim() || loading}>
             <Search size={16} />
             查询位置
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onRefresh}
-            disabled={!deviceId.trim() || loading}
-            title="刷新位置"
-            aria-label="刷新位置"
-          >
-            <RefreshCw size={17} className={loading ? 'spin' : ''} />
-          </button>
         </div>
-        <p className="query-hint">支持查询总览接口返回的机器人名称。</p>
+        <p className="query-hint">支持手动输入，也可点击搜索框右侧展开已同步设备。</p>
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
       <div className="location-grid">
-        <div className="map-frame"><LocationMap position={position} /></div>
+        <div className="map-frame"><LocationMap position={position} centerSeq={mapCenterSeq} /></div>
         <div className="position-details">
           <div className="detail-header">
             <div>
@@ -607,41 +632,66 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
         </div>
       </div>
 
-      <RemoteControlPanel deviceId={deviceId} position={position} fleetPositions={fleetPositions} />
+      <RemoteControlPanel position={position} onToast={onToast} />
     </section>
   );
 }
 
-function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
+function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
-  const [targetDeviceId, setTargetDeviceId] = useState(getRobotNameForDevice(deviceId) || DEFAULT_DEVICE_ID);
   const [lastCommand, setLastCommand] = useState(null);
-  const deviceOptions = getRemoteDeviceOptions(deviceId, position, fleetPositions);
-  const deviceOptionsKey = deviceOptions.join('|');
-  const currentDeviceId = getRobotNameForDevice(position?.robotName) || getRobotNameForDevice(deviceId);
-  const remoteDeviceId = targetDeviceId || currentDeviceId || deviceOptions[0];
-  const topic = `usv/${remoteDeviceId}/test`;
+  const [sendingCommand, setSendingCommand] = useState('');
+  const remoteDeviceId = getRobotNameForDevice(position?.robotName);
+  const hasRemoteTarget = Boolean(remoteDeviceId);
+  const isSending = Boolean(sendingCommand);
 
-  useEffect(() => {
-    if (currentDeviceId) setTargetDeviceId(currentDeviceId);
-  }, [currentDeviceId]);
-
-  useEffect(() => {
-    setTargetDeviceId((currentTargetId) => (
-      deviceOptions.includes(currentTargetId) ? currentTargetId : deviceOptions[0]
-    ));
-  }, [deviceOptionsKey]);
-
-  function previewCommand(cmd, value, label, valueText) {
+  function previewCommand(cmd, value, label, valueText, statusText = '发送中', commandId = '') {
+    if (!hasRemoteTarget) return;
     setLastCommand({
       cmd,
-      topic,
       target: remoteDeviceId,
       label,
       value,
       valueText,
+      statusText,
+      commandId,
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
     });
+  }
+
+  async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
+    if (!hasRemoteTarget || isSending) return false;
+
+    const target = remoteDeviceId;
+    setSendingCommand(cmd);
+    previewCommand(cmd, value, label, valueText);
+
+    try {
+      const result = await sendRobotCommand(target, {
+        command: cmd,
+        value,
+        values: nextValues,
+        ttlMs: 800,
+      });
+      setLastCommand((currentCommand) => (
+        currentCommand?.cmd === cmd && currentCommand?.target === target
+          ? { ...currentCommand, statusText: '已发布', commandId: result.commandId }
+          : currentCommand
+      ));
+      onToast?.('遥控指令已发布', 'success');
+      return true;
+    } catch (error) {
+      const message = getRemoteCommandErrorMessage(error);
+      setLastCommand((currentCommand) => (
+        currentCommand?.cmd === cmd && currentCommand?.target === target
+          ? { ...currentCommand, statusText: '发送失败' }
+          : currentCommand
+      ));
+      onToast?.(message);
+      return false;
+    } finally {
+      setSendingCommand('');
+    }
   }
 
   function updateThrottle(cmd, rawValue) {
@@ -650,18 +700,24 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
   }
 
   function sendThrottle(command) {
-    previewCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`);
+    submitRemoteCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`, { ...values });
   }
 
-  function toggleSwitch(command) {
+  async function toggleSwitch(command) {
     const nextValue = values[command.cmd] ? 0 : 1;
-    setValues((currentValues) => ({ ...currentValues, [command.cmd]: nextValue }));
-    previewCommand(command.cmd, nextValue, command.label, nextValue ? command.onText : command.offText);
+    const previousValues = values;
+    const nextValues = { ...values, [command.cmd]: nextValue };
+    setValues(nextValues);
+    const sent = await submitRemoteCommand(command.cmd, nextValue, command.label, nextValue ? command.onText : command.offText, nextValues);
+    if (!sent) setValues(previousValues);
   }
 
-  function turnOffAll() {
-    setValues(INITIAL_REMOTE_VALUES);
-    previewCommand('TURN_OFF', 0, '全部关闭', '复位完成');
+  async function turnOffAll() {
+    const previousValues = values;
+    const nextValues = { ...INITIAL_REMOTE_VALUES };
+    setValues(nextValues);
+    const sent = await submitRemoteCommand('TURN_OFF', 0, '全部关闭', '复位完成', nextValues);
+    if (!sent) setValues(previousValues);
   }
 
   return (
@@ -670,21 +726,15 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
         <div>
           <p className="eyebrow">遥控调试</p>
           <h2>遥控功能</h2>
-          <p className="remote-subtitle">选择控制对象后操作油门和执行机构；后端接入后由系统封装并下发指令。</p>
+          <p className="remote-subtitle">遥控对象与上方查询成功的机器人保持一致；后端接入后由系统封装并下发指令。</p>
         </div>
-        <span className="status-badge status-pending">待接入下发</span>
+        <span className="status-badge status-pending">MQTT 下发</span>
       </div>
 
       <div className="remote-target-card">
-        <label htmlFor="remote-device-select">控制对象</label>
-        <select
-          id="remote-device-select"
-          value={remoteDeviceId}
-          onChange={(event) => setTargetDeviceId(event.target.value)}
-        >
-          {deviceOptions.map((deviceName) => <option value={deviceName} key={deviceName}>{deviceName}</option>)}
-        </select>
-        <small>已隐藏底层 Topic 和 JSON 报文，避免操作员误读协议细节。</small>
+        <span>控制对象</span>
+        <strong>{remoteDeviceId || '请先查询设备'}</strong>
+        <small>{hasRemoteTarget ? '下方遥控指令将只作用于当前设备。' : '查询到设备位置后即可进行遥控操作。'}</small>
       </div>
 
       <div className="remote-grid">
@@ -707,6 +757,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                     max="100"
                     step="1"
                     value={values[command.cmd]}
+                    disabled={!hasRemoteTarget || isSending}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}百分比`}
                   />
@@ -716,10 +767,11 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                     min="-100"
                     max="100"
                     value={values[command.cmd]}
+                    disabled={!hasRemoteTarget || isSending}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)}>下发</button>
+                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isSending}>{sendingCommand === command.cmd ? '发送中' : '下发'}</button>
                 </div>
               </div>
             ))}
@@ -740,6 +792,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
                   type="button"
                   key={command.cmd}
                   onClick={() => toggleSwitch(command)}
+                  disabled={!hasRemoteTarget || isSending}
                   aria-pressed={enabled}
                 >
                   <span><strong>{command.label}</strong><small>点击切换</small></span>
@@ -748,7 +801,7 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
               );
             })}
           </div>
-          <button className="button button-danger" type="button" onClick={turnOffAll}>全部关闭 / 一键复位</button>
+          <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget || isSending}>{sendingCommand === 'TURN_OFF' ? '发送中' : '全部关闭 / 一键复位'}</button>
         </div>
 
         <div className="remote-card remote-status-card">
@@ -761,12 +814,14 @@ function RemoteControlPanel({ deviceId, position, fleetPositions = [] }) {
               <div><span>控制对象</span><strong>{lastCommand.target}</strong></div>
               <div><span>操作项目</span><strong>{lastCommand.label}</strong></div>
               <div><span>目标状态</span><strong>{lastCommand.valueText}</strong></div>
+              <div><span>发送状态</span><strong>{lastCommand.statusText}</strong></div>
+              {lastCommand.commandId && <div><span>指令编号</span><strong>{lastCommand.commandId}</strong></div>}
               <div><span>操作时间</span><strong>{lastCommand.time}</strong></div>
             </div>
           ) : (
-            <div className="remote-empty-state">请选择设备并操作遥控项。</div>
+            <div className="remote-empty-state">{hasRemoteTarget ? '操作遥控项后显示最近状态。' : '请先在上方查询设备位置。'}</div>
           )}
-          <p className="remote-status-note">当前仅完成前端交互；正式下发时由后端按协议发布到对应设备通道。</p>
+          <p className="remote-status-note">当前指令通过后端发布到 MQTT 设备通道；艇端 ACK 接入后可继续显示执行确认。</p>
         </div>
       </div>
     </section>
@@ -867,10 +922,14 @@ function App() {
   const [fleetError, setFleetError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mapCenterSeq, setMapCenterSeq] = useState(0);
   const [toast, setToast] = useState(null);
+  const activeDeviceIdRef = useRef(activeDeviceId);
   const locationRequestSeqRef = useRef(0);
+  const initialLocationLoadRef = useRef(false);
   const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
+  activeDeviceIdRef.current = activeDeviceId;
 
   function showToast(message, type = 'error') {
     setToast({ message, type });
@@ -899,33 +958,42 @@ function App() {
 
   async function loadLocation(code = deviceId, options = {}) {
     const normalizedCode = getRobotNameForDevice(code);
-    const requestSeq = locationRequestSeqRef.current + 1;
-    locationRequestSeqRef.current = requestSeq;
+    const showInlineLoading = !options.silent;
+    const requestSeq = showInlineLoading ? locationRequestSeqRef.current + 1 : locationRequestSeqRef.current;
+    if (showInlineLoading) locationRequestSeqRef.current = requestSeq;
 
     if (!normalizedCode || !getRobotNameForDevice(normalizedCode)) {
-      setError('设备名称无效');
-      setPosition(null);
-      setLoading(false);
-      showToast('设备名称无效');
+      if (showInlineLoading) {
+        setError('设备名称无效');
+        setPosition(null);
+        setLoading(false);
+        showToast('设备名称无效');
+      }
       return;
     }
 
-    setLoading(true);
-    setError('');
+    if (showInlineLoading) {
+      setLoading(true);
+      setError('');
+    }
 
     try {
       const nextPosition = await fetchRobotLocation(normalizedCode);
-      if (requestSeq !== locationRequestSeqRef.current) return;
+      if (showInlineLoading && requestSeq !== locationRequestSeqRef.current) return;
+      if (!showInlineLoading && normalizedCode !== activeDeviceIdRef.current) return;
       setPosition(nextPosition);
+      if (options.centerMap) setMapCenterSeq((currentSeq) => currentSeq + 1);
       if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
-      if (requestSeq !== locationRequestSeqRef.current) return;
-      setPosition(null);
-      const message = getLocationErrorMessage(requestError);
-      setError(message);
-      showToast(message);
+      if (showInlineLoading && requestSeq !== locationRequestSeqRef.current) return;
+      if (showInlineLoading) {
+        setPosition(null);
+        const message = getLocationErrorMessage(requestError);
+        setError(message);
+        showToast(message);
+      }
     } finally {
-      if (requestSeq === locationRequestSeqRef.current) setLoading(false);
+      if (showInlineLoading && requestSeq === locationRequestSeqRef.current) setLoading(false);
     }
   }
 
@@ -934,11 +1002,13 @@ function App() {
     setDeviceId(normalizedCode);
     if (!getRobotNameForDevice(normalizedCode)) {
       setActiveDeviceId('');
+      activeDeviceIdRef.current = '';
       loadLocation(normalizedCode);
       return;
     }
     setActiveDeviceId(normalizedCode);
-    loadLocation(normalizedCode);
+    activeDeviceIdRef.current = normalizedCode;
+    loadLocation(normalizedCode, { centerMap: true });
   }
 
   function openDeviceDetail(robotName) {
@@ -946,15 +1016,19 @@ function App() {
     if (!normalizedName) return;
     setDeviceId(normalizedName);
     setActiveDeviceId(normalizedName);
+    activeDeviceIdRef.current = normalizedName;
     saveActivePage('device-detail');
     setActivePage('device-detail');
     setSidebarOpen(false);
-    loadLocation(normalizedName, { silent: true });
+    loadLocation(normalizedName, { silent: true, centerMap: true });
   }
 
   useEffect(() => {
     if (!activeDeviceId) return undefined;
-    loadLocation(activeDeviceId, { silent: true });
+    if (!initialLocationLoadRef.current) {
+      initialLocationLoadRef.current = true;
+      loadLocation(activeDeviceId, { silent: true, centerMap: true });
+    }
     const timer = window.setInterval(() => loadLocation(activeDeviceId, { silent: true }), POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [activeDeviceId]);
@@ -984,11 +1058,13 @@ function App() {
     fleetPositions,
     loading,
     error,
+    mapCenterSeq,
     onSubmit: (event) => {
       event.preventDefault();
       requestLocation();
     },
-    onRefresh: () => requestLocation(),
+    onSelectDevice: (deviceName) => requestLocation(deviceName),
+    onToast: showToast,
   };
 
   const pageContent = activePage === 'dashboard' ? (

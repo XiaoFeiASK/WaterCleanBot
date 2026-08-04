@@ -2,18 +2,23 @@
 
 # WaterCleanBot
 
-WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**只暴露定位接口，只运行一个定位刷新任务，目标是从数据库读取机器人最新位置**。
+WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**暴露定位接口、运行定位刷新任务，并支持通过 MQTT 发布遥控指令**。
 
 前端页面原型已经基本定型，仍保留在 `web/1/`，当前不改页面结构和交互内容。
 
 ## 当前后端范围
 
-当前后端只做一件事：
+当前后端先做两件事：
 
 ```text
 后台实时定位任务
   -> 查询数据库中的机器人最新位置
   -> HTTP 接口查询机器人最新位置
+
+遥控指令下发
+  -> HTTP 接口接收前端遥控指令
+  -> 校验指令目标状态
+  -> MQTT 发布到对应无人艇 command topic
 ```
 
 当前位置接口：
@@ -21,12 +26,35 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 ```text
 GET /api/robots/locations
 GET /api/robots/{robotName}/location
+POST /api/robots/{robotName}/commands
 ```
 
 示例：
 
 ```text
 GET http://localhost:8080/api/robots/清澜一号/location
+```
+
+遥控指令示例：
+
+```text
+POST http://localhost:8080/api/robots/清澜一号/commands
+Content-Type: application/json
+
+{
+  "command": "THROTTLE_L",
+  "value": 30,
+  "ttlMs": 800,
+  "values": {
+    "THROTTLE_L": 30,
+    "THROTTLE_R": 0,
+    "HATCH_CYLINDER": 0,
+    "DISC_CYLINDER": 0,
+    "CONVEYOR": 0,
+    "BRUSH_L": 0,
+    "BRUSH_R": 0
+  }
+}
 ```
 
 ## 当前文件架构
@@ -83,6 +111,20 @@ MQTT 订阅机器人定位消息
   -> HTTP 接口返回最新位置
 ```
 
+## 遥控下发链路
+
+当前最小实现：
+
+```text
+前端遥控面板
+  -> POST /api/robots/{robotName}/commands
+  -> 后端校验设备名、油门范围和开关状态
+  -> MQTT 发布 usv/{robotName}/command
+  -> 前端显示已发布或失败
+```
+
+发布给艇端的 MQTT 报文包含 `commandId`、`seq`、`issuedAt`、`ttlMs` 和完整 `values` 目标状态。指令不使用 retain；生产环境应增加艇端 ACK topic、权限、审计和急停策略。
+
 ## 本地运行
 
 一键启动本地 PostgreSQL/PostGIS 数据库：
@@ -123,7 +165,7 @@ http://localhost:8080/api/robots/清澜一号/location
 - 不做账号权限。
 - 不做任务管理。
 - 不做告警管理。
-- 不做命令下发。
+- 不做命令 ACK 和审计入库。
 - 不做完整 MQTT 入库。
 - 不做完整 PostgreSQL 业务读写。
 
