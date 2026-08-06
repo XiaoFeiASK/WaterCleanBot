@@ -67,9 +67,9 @@ const DEVICE_DETAIL_TABS = Object.freeze([
 ]);
 
 const PLANNED_ROUTES = Object.freeze([
-  { id: 'R-001', type: '折线', length: '1.2 km', duration: '15分钟' },
-  { id: 'R-002', type: '沿岸', length: '2.0 km', duration: '25分钟' },
-  { id: 'R-003', type: '巡查', length: '0.8 km', duration: '10分钟' },
+  { id: 'R-001', type: '折线', length: '1.2 km', duration: '15分钟', points: [] },
+  { id: 'R-002', type: '沿岸', length: '2.0 km', duration: '25分钟', points: [] },
+  { id: 'R-003', type: '巡查', length: '0.8 km', duration: '10分钟', points: [] },
 ]);
 
 const INITIAL_REMOTE_VALUES = Object.freeze({
@@ -160,6 +160,49 @@ function formatBattery(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
 }
 
+function formatRouteLength(lengthMeters) {
+  if (typeof lengthMeters !== 'number' || !Number.isFinite(lengthMeters)) return '暂无数据';
+  return lengthMeters >= 1000 ? `${(lengthMeters / 1000).toFixed(2)} km` : `${Math.round(lengthMeters)} m`;
+}
+
+function formatRouteDuration(lengthMeters) {
+  if (typeof lengthMeters !== 'number' || !Number.isFinite(lengthMeters)) return '暂无数据';
+  // 第一版先按 1.2m/s 粗略估算，后续接任务参数后再改为真实作业速度。
+  const minutes = Math.max(1, Math.ceil(lengthMeters / 1.2 / 60));
+  return `${minutes}分钟`;
+}
+
+function getDistanceMeters(startPoint, endPoint) {
+  const toRadians = (degree) => degree * Math.PI / 180;
+  const earthRadiusMeters = 6371000;
+  const deltaLat = toRadians(endPoint.lat - startPoint.lat);
+  const deltaLng = toRadians(endPoint.lng - startPoint.lng);
+  const startLat = toRadians(startPoint.lat);
+  const endLat = toRadians(endPoint.lat);
+  const haversine = Math.sin(deltaLat / 2) ** 2 + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
+}
+
+function getRouteLengthMeters(points) {
+  return points.slice(1).reduce((total, point, index) => total + getDistanceMeters(points[index], point), 0);
+}
+
+function createRouteId(routes) {
+  const maxRouteNumber = routes.reduce((maxNumber, route) => {
+    const routeNumber = Number(String(route.id).replace(/^R-/, ''));
+    return Number.isFinite(routeNumber) ? Math.max(maxNumber, routeNumber) : maxNumber;
+  }, 0);
+  return `R-${String(maxRouteNumber + 1).padStart(3, '0')}`;
+}
+
+function getMapClickPoint(lngLat) {
+  if (!lngLat) return null;
+  const lng = typeof lngLat.getLng === 'function' ? lngLat.getLng() : lngLat.lng;
+  const lat = typeof lngLat.getLat === 'function' ? lngLat.getLat() : lngLat.lat;
+  if (typeof lng !== 'number' || typeof lat !== 'number' || !Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  return { lng, lat };
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -207,6 +250,23 @@ function safelyRemoveMarker(marker) {
       // Ignore third-party marker cleanup failures so empty states can render.
     }
   }
+}
+
+function safelyRemoveOverlay(overlay) {
+  if (overlay && typeof overlay.setMap === 'function') {
+    try {
+      overlay.setMap(null);
+    } catch (error) {
+      // Ignore third-party overlay cleanup failures so map interactions keep working.
+    }
+  }
+}
+
+function createRoutePointContent(index, isDraft) {
+  const point = document.createElement('div');
+  point.className = `route-planner-point ${isDraft ? 'route-planner-point-draft' : ''}`;
+  point.textContent = String(index + 1);
+  return point;
 }
 
 function createFleetMarkerContent(position, zoom, onClick) {
@@ -283,11 +343,14 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position, centerSeq }) {
+function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], onMapPoint }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const markerContentRef = useRef(null);
+  const routePolylineRef = useRef(null);
+  const routePointMarkersRef = useRef([]);
+  const mapClickHandlerRef = useRef(null);
   const zoomHandlerRef = useRef(null);
   const centeredSeqRef = useRef(centerSeq);
   const [mapError, setMapError] = useState('');
@@ -296,6 +359,14 @@ function LocationMap({ position, centerSeq }) {
     safelyRemoveMarker(markerRef.current);
     markerRef.current = null;
     markerContentRef.current = null;
+    safelyRemoveOverlay(routePolylineRef.current);
+    routePolylineRef.current = null;
+    routePointMarkersRef.current.forEach(safelyRemoveOverlay);
+    routePointMarkersRef.current = [];
+    if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
+      mapRef.current.off('click', mapClickHandlerRef.current);
+    }
+    mapClickHandlerRef.current = null;
     if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
       mapRef.current.off('zoomchange', zoomHandlerRef.current);
       mapRef.current.off('zoomend', zoomHandlerRef.current);
@@ -310,6 +381,14 @@ function LocationMap({ position, centerSeq }) {
       safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
       markerContentRef.current = null;
+      safelyRemoveOverlay(routePolylineRef.current);
+      routePolylineRef.current = null;
+      routePointMarkersRef.current.forEach(safelyRemoveOverlay);
+      routePointMarkersRef.current = [];
+      if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
+        mapRef.current.off('click', mapClickHandlerRef.current);
+      }
+      mapClickHandlerRef.current = null;
       if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
         mapRef.current.off('zoomchange', zoomHandlerRef.current);
         mapRef.current.off('zoomend', zoomHandlerRef.current);
@@ -364,15 +443,55 @@ function LocationMap({ position, centerSeq }) {
             content: markerContent,
             offset: new AMap.Pixel(-64, -88),
           });
-          markerContentRef.current = markerContent;
-          return;
-        }
-
-        markerRef.current.setPosition(nextPosition);
-        if (typeof markerRef.current.setContent === 'function') {
-          markerRef.current.setContent(markerContent);
+        } else {
+          markerRef.current.setPosition(nextPosition);
+          if (typeof markerRef.current.setContent === 'function') {
+            markerRef.current.setContent(markerContent);
+          }
         }
         markerContentRef.current = markerContent;
+
+        if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
+          mapRef.current.off('click', mapClickHandlerRef.current);
+          mapClickHandlerRef.current = null;
+        }
+        if (planningMode && typeof mapRef.current.on === 'function') {
+          mapClickHandlerRef.current = (event) => {
+            const nextPoint = getMapClickPoint(event.lnglat);
+            if (nextPoint) onMapPoint?.(nextPoint);
+          };
+          mapRef.current.on('click', mapClickHandlerRef.current);
+        }
+
+        // 航线规划第一版只维护前端覆盖物：草稿线用于编辑，预览线用于查看已保存航线。
+        safelyRemoveOverlay(routePolylineRef.current);
+        routePolylineRef.current = null;
+        routePointMarkersRef.current.forEach(safelyRemoveOverlay);
+        routePointMarkersRef.current = [];
+
+        const activeRoutePoints = planningMode ? draftRoutePoints : previewRoutePoints;
+        if (activeRoutePoints.length >= 2) {
+          routePolylineRef.current = new AMap.Polyline({
+            map: mapRef.current,
+            path: activeRoutePoints.map((point) => [point.lng, point.lat]),
+            strokeColor: planningMode ? '#18a999' : '#0b7a6f',
+            strokeOpacity: 0.95,
+            strokeWeight: 5,
+            strokeStyle: planningMode ? 'dashed' : 'solid',
+            lineJoin: 'round',
+            lineCap: 'round',
+          });
+        }
+        activeRoutePoints.forEach((point, index) => {
+          const pointMarker = new AMap.Marker({
+            map: mapRef.current,
+            position: [point.lng, point.lat],
+            content: createRoutePointContent(index, planningMode),
+            offset: new AMap.Pixel(-12, -12),
+            zIndex: 120,
+          });
+          routePointMarkersRef.current.push(pointMarker);
+        });
       })
       .catch(() => {
         if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
@@ -382,7 +501,7 @@ function LocationMap({ position, centerSeq }) {
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq]);
+  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, onMapPoint]);
 
   if (!position) {
     return (
@@ -722,9 +841,72 @@ function DeviceDetailTabContent({ activeTab, position, mapCenterSeq, onToast }) 
 
 function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const deviceName = position?.robotName || '暂无设备';
+  const [routes, setRoutes] = useState(PLANNED_ROUTES);
+  const [planningMode, setPlanningMode] = useState(false);
+  const [draftRoutePoints, setDraftRoutePoints] = useState([]);
+  const [previewRouteId, setPreviewRouteId] = useState('');
+  const previewRoute = routes.find((route) => route.id === previewRouteId);
+  const previewRoutePoints = previewRoute?.points || [];
+  const draftRouteLength = getRouteLengthMeters(draftRoutePoints);
 
-  function scrollToRouteTable() {
-    document.querySelector('.route-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function startRoutePlanning() {
+    if (!position) {
+      onToast?.('请先查询设备位置后再规划航线');
+      return;
+    }
+    setPlanningMode((isPlanning) => !isPlanning);
+    setPreviewRouteId('');
+    setDraftRoutePoints([]);
+  }
+
+  function addDraftRoutePoint(point) {
+    if (!planningMode) return;
+    setDraftRoutePoints((currentPoints) => [...currentPoints, point]);
+  }
+
+  function undoDraftRoutePoint() {
+    setDraftRoutePoints((currentPoints) => currentPoints.slice(0, -1));
+  }
+
+  function clearDraftRoute() {
+    setDraftRoutePoints([]);
+  }
+
+  function saveDraftRoute() {
+    if (draftRoutePoints.length < 2) {
+      onToast?.('至少需要 2 个点才能保存航线');
+      return;
+    }
+    const lengthMeters = getRouteLengthMeters(draftRoutePoints);
+    const route = {
+      id: createRouteId(routes),
+      type: '折线',
+      length: formatRouteLength(lengthMeters),
+      duration: formatRouteDuration(lengthMeters),
+      points: draftRoutePoints,
+    };
+    setRoutes((currentRoutes) => [...currentRoutes, route]);
+    setPreviewRouteId(route.id);
+    setPlanningMode(false);
+    setDraftRoutePoints([]);
+    onToast?.('航线已保存到本地表格', 'success');
+  }
+
+  function viewRoute(route) {
+    if (!route.points?.length) {
+      onToast?.('演示航线暂无地图点位，请新建航线');
+      return;
+    }
+    setPlanningMode(false);
+    setDraftRoutePoints([]);
+    setPreviewRouteId(route.id);
+    document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function deleteRoute(routeId) {
+    setRoutes((currentRoutes) => currentRoutes.filter((route) => route.id !== routeId));
+    if (previewRouteId === routeId) setPreviewRouteId('');
+    onToast?.('航线已从本地表格删除', 'success');
   }
 
   return (
@@ -738,12 +920,35 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           <div className="online-map-actions">
             <button className="button button-primary" type="button" onClick={() => onToast?.('沿岸任务已启动', 'success')}>启动沿岸任务</button>
             <button className="button button-secondary" type="button" onClick={() => onToast?.('任务已停止', 'success')}>停止任务</button>
-            <button className="button button-secondary" type="button" onClick={scrollToRouteTable}>规划航线</button>
+            <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
         </div>
 
         <div className="map-frame online-map-frame">
-          <LocationMap position={position} centerSeq={mapCenterSeq} />
+          <LocationMap
+            position={position}
+            centerSeq={mapCenterSeq}
+            planningMode={planningMode}
+            draftRoutePoints={draftRoutePoints}
+            previewRoutePoints={previewRoutePoints}
+            onMapPoint={addDraftRoutePoint}
+          />
+          {planningMode && (
+            <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
+              <div>
+                <strong>规划模式</strong>
+                <span>点击地图添加航点，当前 {draftRoutePoints.length} 个点，长度 {formatRouteLength(draftRouteLength)}</span>
+              </div>
+              <div className="route-planning-actions">
+                <button type="button" onClick={undoDraftRoutePoint} disabled={!draftRoutePoints.length}>撤销点</button>
+                <button type="button" onClick={clearDraftRoute} disabled={!draftRoutePoints.length}>清空</button>
+                <button type="button" onClick={saveDraftRoute} disabled={draftRoutePoints.length < 2}>保存航线</button>
+              </div>
+            </div>
+          )}
+          {!planningMode && previewRoute && (
+            <div className="route-preview-badge">正在查看 {previewRoute.id} · {previewRoute.length}</div>
+          )}
         </div>
       </section>
 
@@ -759,7 +964,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <h3>航线规划</h3>
             <span>已规划航线</span>
           </div>
-          <span className="status-badge status-pending">{PLANNED_ROUTES.length} 条</span>
+          <span className="status-badge status-pending">{routes.length} 条</span>
         </div>
 
         <div className="route-table-wrap">
@@ -774,15 +979,15 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               </tr>
             </thead>
             <tbody>
-              {PLANNED_ROUTES.map((route) => (
-                <tr key={route.id}>
+              {routes.map((route) => (
+                <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''} key={route.id}>
                   <td>{route.id}</td>
                   <td>{route.type}</td>
                   <td>{route.length}</td>
                   <td>{route.duration}</td>
                   <td>
-                    <button type="button" onClick={() => onToast?.('清洁区域暂未接入')}>查看</button>
-                    <button className="route-table-danger" type="button" onClick={() => onToast?.('演示航线暂不可删除')}>删除</button>
+                    <button type="button" onClick={() => viewRoute(route)}>查看</button>
+                    <button className="route-table-danger" type="button" onClick={() => deleteRoute(route.id)}>删除</button>
                   </td>
                 </tr>
               ))}

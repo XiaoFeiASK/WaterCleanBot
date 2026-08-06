@@ -224,6 +224,14 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .online-map-frame { height: 560px; min-height: 560px; position: relative; border: 0; border-radius: 0; box-shadow: none; }
 .online-map-frame .location-map,
 .online-map-frame .map-empty { height: 560px; }
+.route-planning-toolbar { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 6; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 14px; color: var(--ink); background: rgba(255,253,246,.96); border: 1px solid rgba(19,38,41,.12); border-radius: 16px; box-shadow: 0 16px 34px rgba(11,36,41,.16); backdrop-filter: blur(10px); }
+.route-planning-toolbar strong { display: block; margin-bottom: 3px; font-size: 14px; }
+.route-planning-toolbar span { display: block; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.route-planning-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.route-planning-actions button { min-height: 34px; padding: 0 11px; border: 1px solid rgba(24,169,153,.18); border-radius: 10px; color: var(--water); background: rgba(226,243,239,.9); font-size: 12px; font-weight: 900; }
+.route-planning-actions button:hover:not(:disabled) { background: rgba(24,169,153,.16); }
+.route-planning-actions button:last-child { color: #fffef7; background: linear-gradient(135deg, var(--teal-dark), var(--water)); }
+.route-preview-badge { position: absolute; left: 16px; bottom: 16px; z-index: 6; padding: 9px 12px; color: var(--teal-dark); background: rgba(255,253,246,.94); border: 1px solid rgba(24,169,153,.28); border-radius: 999px; box-shadow: 0 12px 24px rgba(11,36,41,.12); font-size: 12px; font-weight: 900; }
 .online-map-ops-grid { display: grid; gap: 16px; align-items: start; }
 .map-command-panel { min-width: 0; min-height: 100%; }
 .map-command-panel { padding: 18px; border: 1px solid rgba(19,38,41,.1); border-radius: 22px; background: rgba(255,253,246,.82); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
@@ -238,6 +246,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .route-table th { padding: 13px 16px; color: #7a8d8f; background: rgba(19,38,41,.04); font-size: 12px; font-weight: 900; text-align: left; }
 .route-table td { padding: 15px 16px; border-bottom: 1px solid rgba(19,38,41,.08); font-size: 13px; }
 .route-table tbody tr:hover { background: rgba(226,243,239,.36); }
+.route-table-row-active { background: rgba(24,169,153,.1); }
 .route-table button { margin-right: 12px; padding: 0; border: 0; color: #1269a8; background: transparent; font-size: 13px; font-weight: 850; }
 .route-table button:hover { text-decoration: underline; }
 .route-table .route-table-danger { color: var(--red); }
@@ -262,6 +271,8 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .fleet-map-marker-icon::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 10px; height: 10px; background: var(--water); border-right: 3px solid #fffdf6; border-bottom: 3px solid #fffdf6; transform: translateX(-50%) rotate(45deg); }
 .fleet-map-marker-icon span { position: relative; z-index: 1; font-size: 12px; font-weight: 900; line-height: 1; }
 .fleet-map-marker-pulse { position: absolute; left: 50%; bottom: -1px; width: 26px; height: 10px; border-radius: 50%; background: rgba(24,169,153,.22); transform: translateX(-50%); }
+.route-planner-point { width: 24px; height: 24px; display: grid; place-items: center; color: #fffef7; background: var(--teal-dark); border: 3px solid #fffdf6; border-radius: 50%; box-shadow: 0 8px 18px rgba(15,89,97,.28); font-size: 11px; font-weight: 950; line-height: 1; }
+.route-planner-point-draft { background: var(--teal); box-shadow: 0 0 0 5px rgba(24,169,153,.18), 0 8px 18px rgba(15,89,97,.22); }
 
 .map-empty { height: 410px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; color: #7e9294; background-image: linear-gradient(rgba(19,38,41,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(19,38,41,.07) 1px, transparent 1px); background-size: 44px 44px; }
 .fleet-map-frame .map-empty { height: 500px; }
@@ -408,6 +419,10 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .online-map-frame,
   .online-map-frame .location-map,
   .online-map-frame .map-empty { min-height: 390px; height: 390px; }
+  .route-planning-toolbar { left: 10px; right: 10px; bottom: 10px; padding: 11px 12px; align-items: flex-start; flex-direction: column; }
+  .route-planning-actions { width: 100%; justify-content: flex-start; }
+  .route-planning-actions button { flex: 1 1 auto; }
+  .route-preview-badge { left: 10px; bottom: 10px; }
   .map-command-panel { padding: 13px; border-radius: 19px; }
   .map-command-panel .remote-grid { grid-template-columns: 1fr; }
   .detail-feature-placeholder { min-height: 280px; padding: 22px; }
