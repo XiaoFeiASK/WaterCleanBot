@@ -7,10 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 )
+
+var nonFiniteJSONNumberPattern = regexp.MustCompile(`(?i)(:\s*)(nan|inf|-inf|infinity|-infinity)(\s*[,}])`)
 
 // USVData 对应无人艇发布到 usv/{usvId}/telemetry 的 JSON 报文。
 // 调用方：Subscriber.handleMessage 在收到 MQTT 消息后解析它。
@@ -28,7 +32,7 @@ type USVData struct {
 
 // ParseUSVData 解析并校验一条 MQTT 遥测消息。
 // 调用方：Subscriber.handleMessage。
-// 会调用：topicUSVID、json.Unmarshal、USVData.Validate。
+// 会调用：topicUSVID、sanitizeTelemetryPayload、json.Unmarshal、USVData.Validate。
 func ParseUSVData(topic string, payload []byte) (USVData, error) {
 	topicID, err := topicUSVID(topic)
 	if err != nil {
@@ -36,14 +40,24 @@ func ParseUSVData(topic string, payload []byte) (USVData, error) {
 	}
 
 	var data USVData
-	if err := json.Unmarshal(payload, &data); err != nil {
+	if err := json.Unmarshal(sanitizeTelemetryPayload(payload), &data); err != nil {
 		return USVData{}, fmt.Errorf("decode usv telemetry payload: %w", err)
 	}
 	data.USVID = strings.TrimSpace(data.USVID)
+	if data.Timestamp <= 0 {
+		// 兼容艇端未上报 timestamp 的旧报文，使用后端接收时间参与新旧数据比较。
+		data.Timestamp = time.Now().UnixMilli()
+	}
 	if err := data.Validate(topicID); err != nil {
 		return USVData{}, err
 	}
 	return data, nil
+}
+
+func sanitizeTelemetryPayload(payload []byte) []byte {
+	// 设备端当前会上报 battery:nan。nan 不是合法 JSON 数字，先转成 null；
+	// 对 float64 字段来说 null 会解成 0，保证 HTTP JSON 响应仍是可编码的有限数值。
+	return []byte(nonFiniteJSONNumberPattern.ReplaceAllString(string(payload), `${1}null${3}`))
 }
 
 // Validate 校验字段范围，避免非法遥测数据进入数据库和内存缓存。

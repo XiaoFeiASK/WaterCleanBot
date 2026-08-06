@@ -1,7 +1,8 @@
-# 文件作用：定义本地开发用 PostgreSQL/PostGIS 和 MQTT Broker 容器。
+# 文件作用：定义本地开发用 PostgreSQL/PostGIS 数据库容器。
 
 # 本地开发栈。
-# 此文件刻意保持小范围：先配置 PostgreSQL/PostGIS，再配置 MQTT 消息代理。
+# 此文件刻意保持小范围：只配置 PostgreSQL/PostGIS。
+# 本地 MQTT Broker 请使用 docker-compose.mqtt.yml 和 start-mqtt.bat 单独启动。
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -19,10 +20,9 @@ services:
       test: ["CMD-SHELL", "pg_isready -U waterbot -d waterbot"]
       interval: 10s
       timeout: 5s
+
       retries: 5
 
 volumes:
   postgres_data:
     # 命名卷会在容器重启后保留本地数据库数据。
-  mosquitto_data:
-    # 命名卷会在容器重启后保留本地 MQTT 持久化数据。

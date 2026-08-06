@@ -96,7 +96,7 @@ func (p *Publisher) PublishRemoteCommand(ctx context.Context, target string, req
 		return RemoteCommandEnvelope{}, fmt.Errorf("mqtt command publisher is not connected")
 	}
 
-	payload, err := json.Marshal(command)
+	payload, err := json.Marshal(command.DevicePayload())
 	if err != nil {
 		return RemoteCommandEnvelope{}, fmt.Errorf("encode mqtt command payload: %w", err)
 	}

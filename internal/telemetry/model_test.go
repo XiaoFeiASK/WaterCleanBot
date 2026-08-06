@@ -1,0 +1,32 @@
+// 文件作用：验证 MQTT 遥测报文解析兼容性。
+
+package telemetry
+
+import "testing"
+
+func TestParseUSVDataAcceptsNaNBatteryAndMissingTimestamp(t *testing.T) {
+	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":nan,"status":0,"usvId":"USV-001"}`)
+
+	data, err := ParseUSVData("usv/USV-001/telemetry", payload)
+	if err != nil {
+		t.Fatalf("ParseUSVData returned error: %v", err)
+	}
+
+	if data.USVID != "USV-001" {
+		t.Fatalf("USVID = %q, want USV-001", data.USVID)
+	}
+	if data.Battery != 0 {
+		t.Fatalf("Battery = %v, want 0 for nan fallback", data.Battery)
+	}
+	if data.Timestamp <= 0 {
+		t.Fatalf("Timestamp = %d, want generated receive timestamp", data.Timestamp)
+	}
+}
+
+func TestParseUSVDataRejectsTopicPayloadMismatch(t *testing.T) {
+	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":88,"status":0,"usvId":"USV-002"}`)
+
+	if _, err := ParseUSVData("usv/USV-001/telemetry", payload); err == nil {
+		t.Fatal("ParseUSVData returned nil error for topic/payload mismatch")
+	}
+}

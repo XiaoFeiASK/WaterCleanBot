@@ -57,7 +57,7 @@ type RemoteCommandRequest struct {
 	TTLMS   int            `json:"ttlMs"`
 }
 
-// RemoteCommandEnvelope 是后端发布给艇端 MQTT topic 的标准指令报文。
+// RemoteCommandEnvelope 是后端内部使用的指令信封，保留 commandId/seq 便于 HTTP 响应和日志追踪。
 type RemoteCommandEnvelope struct {
 	CommandID string         `json:"commandId"`
 	Target    string         `json:"target"`
@@ -68,6 +68,22 @@ type RemoteCommandEnvelope struct {
 	Command   string         `json:"command"`
 	Value     int            `json:"value"`
 	Values    map[string]int `json:"values"`
+}
+
+// DeviceCommandPayload 是真正发给艇端 MQTT topic 的精简报文格式。
+type DeviceCommandPayload struct {
+	Cmd       string `json:"cmd"`
+	Value     int    `json:"value"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// DevicePayload 返回艇端当前协议要求的 cmd/value/timestamp 报文。
+func (e RemoteCommandEnvelope) DevicePayload() DeviceCommandPayload {
+	return DeviceCommandPayload{
+		Cmd:       e.Command,
+		Value:     e.Value,
+		Timestamp: e.IssuedAt,
+	}
 }
 
 // BuildRemoteCommand 校验前端请求，并封装成可发给艇端的 MQTT 报文。

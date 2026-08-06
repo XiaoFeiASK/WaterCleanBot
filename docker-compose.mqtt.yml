@@ -1,0 +1,17 @@
+# 文件作用：定义本地开发用 MQTT Broker 容器。
+
+# 本地 MQTT Broker 独立于数据库启动，便于在本地 Broker 和外部 Broker 之间切换。
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: watercleanbot-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+volumes:
+  mosquitto_data:
+    # 命名卷会在容器重启后保留本地 MQTT 持久化数据。
