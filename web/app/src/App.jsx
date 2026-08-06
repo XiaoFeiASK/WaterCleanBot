@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
+  Camera,
   ChevronDown,
   ChevronRight,
   CircleAlert,
   Clock3,
+  Compass,
+  Crosshair,
   Gauge,
   LayoutDashboard,
   List,
   MapPinned,
   Menu,
   PanelLeftClose,
+  Radio,
   Search,
   Settings2,
   ShipWheel,
+  Video,
   Wifi,
 } from 'lucide-react';
 import {
@@ -42,6 +47,29 @@ const REMOTE_SWITCH_COMMANDS = Object.freeze([
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_R', label: '右滚刷', onText: '开启', offText: '关闭' },
+]);
+
+const CAMERA_CHANNELS = Object.freeze([
+  { id: 'front', name: '前视主摄', placement: '船艏广角', status: '待接入', tone: 'teal' },
+  { id: 'deck', name: '甲板监控', placement: '传送带上方', status: '待接入', tone: 'amber' },
+  { id: 'rear', name: '后视泊靠', placement: '船尾低位', status: '待接入', tone: 'blue' },
+]);
+
+const DEVICE_DETAIL_TABS = Object.freeze([
+  { id: 'online-map', label: '在线地图' },
+  { id: 'dock', label: '智能船坞' },
+  { id: 'water-report', label: '水质报告' },
+  { id: 'depth-map', label: '水深图' },
+  { id: 'shoreline-map', label: '河岸二维地图' },
+  { id: 'cameras', label: '监控摄像头' },
+  { id: 'cleaning-area', label: '清洁区域' },
+  { id: 'patrol', label: '巡查情况' },
+]);
+
+const PLANNED_ROUTES = Object.freeze([
+  { id: 'R-001', type: '折线', length: '1.2 km', duration: '15分钟' },
+  { id: 'R-002', type: '沿岸', length: '2.0 km', duration: '25分钟' },
+  { id: 'R-003', type: '巡查', length: '0.8 km', duration: '10分钟' },
 ]);
 
 const INITIAL_REMOTE_VALUES = Object.freeze({
@@ -202,9 +230,24 @@ function createFleetMarkerContent(position, zoom, onClick) {
   const battery = document.createElement('span');
   battery.textContent = `电量 ${formatBattery(position.battery)}`;
 
+  const hoverDetails = document.createElement('div');
+  hoverDetails.className = 'fleet-map-marker-details';
+  [
+    ['纬度', formatNumber(position.lat, 2)],
+    ['经度', formatNumber(position.lng, 2)],
+    ['速度', typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无数据'],
+  ].forEach(([label, value]) => {
+    const row = document.createElement('div');
+    const rowLabel = document.createElement('span');
+    const rowValue = document.createElement('strong');
+    rowLabel.textContent = label;
+    rowValue.textContent = value;
+    row.append(rowLabel, rowValue);
+    hoverDetails.append(row);
+  });
+
   const icon = document.createElement('div');
   icon.className = 'fleet-map-marker-icon';
-  icon.title = `${position.robotName} 定位点`;
 
   const iconText = document.createElement('span');
   iconText.textContent = '艇';
@@ -212,7 +255,12 @@ function createFleetMarkerContent(position, zoom, onClick) {
   const pulse = document.createElement('div');
   pulse.className = 'fleet-map-marker-pulse';
 
-  bubble.append(name, battery);
+  [bubble, icon].forEach((node) => {
+    node.addEventListener('mouseenter', () => marker.classList.add('fleet-map-marker-hover'));
+    node.addEventListener('mouseleave', () => marker.classList.remove('fleet-map-marker-hover'));
+  });
+
+  bubble.append(name, battery, hoverDetails);
   icon.append(iconText);
   marker.append(bubble, pulse, icon);
   return marker;
@@ -278,7 +326,6 @@ function LocationMap({ position, centerSeq }) {
     const lat = position.lat;
     const lng = position.lng;
     const nextPosition = [lng, lat];
-    const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)} · 航向 ${position.heading}°`;
     let resizeTimer;
     let cancelled = false;
     setMapError('');
@@ -314,7 +361,6 @@ function LocationMap({ position, centerSeq }) {
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
-            title: markerTitle,
             content: markerContent,
             offset: new AMap.Pixel(-64, -88),
           });
@@ -323,9 +369,6 @@ function LocationMap({ position, centerSeq }) {
         }
 
         markerRef.current.setPosition(nextPosition);
-        if (typeof markerRef.current.setTitle === 'function') {
-          markerRef.current.setTitle(markerTitle);
-        }
         if (typeof markerRef.current.setContent === 'function') {
           markerRef.current.setContent(markerContent);
         }
@@ -429,14 +472,12 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
         positions.forEach((position) => {
           const markerKey = position.robotName;
           const nextPosition = [position.lng, position.lat];
-          const markerTitle = `${position.robotName} · 电量 ${formatBattery(position.battery)}`;
           const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
           activeNames.add(markerKey);
 
           const existingMarkerGroup = markersRef.current.get(markerKey);
           if (existingMarkerGroup) {
             existingMarkerGroup.marker.setPosition(nextPosition);
-            if (typeof existingMarkerGroup.marker.setTitle === 'function') existingMarkerGroup.marker.setTitle(markerTitle);
             if (typeof existingMarkerGroup.marker.setContent === 'function') existingMarkerGroup.marker.setContent(markerContent);
             existingMarkerGroup.content = markerContent;
             return;
@@ -445,7 +486,6 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
           const marker = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
-            title: markerTitle,
             content: markerContent,
             offset: new AMap.Pixel(-64, -88),
           });
@@ -542,6 +582,7 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
 
 function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice, onToast }) {
   const [deviceListOpen, setDeviceListOpen] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState('online-map');
   const deviceOptions = [
     ...new Set(fleetPositions.map((fleetPosition) => getRobotNameForDevice(fleetPosition.robotName)).filter(Boolean)),
   ];
@@ -556,8 +597,8 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
     <section className="location-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">实时定位</p>
-          <h2>机器人位置</h2>
+          <p className="eyebrow">设备详情</p>
+          <h2>{position?.robotName || deviceId || '未选择设备'}</h2>
         </div>
         <StatusBadge position={position} loading={loading} />
       </div>
@@ -610,83 +651,229 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
         {error && <p className="form-error" role="alert">{error}</p>}
       </form>
 
-      <div className="location-grid">
-        <div className="map-frame"><LocationMap position={position} centerSeq={mapCenterSeq} /></div>
-        <div className="position-details">
-          <div className="detail-header">
-            <div>
-              <span className="detail-label">机器人名称</span>
-              <h3>{position?.robotName || '暂无设备'}</h3>
-            </div>
-            <Wifi size={20} className={position ? 'icon-green' : 'icon-muted'} />
+      <DeviceDetailTabs activeTab={activeDetailTab} onChange={setActiveDetailTab} />
+
+      <div className="device-tab-panel">
+        <DeviceDetailTabContent
+          activeTab={activeDetailTab}
+          position={position}
+          mapCenterSeq={mapCenterSeq}
+          onToast={onToast}
+        />
+      </div>
+    </section>
+  );
+}
+
+function DeviceDetailTabs({ activeTab, onChange }) {
+  return (
+    <div className="device-detail-tabs" role="tablist" aria-label="设备详情分类">
+      {DEVICE_DETAIL_TABS.map((tab) => (
+        <button
+          className={`device-detail-tab ${activeTab === tab.id ? 'device-detail-tab-active' : ''}`}
+          type="button"
+          role="tab"
+          key={tab.id}
+          aria-selected={activeTab === tab.id}
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DeviceDetailTabContent({ activeTab, position, mapCenterSeq, onToast }) {
+  if (activeTab === 'online-map') {
+    return <OnlineMapTab position={position} mapCenterSeq={mapCenterSeq} onToast={onToast} />;
+  }
+
+  if (activeTab === 'dock') {
+    return <DetailFeaturePlaceholder icon={ShipWheel} eyebrow="智能船坞" title="智能船坞暂未接入" description="该分类先清空，等船坞状态、泊靠控制和充电数据接口确认后再恢复内容。" />;
+  }
+
+  if (activeTab === 'cameras') {
+    return <CameraPanel position={position} />;
+  }
+
+  if (activeTab === 'cleaning-area') {
+    return <DetailFeaturePlaceholder icon={MapPinned} eyebrow="清洁区域" title="清洁区域暂未接入" description="该分类先清空，后续接入区域边界、作业覆盖和任务结果后再展示。" />;
+  }
+
+  if (activeTab === 'water-report') {
+    return <DetailFeaturePlaceholder icon={Gauge} eyebrow="水质报告" title="水质数据待接入" description="后续可在这里展示 PH、浊度、溶解氧、电导率等采样数据和趋势图。" />;
+  }
+
+  if (activeTab === 'depth-map') {
+    return <DetailFeaturePlaceholder icon={MapPinned} eyebrow="水深图" title="水深图层待接入" description="适合展示测深点位、等深线和浅滩风险区域，避免与实时地图混在一起。" />;
+  }
+
+  if (activeTab === 'shoreline-map') {
+    return <DetailFeaturePlaceholder icon={MapPinned} eyebrow="河岸二维地图" title="二维河岸地图待接入" description="后续可展示河岸边界、障碍物、补给点和禁航区域等静态地图资产。" />;
+  }
+
+  if (activeTab === 'patrol') {
+    return <DetailFeaturePlaceholder icon={Clock3} eyebrow="巡查情况" title="巡查记录待接入" description="后续可按时间线展示巡查任务、异常告警、人工复核和任务闭环记录。" />;
+  }
+
+  return <OnlineMapTab position={position} mapCenterSeq={mapCenterSeq} onToast={onToast} />;
+}
+
+function OnlineMapTab({ position, mapCenterSeq, onToast }) {
+  const deviceName = position?.robotName || '暂无设备';
+
+  function scrollToRouteTable() {
+    document.querySelector('.route-table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  return (
+    <div className="online-map-layout">
+      <section className="online-map-card">
+        <div className="online-map-toolbar">
+          <div>
+            <p className="eyebrow">在线地图</p>
+            <h3>在线地图 - {deviceName}</h3>
           </div>
-          <div className="detail-list">
-            <DetailRow icon={MapPinned} label="纬度" value={formatNumber(position?.lat, 2)} />
-            <DetailRow icon={MapPinned} label="经度" value={formatNumber(position?.lng, 2)} />
-            <DetailRow icon={Gauge} label="速度" value={typeof position?.speed === 'number' ? `${position.speed} m/s` : '暂无数据'} />
-            <DetailRow icon={Gauge} label="电量" value={typeof position?.battery === 'number' ? `${position.battery}%` : '暂无数据'} />
-            <DetailRow icon={MapPinned} label="航向" value={typeof position?.heading === 'number' ? `${position.heading}°` : '暂无数据'} />
-            <DetailRow icon={Clock3} label="状态码" value={typeof position?.status === 'number' ? String(position.status) : '暂无数据'} />
+          <div className="online-map-actions">
+            <button className="button button-primary" type="button" onClick={() => onToast?.('沿岸任务已启动', 'success')}>启动沿岸任务</button>
+            <button className="button button-secondary" type="button" onClick={() => onToast?.('任务已停止', 'success')}>停止任务</button>
+            <button className="button button-secondary" type="button" onClick={scrollToRouteTable}>规划航线</button>
           </div>
-          <p className="data-note">位置数据来自已确认的后端接口，查询失败时不会使用模拟位置。</p>
+        </div>
+
+        <div className="map-frame online-map-frame">
+          <LocationMap position={position} centerSeq={mapCenterSeq} />
+        </div>
+      </section>
+
+      <section className="online-map-ops-grid" aria-label="指令下发">
+        <div className="map-command-panel">
+          <RemoteControlPanel position={position} onToast={onToast} />
+        </div>
+      </section>
+
+      <section className="route-table-card">
+        <div className="route-table-heading">
+          <div>
+            <h3>航线规划</h3>
+            <span>已规划航线</span>
+          </div>
+          <span className="status-badge status-pending">{PLANNED_ROUTES.length} 条</span>
+        </div>
+
+        <div className="route-table-wrap">
+          <table className="route-table">
+            <thead>
+              <tr>
+                <th>航线编号</th>
+                <th>类型</th>
+                <th>长度</th>
+                <th>预计耗时</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PLANNED_ROUTES.map((route) => (
+                <tr key={route.id}>
+                  <td>{route.id}</td>
+                  <td>{route.type}</td>
+                  <td>{route.length}</td>
+                  <td>{route.duration}</td>
+                  <td>
+                    <button type="button" onClick={() => onToast?.('清洁区域暂未接入')}>查看</button>
+                    <button className="route-table-danger" type="button" onClick={() => onToast?.('演示航线暂不可删除')}>删除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DetailFeaturePlaceholder({ icon: Icon, eyebrow, title, description }) {
+  return (
+    <section className="detail-feature-placeholder">
+      <div className="empty-icon"><Icon size={24} /></div>
+      <p className="eyebrow">{eyebrow}</p>
+      <h2>{title}</h2>
+      <span>{description}</span>
+    </section>
+  );
+}
+
+function CameraPanel({ position }) {
+  const [activeCameraId, setActiveCameraId] = useState(CAMERA_CHANNELS[0].id);
+  const activeCamera = CAMERA_CHANNELS.find((camera) => camera.id === activeCameraId) || CAMERA_CHANNELS[0];
+
+  return (
+    <div className="camera-panel">
+      <div className="route-panel-header">
+        <div className="panel-title-with-icon">
+          <Camera size={18} />
+          <div><strong>摄像头画面</strong><span>{position ? `${position.robotName} 视频通道` : '等待设备选择'}</span></div>
+        </div>
+        <span className="camera-status"><Radio size={14} />RTSP 待接入</span>
+      </div>
+
+      <div className={`camera-live-frame camera-live-${activeCamera.tone}`}>
+        <div className="camera-live-topbar">
+          <span><Video size={15} />{activeCamera.name}</span>
+          <strong>{activeCamera.status}</strong>
+        </div>
+        <div className="camera-reticle"><Crosshair size={42} strokeWidth={1.3} /></div>
+        <div className="camera-noise-line" />
+        <div className="camera-hud">
+          <span><Compass size={14} />{typeof position?.heading === 'number' ? `${position.heading}°` : '暂无航向'}</span>
+          <span>{typeof position?.speed === 'number' ? `${position.speed} m/s` : '暂无速度'}</span>
+          <span>{formatBattery(position?.battery)}</span>
         </div>
       </div>
 
-      <RemoteControlPanel position={position} onToast={onToast} />
-    </section>
+      <div className="camera-channel-grid" aria-label="摄像头通道">
+        {CAMERA_CHANNELS.map((camera) => (
+          <button
+            className={`camera-channel ${camera.id === activeCamera.id ? 'camera-channel-active' : ''}`}
+            type="button"
+            key={camera.id}
+            onClick={() => setActiveCameraId(camera.id)}
+          >
+            <span className={`camera-channel-preview camera-preview-${camera.tone}`}><Camera size={16} /></span>
+            <span><strong>{camera.name}</strong><small>{camera.placement}</small></span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
 function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
-  const [lastCommand, setLastCommand] = useState(null);
   const [sendingCommand, setSendingCommand] = useState('');
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
   const isSending = Boolean(sendingCommand);
-
-  function previewCommand(cmd, value, label, valueText, statusText = '发送中', commandId = '') {
-    if (!hasRemoteTarget) return;
-    setLastCommand({
-      cmd,
-      target: remoteDeviceId,
-      label,
-      value,
-      valueText,
-      statusText,
-      commandId,
-      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-    });
-  }
 
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
     if (!hasRemoteTarget || isSending) return false;
 
     const target = remoteDeviceId;
     setSendingCommand(cmd);
-    previewCommand(cmd, value, label, valueText);
 
     try {
-      const result = await sendRobotCommand(target, {
+      await sendRobotCommand(target, {
         command: cmd,
         value,
         values: nextValues,
         ttlMs: 800,
       });
-      setLastCommand((currentCommand) => (
-        currentCommand?.cmd === cmd && currentCommand?.target === target
-          ? { ...currentCommand, statusText: '已发布', commandId: result.commandId }
-          : currentCommand
-      ));
       onToast?.('遥控指令已发布', 'success');
       return true;
     } catch (error) {
       const message = getRemoteCommandErrorMessage(error);
-      setLastCommand((currentCommand) => (
-        currentCommand?.cmd === cmd && currentCommand?.target === target
-          ? { ...currentCommand, statusText: '发送失败' }
-          : currentCommand
-      ));
       onToast?.(message);
       return false;
     } finally {
@@ -724,9 +911,9 @@ function RemoteControlPanel({ position, onToast }) {
     <section className="remote-panel" aria-label="遥控调试面板">
       <div className="section-heading remote-heading">
         <div>
-          <p className="eyebrow">遥控调试</p>
-          <h2>遥控功能</h2>
-          <p className="remote-subtitle">遥控对象与上方查询成功的机器人保持一致；后端接入后由系统封装并下发指令。</p>
+          <p className="eyebrow">指令下发</p>
+          <h2>设备指令下发</h2>
+          <p className="remote-subtitle">指令对象与当前在线地图设备保持一致；后端接入后由系统封装并下发指令。</p>
         </div>
         <span className="status-badge status-pending">MQTT 下发</span>
       </div>
@@ -804,36 +991,8 @@ function RemoteControlPanel({ position, onToast }) {
           <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget || isSending}>{sendingCommand === 'TURN_OFF' ? '发送中' : '全部关闭 / 一键复位'}</button>
         </div>
 
-        <div className="remote-card remote-status-card">
-          <div className="remote-card-header">
-            <Wifi size={18} />
-            <div><strong>操作状态</strong><span>{lastCommand ? '最近一次操作' : '等待操作'}</span></div>
-          </div>
-          {lastCommand ? (
-            <div className="command-status-list">
-              <div><span>控制对象</span><strong>{lastCommand.target}</strong></div>
-              <div><span>操作项目</span><strong>{lastCommand.label}</strong></div>
-              <div><span>目标状态</span><strong>{lastCommand.valueText}</strong></div>
-              <div><span>发送状态</span><strong>{lastCommand.statusText}</strong></div>
-              {lastCommand.commandId && <div><span>指令编号</span><strong>{lastCommand.commandId}</strong></div>}
-              <div><span>操作时间</span><strong>{lastCommand.time}</strong></div>
-            </div>
-          ) : (
-            <div className="remote-empty-state">{hasRemoteTarget ? '操作遥控项后显示最近状态。' : '请先在上方查询设备位置。'}</div>
-          )}
-          <p className="remote-status-note">当前指令通过后端发布到 MQTT 设备通道；艇端 ACK 接入后可继续显示执行确认。</p>
-        </div>
       </div>
     </section>
-  );
-}
-
-function DetailRow({ icon: Icon, label, value }) {
-  return (
-    <div className="detail-row">
-      <span className="detail-row-label"><Icon size={15} />{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -1066,6 +1225,7 @@ function App() {
     onSelectDevice: (deviceName) => requestLocation(deviceName),
     onToast: showToast,
   };
+  const detailTitle = position?.robotName || activeDeviceId || deviceId || '未选择设备';
 
   const pageContent = activePage === 'dashboard' ? (
     <Dashboard
@@ -1076,7 +1236,7 @@ function App() {
     />
   ) : activePage === 'device-detail' ? (
     <>
-      <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情</h1><p className="page-description">查询指定设备的实时位置。</p></div></div>
+      <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情 - {detailTitle}</h1><p className="page-description">按分类查看设备位置、摄像头、清洁区域、船坞控制和巡查数据。</p></div></div>
       <LocationPanel {...locationProps} />
     </>
   ) : (
