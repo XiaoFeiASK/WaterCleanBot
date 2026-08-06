@@ -72,6 +72,12 @@ const PLANNED_ROUTES = Object.freeze([
   { id: 'R-003', type: '巡查', length: '0.8 km', duration: '10分钟', points: [] },
 ]);
 
+const FLEET_FALLBACK_DEVICES = Object.freeze([
+  { robotName: '清澜一号', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
+  { robotName: '清澜二号', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
+  { robotName: '巡岸备用艇', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
+]);
+
 const INITIAL_REMOTE_VALUES = Object.freeze({
   THROTTLE_L: 0,
   THROTTLE_R: 0,
@@ -463,17 +469,19 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           mapRef.current.on('click', mapClickHandlerRef.current);
         }
 
-        // 航线规划第一版只维护前端覆盖物：草稿线用于编辑，预览线用于查看已保存航线。
+        // 航线规划第一版只维护前端覆盖物：规划中从船当前位置连到用户航点，保存后只回显航点之间的航线。
         safelyRemoveOverlay(routePolylineRef.current);
         routePolylineRef.current = null;
         routePointMarkersRef.current.forEach(safelyRemoveOverlay);
         routePointMarkersRef.current = [];
 
-        const activeRoutePoints = planningMode ? draftRoutePoints : previewRoutePoints;
-        if (activeRoutePoints.length >= 2) {
+        const routeLinePoints = planningMode && draftRoutePoints.length
+          ? [{ lng, lat }, ...draftRoutePoints]
+          : previewRoutePoints;
+        if (routeLinePoints.length >= 2) {
           routePolylineRef.current = new AMap.Polyline({
             map: mapRef.current,
-            path: activeRoutePoints.map((point) => [point.lng, point.lat]),
+            path: routeLinePoints.map((point) => [point.lng, point.lat]),
             strokeColor: planningMode ? '#18a999' : '#0b7a6f',
             strokeOpacity: 0.95,
             strokeWeight: 5,
@@ -482,7 +490,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             lineCap: 'round',
           });
         }
-        activeRoutePoints.forEach((point, index) => {
+        const routeMarkerPoints = planningMode ? draftRoutePoints : previewRoutePoints;
+        routeMarkerPoints.forEach((point, index) => {
           const pointMarker = new AMap.Marker({
             map: mapRef.current,
             position: [point.lng, point.lat],
@@ -699,6 +708,87 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
+function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, onToast }) {
+  const [searchText, setSearchText] = useState('');
+  const [removedDeviceNames, setRemovedDeviceNames] = useState([]);
+  const syncedDeviceNames = new Set(fleetPositions.map((position) => position.robotName));
+  const baseDevices = fleetPositions.length ? fleetPositions : FLEET_FALLBACK_DEVICES;
+  const devices = baseDevices
+    .filter((device) => !removedDeviceNames.includes(device.robotName))
+    .filter((device) => device.robotName.toLowerCase().includes(searchText.trim().toLowerCase()));
+  const onlineCount = devices.filter((device) => device.status === 1 || syncedDeviceNames.has(device.robotName)).length;
+  const averageBattery = getAverage(devices.map((device) => device.battery));
+
+  function deleteDevice(deviceName) {
+    const confirmed = window.confirm(`确认从当前编队移除「${deviceName}」吗？`);
+    if (!confirmed) return;
+    // 后端删除接口接入后，把这里替换为真实 API 调用；当前只移除前端编队草稿。
+    setRemovedDeviceNames((currentNames) => [...new Set([...currentNames, deviceName])]);
+    onToast?.('设备已从当前前端编队移除', 'success');
+  }
+
+  return (
+    <section className="fleet-management-section">
+      <div className="fleet-management-toolbar">
+        <div className="fleet-search input-with-icon">
+          <Search size={16} aria-hidden="true" />
+          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索设备名称" />
+        </div>
+      </div>
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+
+      <div className="fleet-management-stats">
+        <StatCard icon={ShipWheel} label="编队设备" value={`${devices.length} 台`} />
+        <StatCard icon={Wifi} label="在线设备" value={`${onlineCount} 台`} />
+        <StatCard icon={Gauge} label="平均电量" value={averageBattery === null ? '暂无数据' : `${Math.round(averageBattery)}%`} />
+        <StatCard icon={Clock3} label="同步状态" value={loading ? '同步中' : '已就绪'} />
+      </div>
+
+      <div className="fleet-management-table-card">
+        <div className="fleet-management-table-heading">
+          <div><h3>编队设备列表</h3><span>{fleetPositions.length ? '来自实时位置接口' : '前端占位设备'}</span></div>
+          <span className="status-badge status-empty">{devices.length} 条</span>
+        </div>
+
+        <div className="fleet-management-table-wrap">
+          <table className="fleet-management-table">
+            <thead>
+              <tr>
+                <th>设备名称</th>
+                <th>运行状态</th>
+                <th>电量</th>
+                <th>速度</th>
+                <th>位置</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {devices.map((device) => {
+                const online = device.status === 1 || syncedDeviceNames.has(device.robotName);
+                return (
+                  <tr key={device.robotName}>
+                    <td><strong>{device.robotName}</strong><span>{online ? '已纳入实时编队' : '待同步设备'}</span></td>
+                    <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{online ? '在线' : '待接入'}</span></td>
+                    <td>{formatBattery(device.battery)}</td>
+                    <td>{typeof device.speed === 'number' ? `${device.speed} m/s` : '暂无数据'}</td>
+                    <td>{typeof device.lng === 'number' && typeof device.lat === 'number' ? `${formatNumber(device.lng, 2)}, ${formatNumber(device.lat, 2)}` : '暂无位置'}</td>
+                    <td>
+                      <button type="button" onClick={() => onOpenDeviceDetail(device.robotName)}>详情</button>
+                      <button className="fleet-table-danger" type="button" onClick={() => deleteDevice(device.robotName)}>删除</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!devices.length && <div className="fleet-management-empty">没有匹配的设备。</div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loading, error, mapCenterSeq, onSubmit, onSelectDevice, onToast }) {
   const [deviceListOpen, setDeviceListOpen] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('online-map');
@@ -847,7 +937,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [previewRouteId, setPreviewRouteId] = useState('');
   const previewRoute = routes.find((route) => route.id === previewRouteId);
   const previewRoutePoints = previewRoute?.points || [];
-  const draftRouteLength = getRouteLengthMeters(draftRoutePoints);
+  const draftRouteLinePoints = position && draftRoutePoints.length ? [{ lng: position.lng, lat: position.lat }, ...draftRoutePoints] : draftRoutePoints;
+  const draftRouteLength = getRouteLengthMeters(draftRouteLinePoints);
 
   function startRoutePlanning() {
     if (!position) {
@@ -877,7 +968,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       onToast?.('至少需要 2 个点才能保存航线');
       return;
     }
-    const lengthMeters = getRouteLengthMeters(draftRoutePoints);
+    const lengthMeters = getRouteLengthMeters(draftRouteLinePoints);
     const route = {
       id: createRouteId(routes),
       type: '折线',
@@ -1439,6 +1530,17 @@ function App() {
       fleetError={fleetError}
       onOpenDeviceDetail={openDeviceDetail}
     />
+  ) : activePage === 'fleet' ? (
+    <>
+      <div className="page-intro"><div><p className="eyebrow">监控中心</p><h1>设备编队</h1><p className="page-description">维护当前前端编队草稿，查看设备状态并快速进入设备详情。</p></div></div>
+      <FleetManagement
+        fleetPositions={fleetPositions}
+        loading={fleetLoading}
+        error={fleetError}
+        onOpenDeviceDetail={openDeviceDetail}
+        onToast={showToast}
+      />
+    </>
   ) : activePage === 'device-detail' ? (
     <>
       <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情 - {detailTitle}</h1><p className="page-description">按分类查看设备位置、摄像头、清洁区域、船坞控制和巡查数据。</p></div></div>

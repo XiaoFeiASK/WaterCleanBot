@@ -21,16 +21,6 @@ services:
       timeout: 5s
       retries: 5
 
-  mqtt:
-    image: eclipse-mosquitto:2
-    container_name: watercleanbot-mqtt
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
-
 volumes:
   postgres_data:
     # 命名卷会在容器重启后保留本地数据库数据。

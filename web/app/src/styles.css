@@ -360,6 +360,27 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .switch-control-on .switch-state { color: #fffef7; background: var(--teal-dark); }
 .button-danger { width: 100%; color: #fffef7; background: linear-gradient(135deg, #bd3b3b, #7f2525); box-shadow: 0 12px 24px rgba(189,59,59,.14); }
 .button-danger:hover { filter: brightness(.96); }
+.fleet-management-section { padding: 22px; background: rgba(255,253,246,.88); border: 1px solid var(--line); border-radius: 26px; box-shadow: var(--shadow); }
+.fleet-management-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 14px; border: 1px solid rgba(19,38,41,.09); border-radius: 18px; background: rgba(244,234,214,.3); }
+.fleet-search { flex: 1; max-width: 430px; }
+.fleet-management-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.fleet-management-table-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-radius: 20px; background: rgba(255,253,246,.86); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
+.fleet-management-table-heading { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid rgba(19,38,41,.1); }
+.fleet-management-table-heading h3 { margin: 0; color: var(--ink); font-size: 18px; letter-spacing: -.02em; }
+.fleet-management-table-heading span:not(.status-badge) { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
+.fleet-management-table-wrap { overflow-x: auto; padding: 16px 18px 20px; }
+.fleet-management-table { width: 100%; min-width: 820px; border-collapse: collapse; color: var(--ink); }
+.fleet-management-table th { padding: 13px 16px; color: #7a8d8f; background: rgba(19,38,41,.04); font-size: 12px; font-weight: 900; text-align: left; }
+.fleet-management-table td { padding: 15px 16px; border-bottom: 1px solid rgba(19,38,41,.08); font-size: 13px; vertical-align: middle; }
+.fleet-management-table tbody tr:hover { background: rgba(226,243,239,.36); }
+.fleet-management-table td strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 13px; }
+.fleet-management-table td span:not(.fleet-state) { display: block; color: var(--muted); font-size: 11px; }
+.fleet-management-table button { margin-right: 12px; padding: 0; border: 0; color: #1269a8; background: transparent; font-size: 13px; font-weight: 850; }
+.fleet-management-table button:hover { text-decoration: underline; }
+.fleet-management-table .fleet-table-danger { color: var(--red); }
+.fleet-state { display: inline-flex !important; align-items: center; justify-content: center; min-width: 58px; padding: 5px 9px; color: var(--muted); background: rgba(19,38,41,.07); border-radius: 999px; font-size: 12px !important; font-weight: 900; }
+.fleet-state-online { color: var(--teal-dark); background: rgba(24,169,153,.13); }
+.fleet-management-empty { padding: 28px; color: var(--muted); text-align: center; font-size: 13px; }
 .fleet-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 15px; }
 .fleet-device-card { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid rgba(19,38,41,.12); border-radius: 18px; color: inherit; background: rgba(255,253,246,.78); text-align: left; cursor: pointer; box-shadow: 0 10px 24px rgba(11,36,41,.05); }
 .fleet-device-card:hover { border-color: rgba(24,169,153,.45); background: #fffdf6; transform: translateY(-1px); }
@@ -382,6 +403,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 
 @media (max-width: 1080px) {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fleet-management-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .location-grid { grid-template-columns: 1fr; }
   .remote-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -406,6 +428,10 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .stat-card strong { font-size: 19px; }
   .stat-icon { width: 36px; height: 36px; margin-bottom: 12px; }
   .location-section { padding: 14px; border-radius: 22px; }
+  .fleet-management-section { padding: 14px; border-radius: 22px; }
+  .fleet-management-toolbar,
+  .fleet-management-table-heading { align-items: flex-start; flex-direction: column; }
+  .fleet-search { max-width: none; width: 100%; }
   .section-heading { flex-direction: column; }
   .query-controls { flex-wrap: wrap; }
   .input-with-icon { flex-basis: 100%; max-width: none; }
@@ -445,6 +471,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 
 @media (max-width: 430px) {
   .stat-grid { grid-template-columns: 1fr; }
+  .fleet-management-stats { grid-template-columns: 1fr; }
   .switch-grid { grid-template-columns: 1fr; }
   .fleet-device-card { align-items: flex-start; flex-direction: column; }
   .fleet-device-meta { text-align: left; }

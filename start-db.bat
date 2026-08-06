@@ -16,16 +16,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [INFO] Starting PostgreSQL/PostGIS database and MQTT broker...
-call docker compose up -d postgres mqtt
+echo [INFO] Starting PostgreSQL/PostGIS database...
+call docker compose up -d postgres
 if errorlevel 1 (
   echo [ERROR] Local service startup failed. Please make sure Docker Desktop is running.
   pause
   exit /b 1
 )
 
-call docker compose ps postgres mqtt
+call docker compose ps postgres
 
 echo.
-echo [INFO] Database and MQTT startup command completed.
+echo [INFO] Database startup command completed.
 pause
