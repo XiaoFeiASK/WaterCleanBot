@@ -91,6 +91,10 @@ WaterCleanBot/
 
 ## 实时定位链路
 
+### 坐标系约定
+
+MQTT 遥测报文中的 `lat`、`lng` 采用 WGS-84，后端和 PostGIS 均按 WGS-84（SRID 4326）保存与返回。前端仅在传入高德地图 JS API 前转换为 GCJ-02；高德地图点击得到的航点已是 GCJ-02，不能重复转换。
+
 当前最小实现：
 
 ```text

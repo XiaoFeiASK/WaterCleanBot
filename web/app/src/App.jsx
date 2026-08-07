@@ -29,6 +29,7 @@ import {
   getRobotNameForDevice,
   sendRobotCommand,
 } from './api';
+import { wgs84ToGcj02 } from './coordinates';
 
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
@@ -408,8 +409,9 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
 
     if (!mapNode.current) return undefined;
 
-    const lat = position.lat;
-    const lng = position.lng;
+    const mapPosition = wgs84ToGcj02(position);
+    const lat = mapPosition.lat;
+    const lng = mapPosition.lng;
     const nextPosition = [lng, lat];
     let resizeTimer;
     let cancelled = false;
@@ -476,7 +478,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         routePointMarkersRef.current = [];
 
         const routeLinePoints = planningMode && draftRoutePoints.length
-          ? [{ lng, lat }, ...draftRoutePoints]
+          ? [mapPosition, ...draftRoutePoints]
           : previewRoutePoints;
         if (routeLinePoints.length >= 2) {
           routePolylineRef.current = new AMap.Polyline({
@@ -578,7 +580,8 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
       .then((AMap) => {
         if (cancelled || !mapNode.current) return;
 
-        const firstPosition = [positions[0].lng, positions[0].lat];
+        const firstMapPosition = wgs84ToGcj02(positions[0]);
+        const firstPosition = [firstMapPosition.lng, firstMapPosition.lat];
         if (!mapRef.current) {
           mapRef.current = new AMap.Map(mapNode.current, {
             center: firstPosition,
@@ -599,7 +602,8 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
         const activeNames = new Set();
         positions.forEach((position) => {
           const markerKey = position.robotName;
-          const nextPosition = [position.lng, position.lat];
+          const mapPosition = wgs84ToGcj02(position);
+          const nextPosition = [mapPosition.lng, mapPosition.lat];
           const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
           activeNames.add(markerKey);
 
@@ -937,7 +941,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [previewRouteId, setPreviewRouteId] = useState('');
   const previewRoute = routes.find((route) => route.id === previewRouteId);
   const previewRoutePoints = previewRoute?.points || [];
-  const draftRouteLinePoints = position && draftRoutePoints.length ? [{ lng: position.lng, lat: position.lat }, ...draftRoutePoints] : draftRoutePoints;
+  const draftRouteLinePoints = position && draftRoutePoints.length
+    ? [wgs84ToGcj02(position), ...draftRoutePoints]
+    : draftRoutePoints;
   const draftRouteLength = getRouteLengthMeters(draftRouteLinePoints);
 
   function startRoutePlanning() {
