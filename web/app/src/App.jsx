@@ -1563,7 +1563,7 @@ function App() {
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand-row">
           <div className="brand-mark"><ShipWheel size={21} /></div>
-          <div><strong>AquaClean</strong><span>水面清洁管理平台</span></div>
+          <div><strong>Aisland</strong><span>水面机器人云管理平台</span></div>
           <button className="icon-button sidebar-close" onClick={() => setSidebarOpen(false)} title="收起菜单" aria-label="收起菜单"><PanelLeftClose size={17} /></button>
         </div>
         <nav>
