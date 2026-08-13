@@ -50,6 +50,9 @@ if [[ -d "$APP_DIR/web/app/dist" ]]; then
   mv "$APP_DIR/web/app/dist" "$APP_DIR/web/app/dist.prev"
 fi
 mv "$tmp_dist" "$APP_DIR/web/app/dist"
+test -f "$APP_DIR/web/app/dist/index.html"
+chmod -R a+rX "$APP_DIR/web/app/dist"
+chmod a+X "$APP_DIR" "$APP_DIR/web" "$APP_DIR/web/app"
 
 if [[ "${APPLY_DB_SCHEMA:-0}" == "1" ]]; then
   docker compose -f "$APP_DIR/docker-compose.yml" exec -T postgres \
@@ -67,8 +70,25 @@ nginx -t
 systemctl restart watercleanbot
 systemctl reload nginx
 
-systemctl is-active --quiet watercleanbot
-curl -fsS http://127.0.0.1:8080/api/robots/locations >/dev/null
-curl -fsSI http://127.0.0.1/ >/dev/null
+for _ in {1..30}; do
+  if systemctl is-active --quiet watercleanbot && \
+     curl -fsS http://127.0.0.1:8080/api/robots/locations >/dev/null; then
+    break
+  fi
+
+  sleep 1
+done
+
+if ! curl -fsS http://127.0.0.1:8080/api/robots/locations >/dev/null; then
+  systemctl status watercleanbot --no-pager || true
+  journalctl -u watercleanbot -n 80 --no-pager || true
+  exit 1
+fi
+
+if ! curl -fsSI http://127.0.0.1/ >/dev/null; then
+  ls -lah "$APP_DIR/web/app/dist" || true
+  tail -n 80 /var/log/nginx/error.log || true
+  exit 1
+fi
 
 echo "WaterCleanBot deployed: $(git rev-parse --short HEAD)"
