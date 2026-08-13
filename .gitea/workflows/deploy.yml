@@ -1,0 +1,21 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: watercleanbot-deploy
+    steps:
+      - name: Deploy on WaterCleanBot ECS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /opt/watercleanbot
+          git config --global --add safe.directory /opt/watercleanbot || true
+          git fetch --prune gitea main
+          git reset --hard gitea/main
+          bash scripts/deploy-production.sh --no-git
