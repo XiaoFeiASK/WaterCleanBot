@@ -22,11 +22,16 @@ import {
   Wifi,
 } from 'lucide-react';
 import {
+  createRobotRoute,
+  deleteRobotRoute,
   fetchAllRobotLocations,
   fetchRobotLocation,
   getLocationErrorMessage,
   getRemoteCommandErrorMessage,
   getRobotNameForDevice,
+  getRouteErrorMessage,
+  fetchRobotRoutes,
+  sendRobotRoute,
   sendRobotCommand,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
@@ -65,12 +70,6 @@ const DEVICE_DETAIL_TABS = Object.freeze([
   { id: 'cameras', label: '监控摄像头' },
   { id: 'cleaning-area', label: '清洁区域' },
   { id: 'patrol', label: '巡查情况' },
-]);
-
-const PLANNED_ROUTES = Object.freeze([
-  { id: 'R-001', type: '折线', length: '1.2 km', duration: '15分钟', points: [] },
-  { id: 'R-002', type: '沿岸', length: '2.0 km', duration: '25分钟', points: [] },
-  { id: 'R-003', type: '巡查', length: '0.8 km', duration: '10分钟', points: [] },
 ]);
 
 const FLEET_FALLBACK_DEVICES = Object.freeze([
@@ -172,10 +171,9 @@ function formatRouteLength(lengthMeters) {
   return lengthMeters >= 1000 ? `${(lengthMeters / 1000).toFixed(2)} km` : `${Math.round(lengthMeters)} m`;
 }
 
-function formatRouteDuration(lengthMeters) {
-  if (typeof lengthMeters !== 'number' || !Number.isFinite(lengthMeters)) return '暂无数据';
-  // 第一版先按 1.2m/s 粗略估算，后续接任务参数后再改为真实作业速度。
-  const minutes = Math.max(1, Math.ceil(lengthMeters / 1.2 / 60));
+function formatRouteDurationSeconds(durationSeconds) {
+  if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds)) return '暂无数据';
+  const minutes = Math.max(1, Math.ceil(durationSeconds / 60));
   return `${minutes}分钟`;
 }
 
@@ -194,12 +192,28 @@ function getRouteLengthMeters(points) {
   return points.slice(1).reduce((total, point, index) => total + getDistanceMeters(points[index], point), 0);
 }
 
-function createRouteId(routes) {
-  const maxRouteNumber = routes.reduce((maxNumber, route) => {
-    const routeNumber = Number(String(route.id).replace(/^R-/, ''));
-    return Number.isFinite(routeNumber) ? Math.max(maxNumber, routeNumber) : maxNumber;
-  }, 0);
-  return `R-${String(maxRouteNumber + 1).padStart(3, '0')}`;
+function getRouteDurationSeconds(points, startPoint) {
+  if (!points.length) return null;
+  let previousPoint = startPoint || null;
+  let durationSeconds = 0;
+  points.forEach((point) => {
+    if (previousPoint) {
+      const speedMetersPerSecond = point.speedKnots * 0.514444;
+      if (speedMetersPerSecond > 0) {
+        durationSeconds += getDistanceMeters(previousPoint, point) / speedMetersPerSecond;
+      }
+    }
+    previousPoint = point;
+  });
+  return Math.ceil(durationSeconds);
+}
+
+function getRouteMapPoints(route) {
+  if (!route?.points?.length) return [];
+  if (route.coordinateSystem === 'WGS84') {
+    return route.points.map((point) => ({ ...point, ...wgs84ToGcj02(point) }));
+  }
+  return route.points;
 }
 
 function getMapClickPoint(lngLat) {
@@ -479,7 +493,9 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
 
         const routeLinePoints = planningMode && draftRoutePoints.length
           ? [mapPosition, ...draftRoutePoints]
-          : previewRoutePoints;
+          : previewRoutePoints.length
+            ? [mapPosition, ...previewRoutePoints]
+            : [];
         if (routeLinePoints.length >= 2) {
           routePolylineRef.current = new AMap.Polyline({
             map: mapRef.current,
@@ -935,16 +951,62 @@ function DeviceDetailTabContent({ activeTab, position, mapCenterSeq, onToast }) 
 
 function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const deviceName = position?.robotName || '暂无设备';
-  const [routes, setRoutes] = useState(PLANNED_ROUTES);
+  const routeDeviceId = getRobotNameForDevice(position?.robotName);
+  const [routes, setRoutes] = useState([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [routesError, setRoutesError] = useState('');
+  const [routeAction, setRouteAction] = useState('');
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
+  const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
+  const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
   const previewRoute = routes.find((route) => route.id === previewRouteId);
-  const previewRoutePoints = previewRoute?.points || [];
-  const draftRouteLinePoints = position && draftRoutePoints.length
-    ? [wgs84ToGcj02(position), ...draftRoutePoints]
+  const previewRoutePoints = getRouteMapPoints(previewRoute);
+  const startMapPoint = position ? wgs84ToGcj02(position) : null;
+  const draftRouteLinePoints = startMapPoint && draftRoutePoints.length
+    ? [startMapPoint, ...draftRoutePoints]
     : draftRoutePoints;
   const draftRouteLength = getRouteLengthMeters(draftRouteLinePoints);
+  const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints, startMapPoint);
+  const isRouteBusy = Boolean(routeAction);
+
+  useEffect(() => {
+    if (!routeDeviceId) {
+      setRoutes([]);
+      setRoutesError('');
+      setPreviewRouteId('');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setRoutesLoading(true);
+    setRoutesError('');
+
+    fetchRobotRoutes(routeDeviceId, controller.signal)
+      .then((nextRoutes) => {
+        if (cancelled) return;
+        setRoutes(nextRoutes);
+        setPreviewRouteId((currentRouteId) => (
+          currentRouteId && nextRoutes.some((route) => route.id === currentRouteId) ? currentRouteId : ''
+        ));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = getRouteErrorMessage(error);
+        setRoutesError(message);
+        onToast?.(message);
+      })
+      .finally(() => {
+        if (!cancelled) setRoutesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [routeDeviceId]);
 
   function startRoutePlanning() {
     if (!position) {
@@ -954,56 +1016,117 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setPlanningMode((isPlanning) => !isPlanning);
     setPreviewRouteId('');
     setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
   }
 
   function addDraftRoutePoint(point) {
     if (!planningMode) return;
-    setDraftRoutePoints((currentPoints) => [...currentPoints, point]);
+    setPendingRoutePoint(point);
+    setPendingSpeedKnots('2.0');
+  }
+
+  function confirmPendingRoutePoint() {
+    if (!pendingRoutePoint) return;
+    const speedKnots = Number(pendingSpeedKnots);
+    if (!Number.isFinite(speedKnots) || speedKnots <= 0 || speedKnots > 100) {
+      onToast?.('请输入 0-100 节之间的到点速度');
+      return;
+    }
+    setDraftRoutePoints((currentPoints) => [
+      ...currentPoints,
+      {
+        ...pendingRoutePoint,
+        speedKnots,
+      },
+    ]);
+    setPendingRoutePoint(null);
+  }
+
+  function cancelPendingRoutePoint() {
+    setPendingRoutePoint(null);
   }
 
   function undoDraftRoutePoint() {
     setDraftRoutePoints((currentPoints) => currentPoints.slice(0, -1));
+    setPendingRoutePoint(null);
   }
 
   function clearDraftRoute() {
     setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
   }
 
-  function saveDraftRoute() {
+  async function saveDraftRoute() {
+    if (!routeDeviceId || isRouteBusy) return;
+    if (pendingRoutePoint) {
+      onToast?.('请先确认当前航点速度');
+      return;
+    }
     if (draftRoutePoints.length < 2) {
       onToast?.('至少需要 2 个点才能保存航线');
       return;
     }
-    const lengthMeters = getRouteLengthMeters(draftRouteLinePoints);
-    const route = {
-      id: createRouteId(routes),
-      type: '折线',
-      length: formatRouteLength(lengthMeters),
-      duration: formatRouteDuration(lengthMeters),
-      points: draftRoutePoints,
-    };
-    setRoutes((currentRoutes) => [...currentRoutes, route]);
-    setPreviewRouteId(route.id);
-    setPlanningMode(false);
-    setDraftRoutePoints([]);
-    onToast?.('航线已保存到本地表格', 'success');
+
+    setRouteAction('save');
+    try {
+      const route = await createRobotRoute(routeDeviceId, {
+        type: '折线',
+        coordinateSystem: 'GCJ02',
+        points: draftRoutePoints.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
+      });
+      setRoutes((currentRoutes) => [...currentRoutes, route]);
+      setPreviewRouteId(route.id);
+      setPlanningMode(false);
+      setDraftRoutePoints([]);
+      onToast?.('航线已保存到数据库', 'success');
+    } catch (error) {
+      onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
   }
 
   function viewRoute(route) {
     if (!route.points?.length) {
-      onToast?.('演示航线暂无地图点位，请新建航线');
+      onToast?.('该航线暂无地图点位，请新建航线');
       return;
     }
     setPlanningMode(false);
     setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
     setPreviewRouteId(route.id);
     document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function deleteRoute(routeId) {
-    setRoutes((currentRoutes) => currentRoutes.filter((route) => route.id !== routeId));
-    if (previewRouteId === routeId) setPreviewRouteId('');
-    onToast?.('航线已从本地表格删除', 'success');
+  async function deleteRoute(route) {
+    if (!routeDeviceId || isRouteBusy) return;
+    const confirmed = window.confirm(`确认删除航线「${route.id}」吗？`);
+    if (!confirmed) return;
+
+    setRouteAction(`delete:${route.id}`);
+    try {
+      await deleteRobotRoute(routeDeviceId, route.id);
+      setRoutes((currentRoutes) => currentRoutes.filter((currentRoute) => currentRoute.id !== route.id));
+      if (previewRouteId === route.id) setPreviewRouteId('');
+      onToast?.('航线已从数据库删除', 'success');
+    } catch (error) {
+      onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
+  async function sendRoute(route) {
+    if (!routeDeviceId || !route || isRouteBusy) return;
+    setRouteAction(`send:${route.id}`);
+    try {
+      await sendRobotRoute(routeDeviceId, route.id);
+      onToast?.('路径点已下发到无人艇', 'success');
+    } catch (error) {
+      onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
   }
 
   return (
@@ -1015,7 +1138,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <h3>在线地图 - {deviceName}</h3>
           </div>
           <div className="online-map-actions">
-            <button className="button button-primary" type="button" onClick={() => onToast?.('沿岸任务已启动', 'success')}>启动沿岸任务</button>
+            <button className="button button-primary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
             <button className="button button-secondary" type="button" onClick={() => onToast?.('任务已停止', 'success')}>停止任务</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
@@ -1034,17 +1157,38 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
               <div>
                 <strong>规划模式</strong>
-                <span>点击地图添加航点，当前 {draftRoutePoints.length} 个点，长度 {formatRouteLength(draftRouteLength)}</span>
+                <span>点击地图后输入到该点速度，当前 {draftRoutePoints.length} 个点，长度 {formatRouteLength(draftRouteLength)}，预计 {formatRouteDurationSeconds(draftRouteDuration)}</span>
               </div>
               <div className="route-planning-actions">
                 <button type="button" onClick={undoDraftRoutePoint} disabled={!draftRoutePoints.length}>撤销点</button>
                 <button type="button" onClick={clearDraftRoute} disabled={!draftRoutePoints.length}>清空</button>
-                <button type="button" onClick={saveDraftRoute} disabled={draftRoutePoints.length < 2}>保存航线</button>
+                <button type="button" onClick={saveDraftRoute} disabled={draftRoutePoints.length < 2 || isRouteBusy}>{routeAction === 'save' ? '保存中' : '保存航线'}</button>
+              </div>
+            </div>
+          )}
+          {planningMode && pendingRoutePoint && (
+            <div className="route-point-confirm-card" role="dialog" aria-label="确认航点速度">
+              <strong>确认航点 {draftRoutePoints.length + 1}</strong>
+              <span>经纬度 {pendingRoutePoint.lng.toFixed(8)}, {pendingRoutePoint.lat.toFixed(8)}</span>
+              <label>
+                到该点速度（节）
+                <input
+                  type="number"
+                  min="0.1"
+                  max="100"
+                  step="0.1"
+                  value={pendingSpeedKnots}
+                  onChange={(event) => setPendingSpeedKnots(event.target.value)}
+                />
+              </label>
+              <div className="route-point-confirm-actions">
+                <button type="button" onClick={cancelPendingRoutePoint}>取消</button>
+                <button type="button" onClick={confirmPendingRoutePoint}>确认航点</button>
               </div>
             </div>
           )}
           {!planningMode && previewRoute && (
-            <div className="route-preview-badge">正在查看 {previewRoute.id} · {previewRoute.length}</div>
+            <div className="route-preview-badge">正在查看 {previewRoute.id} · {formatRouteLength(previewRoute.lengthMeters)} · {previewRoute.points.length} 点</div>
           )}
         </div>
       </section>
@@ -1059,9 +1203,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         <div className="route-table-heading">
           <div>
             <h3>航线规划</h3>
-            <span>已规划航线</span>
+            <span>{routesError || '数据库已保存航线'}</span>
           </div>
-          <span className="status-badge status-pending">{routes.length} 条</span>
+          <span className="status-badge status-pending">{routesLoading ? '读取中' : `${routes.length} 条`}</span>
         </div>
 
         <div className="route-table-wrap">
@@ -1076,15 +1220,25 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               </tr>
             </thead>
             <tbody>
-              {routes.map((route) => (
+              {routesLoading && (
+                <tr><td className="route-table-empty" colSpan="5">正在读取数据库航线...</td></tr>
+              )}
+              {!routesLoading && routesError && (
+                <tr><td className="route-table-empty route-table-error" colSpan="5">{routesError}</td></tr>
+              )}
+              {!routesLoading && !routesError && !routes.length && (
+                <tr><td className="route-table-empty" colSpan="5">暂无已保存航线，请点击“规划航线”创建。</td></tr>
+              )}
+              {!routesLoading && !routesError && routes.map((route) => (
                 <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''} key={route.id}>
                   <td>{route.id}</td>
                   <td>{route.type}</td>
-                  <td>{route.length}</td>
-                  <td>{route.duration}</td>
+                  <td>{formatRouteLength(route.lengthMeters)}</td>
+                  <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={() => viewRoute(route)}>查看</button>
-                    <button className="route-table-danger" type="button" onClick={() => deleteRoute(route.id)}>删除</button>
+                    <button type="button" onClick={() => sendRoute(route)} disabled={isRouteBusy}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
+                    <button className="route-table-danger" type="button" onClick={() => deleteRoute(route)} disabled={isRouteBusy}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>
                 </tr>
               ))}

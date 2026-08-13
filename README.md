@@ -2,7 +2,7 @@
 
 # WaterCleanBot
 
-WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**暴露定位接口、运行定位刷新任务，并支持通过 MQTT 发布遥控指令**。
+WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**暴露定位接口、运行定位刷新任务，并支持通过 MQTT 发布遥控指令和规划航线路径点**。
 
 前端页面原型已经基本定型，仍保留在 `web/1/`，当前不改页面结构和交互内容。
 
@@ -19,6 +19,12 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
   -> HTTP 接口接收前端遥控指令
   -> 校验指令目标状态
   -> MQTT 发布到对应无人艇 command topic
+
+规划航线下发
+  -> HTTP 接口保存和查询数据库航线
+  -> 校验路径点经纬度和到点速度
+  -> 编码 [40,点数,经度,纬度,速度,...]
+  -> MQTT 发布到对应无人艇 route topic
 ```
 
 当前位置接口：
@@ -27,6 +33,10 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 GET /api/robots/locations
 GET /api/robots/{robotName}/location
 POST /api/robots/{robotName}/commands
+GET /api/robots/{robotName}/routes
+POST /api/robots/{robotName}/routes
+DELETE /api/robots/{robotName}/routes/{routeId}
+POST /api/robots/{robotName}/routes/{routeId}/send
 ```
 
 示例：
@@ -128,6 +138,34 @@ MQTT 订阅机器人定位消息
 ```
 
 发布给艇端的 MQTT 报文包含 `commandId`、`seq`、`issuedAt`、`ttlMs` 和完整 `values` 目标状态。指令不使用 retain；生产环境应增加艇端 ACK topic、权限、审计和急停策略。
+
+## 规划航线链路
+
+当前最小实现：
+
+```text
+前端在线地图规划航线
+  -> 点击地图选择航点
+  -> 每个航点确认前填写“到该点速度”，单位节
+  -> POST /api/robots/{robotName}/routes 保存到 planned_routes / planned_route_points
+  -> GET /api/robots/{robotName}/routes 查询真实数据库航线
+  -> POST /api/robots/{robotName}/routes/{routeId}/send 下发
+  -> MQTT 发布 usv/{robotName}/route
+```
+
+艇端路径点发送协议按 `0x28` 编码，HTTP 下发接口会从数据库读取航线并发布纯数字 payload：
+
+```text
+[40,点数,经度,纬度,到该点速度,经度,纬度,到该点速度,...]
+```
+
+示例：
+
+```text
+[40,2,121.47370100,31.23041600,2.5,121.47410000,31.23090000,2]
+```
+
+前端高德地图点击点按 `GCJ-02` 保存；下发艇端时后端默认转换为 `WGS-84` 并将经纬度格式化为 8 位小数。
 
 ## 本地运行
 

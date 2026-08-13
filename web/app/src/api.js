@@ -4,6 +4,7 @@ const API_BASE_URL = (
 ).replace(/\/$/, '');
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
 const COMMAND_REQUEST_TIMEOUT_MS = 5000;
+const ROUTE_REQUEST_TIMEOUT_MS = 8000;
 
 export const LOCATION_ERROR_MESSAGES = Object.freeze({
   INVALID_ROBOT_CODE: '设备名称无效',
@@ -21,6 +22,15 @@ export const REMOTE_COMMAND_ERROR_MESSAGES = Object.freeze({
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
 
+export const ROUTE_ERROR_MESSAGES = Object.freeze({
+  INVALID_ROBOT_CODE: '设备名称无效',
+  INVALID_ROUTE: '航线数据无效，请检查点位和速度',
+  NOT_FOUND: '未找到该航线或设备位置',
+  PUBLISH_FAILED: '航线下发失败，请检查 MQTT 服务',
+  REQUEST_FAILED: '航线请求失败，请检查服务是否正常',
+  SERVER_ERROR: '服务器异常，请稍后重试',
+});
+
 function createLocationError(code) {
   const error = new Error(LOCATION_ERROR_MESSAGES[code] || LOCATION_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
@@ -29,6 +39,12 @@ function createLocationError(code) {
 
 function createRemoteCommandError(code) {
   const error = new Error(REMOTE_COMMAND_ERROR_MESSAGES[code] || REMOTE_COMMAND_ERROR_MESSAGES.REQUEST_FAILED);
+  error.code = code;
+  return error;
+}
+
+function createRouteError(code) {
+  const error = new Error(ROUTE_ERROR_MESSAGES[code] || ROUTE_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
   return error;
 }
@@ -145,6 +161,73 @@ function validateCommandResponse(payload, expectedRobotName) {
   return payload;
 }
 
+function isNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function validateRoutePointPayload(point, index) {
+  if (!point || typeof point !== 'object' || Array.isArray(point)) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  if (
+    !Number.isInteger(point.seq) || point.seq !== index + 1 ||
+    !isNumber(point.lng) || point.lng < -180 || point.lng > 180 ||
+    !isNumber(point.lat) || point.lat < -90 || point.lat > 90 ||
+    !isNumber(point.speedKnots) || point.speedKnots <= 0
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  return point;
+}
+
+function validateRoutePayload(payload, expectedRobotName) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  if (
+    typeof payload.id !== 'string' || !payload.id ||
+    (expectedRobotName && payload.robotName !== expectedRobotName) ||
+    typeof payload.type !== 'string' || !payload.type ||
+    typeof payload.coordinateSystem !== 'string' || !payload.coordinateSystem ||
+    !isNumber(payload.lengthMeters) || payload.lengthMeters < 0 ||
+    !Number.isInteger(payload.durationSeconds) || payload.durationSeconds < 0 ||
+    !Array.isArray(payload.points)
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+
+  return {
+    ...payload,
+    points: payload.points.map((point, index) => validateRoutePointPayload(point, index)),
+  };
+}
+
+function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  if (
+    payload.status !== 'published' ||
+    payload.target !== expectedRobotName ||
+    payload.routeId !== expectedRouteId ||
+    typeof payload.protocol !== 'string' || !payload.protocol ||
+    !Number.isInteger(payload.pointCount) || payload.pointCount < 2
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  return payload;
+}
+
+async function parseJSONResponse(response, createError) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw createError('REQUEST_FAILED');
+  }
+  return payload;
+}
+
 export async function sendRobotCommand(deviceName, commandPayload, signal) {
   const robotName = getRobotNameForDevice(deviceName);
   if (!robotName) throw createRemoteCommandError('INVALID_ROBOT_CODE');
@@ -188,10 +271,135 @@ export async function sendRobotCommand(deviceName, commandPayload, signal) {
   }
 }
 
+export async function fetchRobotRoutes(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createRouteError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes`,
+      { signal: requestSignal, cache: 'no-store' },
+    );
+
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok) throw createRouteError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createRouteError);
+    if (!Array.isArray(payload)) throw createRouteError('REQUEST_FAILED');
+    return payload.map((route) => validateRoutePayload(route, robotName));
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function createRobotRoute(deviceName, routePayload, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createRouteError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(routePayload),
+        signal: requestSignal,
+        cache: 'no-store',
+      },
+    );
+
+    if (response.status === 400) throw createRouteError('INVALID_ROUTE');
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok) throw createRouteError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createRouteError);
+    return validateRoutePayload(payload, robotName);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function deleteRobotRoute(deviceName, routeId, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !routeId) throw createRouteError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes/${encodeURIComponent(routeId)}`,
+      { method: 'DELETE', signal: requestSignal, cache: 'no-store' },
+    );
+
+    if (response.status === 404) throw createRouteError('NOT_FOUND');
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok && response.status !== 204) throw createRouteError('REQUEST_FAILED');
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function sendRobotRoute(deviceName, routeId, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !routeId) throw createRouteError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes/${encodeURIComponent(routeId)}/send`,
+      { method: 'POST', signal: requestSignal, cache: 'no-store' },
+    );
+
+    if (response.status === 400) throw createRouteError('INVALID_ROUTE');
+    if (response.status === 404) throw createRouteError('NOT_FOUND');
+    if (response.status === 503) throw createRouteError('PUBLISH_FAILED');
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok) throw createRouteError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createRouteError);
+    return validateRouteSendResponse(payload, robotName, routeId);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export function getLocationErrorMessage(error) {
   return LOCATION_ERROR_MESSAGES[error?.code] || LOCATION_ERROR_MESSAGES.REQUEST_FAILED;
 }
 
 export function getRemoteCommandErrorMessage(error) {
   return REMOTE_COMMAND_ERROR_MESSAGES[error?.code] || REMOTE_COMMAND_ERROR_MESSAGES.REQUEST_FAILED;
+}
+
+export function getRouteErrorMessage(error) {
+  return ROUTE_ERROR_MESSAGES[error?.code] || ROUTE_ERROR_MESSAGES.REQUEST_FAILED;
 }

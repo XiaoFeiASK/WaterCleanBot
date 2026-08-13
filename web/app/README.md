@@ -35,3 +35,16 @@ GET /api/robots/{robotName}/location
 ```
 
 当前后端提供全量和单机器人位置查询接口；设备列表、告警和任务模块仍会显示无数据状态，不使用前端模拟数据。
+
+## 航线规划
+
+在线地图页的“航线规划”表格已改为真实接口数据，不再使用前端假数据：
+
+```text
+GET /api/robots/{robotName}/routes
+POST /api/robots/{robotName}/routes
+DELETE /api/robots/{robotName}/routes/{routeId}
+POST /api/robots/{robotName}/routes/{routeId}/send
+```
+
+规划模式下点击地图后必须先填写“到该点速度（节）”，确认后航点才会进入草稿。保存时前端提交 `GCJ02` 坐标和 `speedKnots`，后端保存到数据库；下发时后端编码为 `[40,点数,经度,纬度,速度,...]` 并发布到 MQTT route topic。

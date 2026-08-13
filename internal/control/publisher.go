@@ -18,11 +18,12 @@ const commandQoS byte = 1
 
 // PublisherConfig 是 MQTT 指令发布器的运行配置。
 type PublisherConfig struct {
-	BrokerURL     string
-	ClientID      string
-	TopicTemplate string
-	Username      string
-	Password      string
+	BrokerURL          string
+	ClientID           string
+	TopicTemplate      string
+	RouteTopicTemplate string
+	Username           string
+	Password           string
 }
 
 // Publisher 负责把遥控指令发布到 usv/{robotName}/command。
@@ -54,6 +55,12 @@ func (p *Publisher) Start(ctx context.Context) error {
 	}
 	if !strings.Contains(p.config.TopicTemplate, "%s") {
 		return fmt.Errorf("mqtt command topic template must contain %%s")
+	}
+	if p.config.RouteTopicTemplate == "" {
+		p.config.RouteTopicTemplate = "usv/%s/route"
+	}
+	if !strings.Contains(p.config.RouteTopicTemplate, "%s") {
+		return fmt.Errorf("mqtt route topic template must contain %%s")
 	}
 
 	options := mqtt.NewClientOptions()
@@ -116,6 +123,35 @@ func (p *Publisher) PublishRemoteCommand(ctx context.Context, target string, req
 		slog.Uint64("seq", command.Seq),
 	)
 	return command, nil
+}
+
+// PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/route。
+func (p *Publisher) PublishRoute(ctx context.Context, target string, payload string) error {
+	target = strings.TrimSpace(target)
+	if err := ValidateTarget(target); err != nil {
+		return ValidationError{Err: err}
+	}
+	if strings.TrimSpace(payload) == "" {
+		return ValidationError{Err: fmt.Errorf("route payload is required")}
+	}
+	if p.client == nil || !p.client.IsConnected() {
+		return fmt.Errorf("mqtt command publisher is not connected")
+	}
+
+	topic := fmt.Sprintf(p.config.RouteTopicTemplate, target)
+	token := p.client.Publish(topic, commandQoS, false, []byte(payload))
+	if !token.WaitTimeout(publishTimeout(ctx, 3*time.Second)) {
+		return fmt.Errorf("publish mqtt route timeout")
+	}
+	if err := token.Error(); err != nil {
+		return fmt.Errorf("publish mqtt route: %w", err)
+	}
+
+	p.log.Info("mqtt route published",
+		slog.String("robot_name", target),
+		slog.Int("bytes", len(payload)),
+	)
+	return nil
 }
 
 func publishTimeout(ctx context.Context, fallback time.Duration) time.Duration {

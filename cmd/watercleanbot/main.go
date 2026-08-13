@@ -20,6 +20,7 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/control"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/routes"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/telemetry"
 )
 
@@ -47,6 +48,11 @@ func main() {
 
 	locationStore := location.NewStore()
 	locationRepository := location.NewRepository(db)
+	routeRepository := routes.NewRepository(db)
+	if err := routeRepository.EnsureSchema(appCtx); err != nil {
+		log.Error("ensure route schema failed", slog.Any("error", err))
+		os.Exit(1)
+	}
 	locationTask := location.NewTask(locationStore, locationRepository, cfg.LocationUpdateInterval, log)
 	go locationTask.Start(appCtx)
 
@@ -62,11 +68,12 @@ func main() {
 	}
 
 	commandPublisher := control.NewPublisher(control.PublisherConfig{
-		BrokerURL:     cfg.MQTTBrokerURL,
-		ClientID:      cfg.MQTTCommandClientID,
-		TopicTemplate: cfg.MQTTCommandTopic,
-		Username:      cfg.MQTTUsername,
-		Password:      cfg.MQTTPassword,
+		BrokerURL:          cfg.MQTTBrokerURL,
+		ClientID:           cfg.MQTTCommandClientID,
+		TopicTemplate:      cfg.MQTTCommandTopic,
+		RouteTopicTemplate: cfg.MQTTRouteTopic,
+		Username:           cfg.MQTTUsername,
+		Password:           cfg.MQTTPassword,
 	}, log)
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
@@ -74,7 +81,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, commandPublisher, log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
