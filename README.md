@@ -33,6 +33,7 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 GET /api/robots/locations
 GET /api/robots/{robotName}/location
 POST /api/robots/{robotName}/commands
+GET /api/robots/{robotName}/cameras
 GET /api/robots/{robotName}/routes
 POST /api/robots/{robotName}/routes
 DELETE /api/robots/{robotName}/routes/{routeId}
@@ -201,6 +202,14 @@ go run ./cmd/watercleanbot
 http://localhost:8080/api/robots/locations
 http://localhost:8080/api/robots/清澜一号/location
 ```
+
+启动摄像头 HLS 中转服务：
+
+```powershell
+.\start-video.bat
+```
+
+需要先在 `.env` 中配置全局共用的 `CAMERA_FRONT_RTSP` 和 `CAMERA_REAR_RTSP`。`start-video.bat` 会使用 `--force-recreate` 重建 MediaMTX 容器，确保 `.env` 中修改后的 RTSP 地址生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时可把 `CAMERA_HLS_BASE_URL` 改成服务器公网或反向代理地址。
 
 ## 当前刻意不做
 

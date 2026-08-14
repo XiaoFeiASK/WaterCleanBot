@@ -5,6 +5,7 @@ const API_BASE_URL = (
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
 const COMMAND_REQUEST_TIMEOUT_MS = 5000;
 const ROUTE_REQUEST_TIMEOUT_MS = 8000;
+const CAMERA_REQUEST_TIMEOUT_MS = 6000;
 
 export const LOCATION_ERROR_MESSAGES = Object.freeze({
   INVALID_ROBOT_CODE: '设备名称无效',
@@ -31,6 +32,12 @@ export const ROUTE_ERROR_MESSAGES = Object.freeze({
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
 
+export const CAMERA_ERROR_MESSAGES = Object.freeze({
+  INVALID_ROBOT_CODE: '设备名称无效',
+  REQUEST_FAILED: '摄像头通道查询失败，请检查服务是否正常',
+  SERVER_ERROR: '服务器异常，请稍后重试',
+});
+
 function createLocationError(code) {
   const error = new Error(LOCATION_ERROR_MESSAGES[code] || LOCATION_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
@@ -45,6 +52,12 @@ function createRemoteCommandError(code) {
 
 function createRouteError(code) {
   const error = new Error(ROUTE_ERROR_MESSAGES[code] || ROUTE_ERROR_MESSAGES.REQUEST_FAILED);
+  error.code = code;
+  return error;
+}
+
+function createCameraError(code) {
+  const error = new Error(CAMERA_ERROR_MESSAGES[code] || CAMERA_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
   return error;
 }
@@ -218,6 +231,20 @@ function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) 
   return payload;
 }
 
+function validateCameraPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createCameraError('REQUEST_FAILED');
+  }
+
+  const stringFields = ['id', 'name', 'placement', 'status', 'tone', 'type', 'playUrl'];
+  if (stringFields.some((field) => typeof payload[field] !== 'string' || !payload[field])) {
+    throw createCameraError('REQUEST_FAILED');
+  }
+  if (payload.type !== 'hls') throw createCameraError('REQUEST_FAILED');
+
+  return payload;
+}
+
 async function parseJSONResponse(response, createError) {
   let payload;
   try {
@@ -295,6 +322,36 @@ export async function fetchRobotRoutes(deviceName, signal) {
     if (error.code) throw error;
     if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
     throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function fetchRobotCameras(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createCameraError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), CAMERA_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/cameras`,
+      { signal: requestSignal, cache: 'no-store' },
+    );
+
+    if (response.status === 400) throw createCameraError('INVALID_ROBOT_CODE');
+    if (response.status >= 500) throw createCameraError('SERVER_ERROR');
+    if (!response.ok) throw createCameraError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createCameraError);
+    if (!Array.isArray(payload)) throw createCameraError('REQUEST_FAILED');
+    return payload.map((camera) => validateCameraPayload(camera));
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createCameraError('REQUEST_FAILED');
+    throw createCameraError('REQUEST_FAILED');
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -402,4 +459,8 @@ export function getRemoteCommandErrorMessage(error) {
 
 export function getRouteErrorMessage(error) {
   return ROUTE_ERROR_MESSAGES[error?.code] || ROUTE_ERROR_MESSAGES.REQUEST_FAILED;
+}
+
+export function getCameraErrorMessage(error) {
+  return CAMERA_ERROR_MESSAGES[error?.code] || CAMERA_ERROR_MESSAGES.REQUEST_FAILED;
 }

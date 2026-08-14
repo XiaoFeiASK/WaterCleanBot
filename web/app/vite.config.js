@@ -8,6 +8,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': 'http://localhost:8080',
+      '^/video/.*': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/video/, ''),
+      },
     },
   },
 });

@@ -81,7 +81,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

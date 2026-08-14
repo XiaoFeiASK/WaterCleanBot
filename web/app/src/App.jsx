@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Hls from 'hls.js';
 import {
   Bell,
   Camera,
@@ -25,8 +26,10 @@ import {
   createRobotRoute,
   deleteRobotRoute,
   fetchAllRobotLocations,
+  fetchRobotCameras,
   fetchRobotLocation,
   getLocationErrorMessage,
+  getCameraErrorMessage,
   getRemoteCommandErrorMessage,
   getRobotNameForDevice,
   getRouteErrorMessage,
@@ -923,7 +926,7 @@ function DeviceDetailTabContent({ activeTab, position, mapCenterSeq, onToast }) 
   }
 
   if (activeTab === 'cameras') {
-    return <CameraPanel position={position} />;
+    return <CameraPanel position={position} onToast={onToast} />;
   }
 
   if (activeTab === 'cleaning-area') {
@@ -1261,9 +1264,159 @@ function DetailFeaturePlaceholder({ icon: Icon, eyebrow, title, description }) {
   );
 }
 
-function CameraPanel({ position }) {
+function HlsVideoPlayer({ camera, onPlaybackStatusChange }) {
+  const videoRef = useRef(null);
+  const [playerError, setPlayerError] = useState('');
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    setPlayerError('');
+
+    if (!camera?.playUrl) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      onPlaybackStatusChange?.('待接入');
+      return undefined;
+    }
+
+    let hls;
+    let disposed = false;
+    const setStatus = (status) => {
+      if (!disposed) onPlaybackStatusChange?.(status);
+    };
+    const fail = (message) => {
+      if (disposed) return;
+      setPlayerError(message);
+      setStatus('播放失败');
+    };
+
+    setStatus('连接中');
+
+    const tryPlay = () => {
+      video.play().catch(() => {
+        setStatus('点击播放');
+      });
+    };
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = camera.playUrl;
+      video.load();
+    } else if (Hls.isSupported()) {
+      hls = new Hls({ lowLatencyMode: true });
+      hls.loadSource(camera.playUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus('在线');
+        tryPlay();
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data?.fatal) fail('视频播放失败，请检查摄像头网络或视频服务');
+      });
+    } else {
+      fail('当前浏览器不支持 HLS 播放');
+      return undefined;
+    }
+
+    const handleCanPlay = () => {
+      setStatus('在线');
+      tryPlay();
+    };
+    const handlePlaying = () => setStatus('在线');
+    const handleWaiting = () => setStatus('缓冲中');
+    const handleError = () => fail('视频播放失败，请检查摄像头网络或视频服务');
+
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('playing', handlePlaying);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('error', handleError);
+
+    return () => {
+      disposed = true;
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('error', handleError);
+      if (hls) hls.destroy();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [camera?.playUrl, onPlaybackStatusChange]);
+
+  return (
+    <>
+      <video className="camera-video" ref={videoRef} muted playsInline controls autoPlay />
+      {(!camera?.playUrl || playerError) && (
+        <div className="camera-stream-message">
+          <strong>{playerError || '暂无播放地址'}</strong>
+          <span>{camera?.playUrl ? '请确认 MediaMTX 正在运行并能访问摄像头 RTSP' : '请先配置该设备的视频通道'}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function CameraPanel({ position, onToast }) {
   const [activeCameraId, setActiveCameraId] = useState(CAMERA_CHANNELS[0].id);
-  const activeCamera = CAMERA_CHANNELS.find((camera) => camera.id === activeCameraId) || CAMERA_CHANNELS[0];
+  const [cameras, setCameras] = useState([]);
+  const [camerasLoading, setCamerasLoading] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [playbackStatus, setPlaybackStatus] = useState('待接入');
+  const cameraDeviceId = getRobotNameForDevice(position?.robotName);
+  const cameraList = cameras.length ? cameras : CAMERA_CHANNELS;
+  const activeCamera = cameraList.find((camera) => camera.id === activeCameraId) || cameraList[0] || CAMERA_CHANNELS[0];
+  const hasConfiguredCameras = cameras.length > 0;
+  const panelStatus = camerasLoading ? '通道加载中' : cameraError ? '接口异常' : hasConfiguredCameras ? playbackStatus : 'HLS 待配置';
+  const activeStatus = camerasLoading ? '加载中' : cameraError ? '异常' : activeCamera.playUrl ? playbackStatus : activeCamera.status;
+
+  useEffect(() => {
+    if (!cameraDeviceId) {
+      setCameras([]);
+      setCameraError('');
+      setPlaybackStatus('待接入');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setCamerasLoading(true);
+    setCameraError('');
+
+    fetchRobotCameras(cameraDeviceId, controller.signal)
+      .then((nextCameras) => {
+        if (cancelled) return;
+        setCameras(nextCameras);
+        setActiveCameraId((currentCameraId) => (
+          nextCameras.some((camera) => camera.id === currentCameraId)
+            ? currentCameraId
+            : nextCameras[0]?.id || CAMERA_CHANNELS[0].id
+        ));
+        if (!nextCameras.length) setPlaybackStatus('待配置');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = getCameraErrorMessage(error);
+        setCameras([]);
+        setCameraError(message);
+        setPlaybackStatus('接口异常');
+        onToast?.(message);
+      })
+      .finally(() => {
+        if (!cancelled) setCamerasLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [cameraDeviceId]);
+
+  useEffect(() => {
+    setPlaybackStatus(activeCamera.playUrl ? '连接中' : activeCamera.status);
+  }, [activeCamera.id, activeCamera.playUrl, activeCamera.status]);
 
   return (
     <div className="camera-panel">
@@ -1272,13 +1425,14 @@ function CameraPanel({ position }) {
           <Camera size={18} />
           <div><strong>摄像头画面</strong><span>{position ? `${position.robotName} 视频通道` : '等待设备选择'}</span></div>
         </div>
-        <span className="camera-status"><Radio size={14} />RTSP 待接入</span>
+        <span className={`camera-status ${cameraError ? 'camera-status-error' : hasConfiguredCameras ? 'camera-status-live' : ''}`}><Radio size={14} />{panelStatus}</span>
       </div>
 
       <div className={`camera-live-frame camera-live-${activeCamera.tone}`}>
+        <HlsVideoPlayer camera={hasConfiguredCameras ? activeCamera : null} onPlaybackStatusChange={setPlaybackStatus} />
         <div className="camera-live-topbar">
           <span><Video size={15} />{activeCamera.name}</span>
-          <strong>{activeCamera.status}</strong>
+          <strong>{activeStatus}</strong>
         </div>
         <div className="camera-reticle"><Crosshair size={42} strokeWidth={1.3} /></div>
         <div className="camera-noise-line" />
@@ -1296,6 +1450,7 @@ function CameraPanel({ position }) {
             type="button"
             key={camera.id}
             onClick={() => setActiveCameraId(camera.id)}
+            aria-pressed={camera.id === activeCamera.id}
           >
             <span className={`camera-channel-preview camera-preview-${camera.tone}`}><Camera size={16} /></span>
             <span><strong>{camera.name}</strong><small>{camera.placement}</small></span>

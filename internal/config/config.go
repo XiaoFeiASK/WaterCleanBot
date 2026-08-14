@@ -23,6 +23,7 @@ type Config struct {
 	MQTTRouteTopic         string
 	MQTTUsername           string
 	MQTTPassword           string
+	CameraHLSBaseURL       string
 }
 
 // Load 从 .env 和环境变量读取配置，并应用本地开发默认值。
@@ -42,6 +43,7 @@ func Load() Config {
 		MQTTRouteTopic:         getenv("MQTT_ROUTE_TOPIC", "usv/%s/route"),
 		MQTTUsername:           getenv("MQTT_USERNAME", ""),
 		MQTTPassword:           getenv("MQTT_PASSWORD", ""),
+		CameraHLSBaseURL:       getenv("CAMERA_HLS_BASE_URL", "http://localhost:8888"),
 	}
 }
 

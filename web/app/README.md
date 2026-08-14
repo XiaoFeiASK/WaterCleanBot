@@ -11,11 +11,12 @@ npm install
 npm run dev
 ```
 
-开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。机器人位置页面调用已确认的位置接口：
+开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。摄像头播放地址由后端返回，默认指向 MediaMTX HLS 端口 `http://localhost:8888`。机器人位置页面调用已确认的位置接口：
 
 ```text
 GET /api/robots/locations
 GET /api/robots/{robotName}/location
+GET /api/robots/{robotName}/cameras
 ```
 
 当前前端设备映射集中在 `src/api.js`：`清澜一号` -> `清澜一号`。`VITE_API_BASE_URL` 可覆盖 API 基地址，当前部署应使用 HTTP 地址，HTTPS 由反向代理负责。

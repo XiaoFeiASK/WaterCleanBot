@@ -1,0 +1,18 @@
+# 文件作用：启动本地视频中转服务，把摄像头 RTSP 转成浏览器可播放的 HLS/WebRTC。
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: watercleanbot-mediamtx
+    restart: unless-stopped
+    environment:
+      MTX_HLSADDRESS: :8888
+      MTX_WEBRTCADDRESS: :8889
+      MTX_PATHS_FRONT_SOURCE: ${CAMERA_FRONT_RTSP:?set CAMERA_FRONT_RTSP in .env}
+      MTX_PATHS_FRONT_SOURCEONDEMAND: "yes"
+      MTX_PATHS_REAR_SOURCE: ${CAMERA_REAR_RTSP:?set CAMERA_REAR_RTSP in .env}
+      MTX_PATHS_REAR_SOURCEONDEMAND: "yes"
+    ports:
+      - "8554:8554"
+      - "8888:8888"
+      - "8889:8889"

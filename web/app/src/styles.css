@@ -302,13 +302,15 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .camera-panel .panel-title-with-icon strong { color: #fff8e8; }
 .camera-panel .panel-title-with-icon span { color: rgba(238,248,246,.62); }
 .camera-status { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; color: #8edbd2; background: rgba(142,219,210,.1); border: 1px solid rgba(142,219,210,.16); border-radius: 999px; font-size: 11px; font-weight: 900; white-space: nowrap; }
+.camera-status-live { color: #9cf3d4; background: rgba(50,211,154,.12); border-color: rgba(50,211,154,.24); }
+.camera-status-error { color: #ffd1d1; background: rgba(189,59,59,.18); border-color: rgba(255,209,209,.22); }
 .camera-live-frame { min-height: 318px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 19px; background: #071316; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
 .camera-live-frame::before { content: ''; position: absolute; inset: 0; background:
   linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
   linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px),
   radial-gradient(circle at 45% 28%, rgba(255,255,255,.13), transparent 10rem),
-  linear-gradient(150deg, rgba(24,169,153,.32), transparent 44%); background-size: 100% 7px, 42px 42px, auto, auto; opacity: .88; }
-.camera-live-frame::after { content: ''; position: absolute; inset: 12% 9% 18%; border: 1px solid rgba(142,219,210,.18); border-radius: 28px; box-shadow: inset 0 0 60px rgba(24,169,153,.08); }
+  linear-gradient(150deg, rgba(24,169,153,.32), transparent 44%); z-index: 1; pointer-events: none; background-size: 100% 7px, 42px 42px, auto, auto; opacity: .34; }
+.camera-live-frame::after { content: ''; position: absolute; inset: 12% 9% 18%; z-index: 1; pointer-events: none; border: 1px solid rgba(142,219,210,.18); border-radius: 28px; box-shadow: inset 0 0 60px rgba(24,169,153,.08); }
 .camera-live-amber::before { background:
   linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
   linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px),
@@ -319,6 +321,10 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px),
   radial-gradient(circle at 42% 36%, rgba(142,219,210,.16), transparent 11rem),
   linear-gradient(150deg, rgba(56,121,164,.34), transparent 46%); background-size: 100% 7px, 42px 42px, auto, auto; }
+.camera-video { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; background: #061316; }
+.camera-stream-message { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: rgba(238,248,246,.82); background: radial-gradient(circle at center, rgba(6,22,26,.78), rgba(6,22,26,.28)); text-align: center; }
+.camera-stream-message strong { color: #fff8e8; font-size: 14px; }
+.camera-stream-message span { max-width: 440px; color: rgba(238,248,246,.62); font-size: 12px; line-height: 1.6; }
 .camera-live-topbar,
 .camera-hud { position: absolute; left: 14px; right: 14px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .camera-live-topbar { top: 14px; }
@@ -328,7 +334,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .camera-reticle { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: rgba(142,219,210,.42); }
 .camera-noise-line { position: absolute; left: 0; right: 0; top: 42%; z-index: 2; height: 1px; background: linear-gradient(90deg, transparent, rgba(142,219,210,.56), transparent); box-shadow: 0 0 16px rgba(142,219,210,.32); }
 .camera-hud { bottom: 14px; padding: 10px 12px; background: rgba(6,22,26,.58); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; backdrop-filter: blur(10px); }
-.camera-channel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.camera-channel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
 .camera-channel { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; color: inherit; background: rgba(255,255,255,.06); text-align: left; }
 .camera-channel:hover { border-color: rgba(142,219,210,.3); background: rgba(255,255,255,.09); }
 .camera-channel-active { border-color: rgba(142,219,210,.48); background: rgba(142,219,210,.12); }
