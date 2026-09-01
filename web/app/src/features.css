@@ -1,0 +1,25 @@
+.command-console { overflow: hidden; border: 1px solid rgba(19,38,41,.14); border-radius: 12px; background: #f8faf9; }
+.command-target-bar { min-height: 58px; display: grid; grid-template-columns: auto minmax(160px, 240px) 1fr; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(24,169,153,.2); background: rgba(226,243,239,.72); }
+.command-target-bar > span { color: var(--teal-dark); font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.command-target-bar strong { color: var(--ink); font-size: 15px; }
+.command-target-bar small { color: var(--muted); font-size: 11px; }
+.command-sections { display: grid; grid-template-columns: 1fr; }
+.command-section { min-width: 0; padding: 18px; background: transparent; }
+.command-section + .command-section { border-top: 1px solid var(--line); }
+.command-section .remote-card-header { margin-bottom: 14px; }
+.actuator-card .switch-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 0; }
+.actuator-card .switch-control { min-width: 0; min-height: 76px; padding: 12px; }
+
+@media (max-width: 760px) {
+  .command-console { border-radius: 10px; }
+  .command-target-bar { grid-template-columns: auto 1fr; gap: 6px 10px; padding: 12px 14px; }
+  .command-target-bar small { grid-column: 1 / -1; }
+  .command-section { padding: 14px; }
+  .actuator-card .switch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actuator-card .switch-control { min-height: 80px; }
+  .actuator-card .switch-control:last-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 430px) {
+  .actuator-card .switch-grid { grid-template-columns: 1fr; }
+}

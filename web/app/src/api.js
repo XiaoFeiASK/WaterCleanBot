@@ -167,7 +167,10 @@ function validateCommandResponse(payload, expectedRobotName) {
     payload.status !== 'published' ||
     typeof payload.commandId !== 'string' || !payload.commandId ||
     typeof payload.seq !== 'number' || !Number.isFinite(payload.seq) ||
-    payload.target !== expectedRobotName
+    payload.target !== expectedRobotName ||
+    !Array.isArray(payload.protocol) ||
+    !payload.protocol.length ||
+    payload.protocol.some((value) => !Number.isInteger(value))
   ) {
     throw createRemoteCommandError('REQUEST_FAILED');
   }

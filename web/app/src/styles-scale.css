@@ -1,0 +1,66 @@
+/* Comfortable desktop scale for the first visual theme. */
+@media (min-width: 761px) {
+  .sidebar { width: 252px; }
+  .main-content { margin-left: 252px; }
+  .brand-row { min-height: 90px; padding: 20px 18px; gap: 12px; }
+  .brand-mark { width: 43px; height: 43px; border-radius: 14px; }
+  .brand-row strong { font-size: 15px; }
+  .brand-row span { font-size: 12px; }
+  .nav-item { min-height: 43px; padding: 10px 12px; border-radius: 13px; font-size: 13px; }
+  .topbar { height: 68px; padding: 0 32px; }
+  .breadcrumb { font-size: 12px; }
+  .icon-button { width: 39px; height: 39px; border-radius: 12px; }
+  .user-chip { padding: 5px 10px 5px 5px; font-size: 12px; }
+  .avatar { width: 31px; height: 31px; }
+  .content-area { max-width: 1500px; padding: 28px 32px 40px; }
+  .page-intro { min-height: 160px; margin-bottom: 19px; padding: 27px 29px; border-radius: 23px; }
+  h1 { font-size: clamp(30px, 3.5vw, 42px); }
+  .page-description { font-size: 15px; }
+  .stat-grid { gap: 14px; margin-bottom: 18px; }
+  .stat-card { min-height: 140px; padding: 18px; border-radius: 19px; }
+  .stat-icon { width: 42px; height: 42px; margin-bottom: 16px; border-radius: 14px; }
+  .stat-label { font-size: 12px; }
+  .stat-card strong { font-size: 25px; }
+  .location-section, .fleet-management-section { padding: 22px; border-radius: 22px; }
+  .section-heading h2 { font-size: 21px; }
+  .status-badge { padding: 7px 10px; font-size: 11px; }
+  .location-query { padding: 14px; border-radius: 16px; }
+  .input-with-icon input { height: 44px; border-radius: 13px; font-size: 13px; }
+  .button { min-height: 44px; padding: 0 16px; border-radius: 12px; font-size: 12px; }
+  .device-detail-tabs { gap: 25px; margin: 4px -22px 18px; padding: 0 22px; }
+  .device-detail-tab { min-height: 48px; font-size: 13px; }
+  .online-map-toolbar, .route-table-heading { min-height: 68px; padding: 14px 18px; }
+  .online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { font-size: 18px; }
+  .online-map-actions .button { min-height: 37px; padding: 0 13px; font-size: 11px; }
+  .online-map-frame { height: 560px; min-height: 560px; }
+  .online-map-frame .location-map, .online-map-frame .map-empty { height: 560px; }
+  .map-frame { min-height: 410px; border-radius: 21px; }
+  .location-map { height: 410px; }
+  .fleet-map-frame, .fleet-map { min-height: 500px; height: 500px; }
+  .fleet-map-frame .map-empty { height: 500px; }
+  .route-planning-toolbar { right: 16px; bottom: 16px; left: 16px; padding: 13px 14px; border-radius: 14px; }
+  .route-planning-toolbar strong { font-size: 14px; }
+  .route-planning-toolbar span { font-size: 11px; }
+  .route-planning-actions button, .route-point-confirm-actions button { min-height: 35px; padding: 0 11px; font-size: 11px; }
+  .route-point-confirm-card { top: 16px; right: 16px; width: min(300px, calc(100% - 32px)); padding: 14px; border-radius: 14px; }
+  .route-preview-badge { bottom: 16px; left: 16px; padding: 9px 11px; font-size: 11px; }
+  .route-table-wrap, .fleet-management-table-wrap { padding: 16px 18px 20px; }
+  .route-table th, .fleet-management-table th { padding: 13px 15px; font-size: 11px; }
+  .route-table td, .fleet-management-table td { padding: 15px; font-size: 12px; }
+  .fleet-management-toolbar { padding: 13px; border-radius: 16px; }
+  .fleet-management-table-card { border-radius: 16px; }
+  .fleet-management-table-heading { min-height: 68px; padding: 15px 18px; }
+  .fleet-device-card { padding: 14px; border-radius: 14px; }
+  .fleet-device-card strong { font-size: 14px; }
+  .empty-module { min-height: 190px; padding: 24px; border-radius: 20px; }
+  .camera-panel { padding: 15px; border-radius: 20px; }
+  .camera-live-frame { min-height: 320px; }
+  .camera-channel { padding: 10px; border-radius: 12px; }
+  .camera-channel-preview { width: 38px; height: 38px; border-radius: 10px; }
+  .camera-channel strong { font-size: 11px; }
+  .remote-card { padding: 15px; border-radius: 15px; }
+  .remote-target-card { padding: 13px 15px; border-radius: 14px; }
+  .remote-target-card strong { font-size: 14px; }
+  .throttle-control { padding: 12px; border-radius: 11px; }
+  .switch-control { min-height: 70px; padding: 11px; border-radius: 11px; }
+}

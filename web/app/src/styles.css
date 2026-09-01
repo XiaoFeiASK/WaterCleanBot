@@ -495,3 +495,1073 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .fleet-device-card { align-items: flex-start; flex-direction: column; }
   .fleet-device-meta { text-align: left; }
 }
+
+/* First-theme scale pass: improve legibility on large screens */
+@media (min-width: 761px) {
+  .sidebar { width: 276px; }
+  .main-content { margin-left: 276px; }
+  .brand-row { min-height: 104px; padding: 24px 21px; gap: 14px; }
+  .brand-mark { width: 48px; height: 48px; border-radius: 15px; }
+  .brand-row strong { font-size: 17px; }
+  .brand-row span { margin-top: 5px; font-size: 13px; }
+  .sidebar nav { padding: 20px 13px; }
+  .nav-group { padding-bottom: 19px; }
+  .nav-group-label { padding: 11px 13px 8px; font-size: 12px; }
+  .nav-item { min-height: 48px; gap: 13px; padding: 11px 14px; border-radius: 15px; font-size: 15px; }
+  .sidebar-footer { padding: 19px 22px; font-size: 13px; }
+
+  .topbar { height: 78px; padding: 0 40px; gap: 12px; }
+  .breadcrumb { gap: 8px; font-size: 14px; }
+  .icon-button { width: 44px; height: 44px; border-radius: 14px; }
+  .user-chip { gap: 11px; padding: 6px 12px 6px 6px; font-size: 14px; }
+  .avatar { width: 36px; height: 36px; }
+  .content-area { max-width: 1600px; padding: 38px 40px 52px; }
+
+  .page-intro { min-height: 188px; margin-bottom: 26px; padding: 34px 36px; border-radius: 28px; }
+  .page-intro::after { right: 34px; top: 32px; width: 230px; height: 100px; }
+  .eyebrow { margin-bottom: 11px; font-size: 12px; letter-spacing: .18em; }
+  h1 { margin-bottom: 11px; font-size: clamp(37px, 4vw, 56px); }
+  .page-description { max-width: 760px; font-size: 17px; line-height: 1.7; }
+  .api-state { gap: 10px; font-size: 14px; }
+
+  .stat-grid { gap: 19px; margin-bottom: 24px; }
+  .stat-card { min-height: 172px; padding: 22px; border-radius: 24px; }
+  .stat-card::before { right: 22px; bottom: 17px; left: 22px; }
+  .stat-icon { width: 50px; height: 50px; margin-bottom: 20px; border-radius: 17px; }
+  .stat-label { margin-bottom: 9px; font-size: 14px; }
+  .stat-card strong { font-size: 31px; }
+  .stat-rule { top: 22px; right: 22px; width: 52px; height: 10px; }
+
+  .location-section, .fleet-management-section { padding: 29px; border-radius: 28px; }
+  .section-heading { margin-bottom: 22px; }
+  .section-heading h2 { font-size: 26px; }
+  .status-badge { gap: 9px; padding: 9px 13px; border-radius: 999px; font-size: 13px; }
+  .location-query { margin-bottom: 23px; padding: 18px; border-radius: 20px; }
+  .location-query label { margin-bottom: 10px; font-size: 13px; }
+  .query-controls { gap: 13px; }
+  .input-with-icon input { height: 52px; padding-left: 46px; border-radius: 16px; font-size: 15px; }
+  .input-with-icon > svg { left: 15px; }
+  .device-list-toggle { right: 8px; width: 37px; height: 37px; border-radius: 11px; }
+  .query-hint { margin-top: 10px; font-size: 13px; }
+  .button { min-height: 52px; padding: 0 20px; border-radius: 15px; font-size: 14px; }
+  .form-error { margin-top: 13px; font-size: 15px; }
+
+  .device-detail-tabs { gap: 31px; margin: 5px -29px 23px; padding: 0 29px; }
+  .device-detail-tab { min-height: 56px; font-size: 15px; }
+  .device-tab-panel { min-height: 320px; }
+  .detail-feature-placeholder { min-height: 390px; padding: 34px; border-radius: 24px; }
+  .detail-feature-placeholder h2 { margin-bottom: 10px; font-size: 22px; }
+  .detail-feature-placeholder span { max-width: 650px; font-size: 15px; }
+  .empty-icon { width: 60px; height: 60px; margin-bottom: 16px; border-radius: 19px; }
+
+  .online-map-layout { gap: 20px; }
+  .online-map-card, .route-table-card { border-radius: 20px; }
+  .online-map-toolbar, .route-table-heading { min-height: 82px; padding: 18px 23px; }
+  .online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { font-size: 21px; }
+  .online-map-toolbar .eyebrow { margin-bottom: 7px; }
+  .online-map-actions { gap: 11px; }
+  .online-map-actions .button { min-height: 44px; padding: 0 16px; border-radius: 12px; font-size: 13px; }
+  .online-map-frame { height: 650px; min-height: 650px; }
+  .online-map-frame .location-map, .online-map-frame .map-empty { height: 650px; }
+  .map-frame { min-height: 480px; border-radius: 24px; }
+  .location-map { height: 480px; }
+  .fleet-map-frame { min-height: 590px; }
+  .fleet-map { height: 590px; }
+  .fleet-map-frame .map-empty { height: 590px; }
+  .map-empty { height: 480px; gap: 12px; }
+  .map-empty strong { font-size: 18px; }
+  .map-empty span { font-size: 14px; }
+  .route-planning-toolbar { right: 22px; bottom: 22px; left: 22px; gap: 18px; padding: 16px 18px; border-radius: 18px; }
+  .route-planning-toolbar strong { margin-bottom: 5px; font-size: 16px; }
+  .route-planning-toolbar span { font-size: 14px; }
+  .route-planning-actions { gap: 10px; }
+  .route-planning-actions button, .route-point-confirm-actions button { min-height: 42px; padding: 0 14px; border-radius: 11px; font-size: 13px; }
+  .route-point-confirm-card { top: 22px; right: 22px; width: min(360px, calc(100% - 44px)); gap: 12px; padding: 18px; border-radius: 18px; }
+  .route-point-confirm-card strong { font-size: 16px; }
+  .route-point-confirm-card span, .route-point-confirm-card label { font-size: 13px; }
+  .route-point-confirm-card input { height: 44px; border-radius: 12px; font-size: 14px; }
+  .route-preview-badge { bottom: 22px; left: 22px; padding: 11px 14px; border-radius: 999px; font-size: 13px; }
+  .map-command-panel { padding: 23px; border-radius: 23px; }
+  .map-command-panel .remote-grid { gap: 18px; }
+
+  .route-table-wrap, .fleet-management-table-wrap { padding: 20px 23px 25px; }
+  .route-table th, .fleet-management-table th { padding: 16px 18px; font-size: 13px; }
+  .route-table td, .fleet-management-table td { padding: 18px; font-size: 15px; }
+  .route-table button, .fleet-management-table button { margin-right: 16px; font-size: 14px; }
+  .fleet-management-toolbar { margin-bottom: 18px; padding: 17px; border-radius: 18px; }
+  .fleet-management-stats { gap: 17px; margin-bottom: 20px; }
+  .fleet-management-table-card { border-radius: 20px; }
+  .fleet-management-table-heading { min-height: 82px; padding: 19px 23px; }
+  .fleet-management-table-heading span:not(.status-badge), .route-table-heading span:not(.status-badge) { margin-top: 8px; font-size: 14px; }
+  .fleet-list { gap: 16px; margin-top: 21px; }
+  .fleet-device-card { gap: 17px; padding: 18px; border-radius: 18px; }
+  .fleet-device-card strong { margin-bottom: 6px; font-size: 16px; }
+  .fleet-device-card span { font-size: 13px; }
+  .fleet-device-meta span:first-child { font-size: 14px; }
+  .empty-module { min-height: 220px; padding: 30px; border-radius: 24px; }
+  .empty-module h2 { font-size: 20px; }
+  .empty-module p, .empty-module span { font-size: 15px; }
+
+  .camera-panel { padding: 20px; border-radius: 23px; }
+  .route-panel-header { margin-bottom: 19px; }
+  .panel-title-with-icon { gap: 12px; }
+  .panel-title-with-icon strong { font-size: 16px; }
+  .panel-title-with-icon span { font-size: 13px; }
+  .camera-status { padding: 9px 12px; border-radius: 999px; font-size: 12px; }
+  .camera-live-frame { min-height: 390px; border-radius: 19px; }
+  .camera-live-topbar, .camera-hud { right: 18px; left: 18px; }
+  .camera-live-topbar { top: 18px; }
+  .camera-live-topbar span, .camera-hud span { font-size: 13px; }
+  .camera-live-topbar strong { padding: 6px 10px; font-size: 11px; }
+  .camera-hud { bottom: 18px; padding: 12px 14px; border-radius: 14px; }
+  .camera-channel-grid { gap: 12px; margin-top: 16px; }
+  .camera-channel { gap: 12px; padding: 13px; border-radius: 15px; }
+  .camera-channel-preview { width: 46px; height: 46px; border-radius: 12px; }
+  .camera-channel strong { font-size: 14px; }
+  .camera-channel small { font-size: 11px; }
+
+  .remote-panel { margin-top: 24px; padding-top: 26px; }
+  .remote-subtitle { font-size: 14px; }
+  .remote-target-card { grid-template-columns: auto minmax(200px, 280px) 1fr; gap: 15px; margin-bottom: 18px; padding: 18px 20px; border-radius: 17px; }
+  .remote-target-card span { font-size: 12px; }
+  .remote-target-card strong { font-size: 17px; }
+  .remote-target-card small { font-size: 13px; }
+  .remote-grid { gap: 18px; }
+  .remote-card { padding: 20px; border-radius: 19px; }
+  .remote-card-header { gap: 12px; margin-bottom: 17px; }
+  .remote-card-header strong { font-size: 16px; }
+  .remote-card-header span { font-size: 13px; }
+  .throttle-list { gap: 15px; }
+  .throttle-control { padding: 16px; border-radius: 15px; }
+  .throttle-meta strong { font-size: 15px; }
+  .throttle-meta span { font-size: 13px; }
+  .throttle-inputs { grid-template-columns: minmax(130px, 1fr) 82px auto; gap: 11px; }
+  .throttle-value { height: 44px; border-radius: 11px; font-size: 14px; }
+  .switch-grid { gap: 12px; margin-bottom: 17px; }
+  .switch-control { min-height: 87px; padding: 15px; border-radius: 15px; }
+  .switch-control strong { font-size: 15px; }
+  .switch-control small { margin-top: 5px; font-size: 11px; }
+  .switch-state { min-width: 50px; padding: 6px 9px; border-radius: 999px; font-size: 13px; }
+  .toast { top: 92px; padding: 13px 20px; border-radius: 999px; font-size: 14px; }
+}
+
+/* Final desktop scale correction */
+@media (min-width: 761px) {
+  .sidebar { width: 260px; }
+  .main-content { margin-left: 260px; }
+  .brand-row { min-height: 96px; padding: 21px 19px; gap: 12px; }
+  .brand-mark { width: 44px; height: 44px; border-radius: 13px; }
+  .brand-row strong { font-size: 16px; }
+  .brand-row span { font-size: 12px; }
+  .sidebar nav { padding: 17px 12px; }
+  .nav-group-label { padding: 10px 12px 7px; font-size: 11px; }
+  .nav-item { min-height: 45px; gap: 12px; padding: 10px 13px; border-radius: 13px; font-size: 14px; }
+  .sidebar-footer { padding: 17px 20px; font-size: 12px; }
+  .topbar { height: 72px; padding: 0 36px; }
+  .breadcrumb { font-size: 13px; }
+  .icon-button { width: 41px; height: 41px; border-radius: 12px; }
+  .user-chip { padding: 5px 11px 5px 5px; font-size: 13px; }
+  .avatar { width: 33px; height: 33px; }
+  .content-area { max-width: 1540px; padding: 32px 36px 46px; }
+  .page-intro { min-height: 172px; margin-bottom: 22px; padding: 29px 31px; border-radius: 24px; }
+  .page-intro::after { right: 30px; top: 28px; width: 210px; height: 90px; }
+  .eyebrow { margin-bottom: 9px; font-size: 11px; }
+  h1 { margin-bottom: 9px; font-size: clamp(33px, 3.7vw, 48px); }
+  .page-description { max-width: 700px; font-size: 15px; }
+  .api-state { font-size: 13px; }
+  .stat-grid { gap: 16px; margin-bottom: 21px; }
+  .stat-card { min-height: 148px; padding: 19px; border-radius: 20px; }
+  .stat-card::before { right: 19px; bottom: 15px; left: 19px; }
+  .stat-icon { width: 44px; height: 44px; margin-bottom: 17px; border-radius: 14px; }
+  .stat-label { margin-bottom: 7px; font-size: 12px; }
+  .stat-card strong { font-size: 27px; }
+  .stat-rule { top: 19px; right: 19px; width: 45px; }
+  .location-section, .fleet-management-section { padding: 25px; border-radius: 24px; }
+  .section-heading { margin-bottom: 19px; }
+  .section-heading h2 { font-size: 23px; }
+  .status-badge { padding: 8px 11px; font-size: 12px; }
+  .location-query { margin-bottom: 20px; padding: 16px; border-radius: 17px; }
+  .location-query label { margin-bottom: 9px; font-size: 12px; }
+  .input-with-icon input { height: 48px; padding-left: 42px; border-radius: 14px; font-size: 14px; }
+  .input-with-icon > svg { left: 14px; }
+  .device-list-toggle { width: 34px; height: 34px; border-radius: 10px; }
+  .query-hint { font-size: 12px; }
+  .button { min-height: 48px; padding: 0 18px; border-radius: 13px; font-size: 13px; }
+  .device-detail-tabs { gap: 27px; margin: 4px -25px 19px; padding: 0 25px; }
+  .device-detail-tab { min-height: 51px; font-size: 14px; }
+  .detail-feature-placeholder { min-height: 350px; padding: 30px; border-radius: 20px; }
+  .detail-feature-placeholder h2 { font-size: 20px; }
+  .detail-feature-placeholder span { font-size: 13px; }
+  .empty-icon { width: 53px; height: 53px; margin-bottom: 14px; border-radius: 16px; }
+  .online-map-toolbar, .route-table-heading { min-height: 74px; padding: 16px 20px; }
+  .online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { font-size: 19px; }
+  .online-map-actions .button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 12px; }
+  .online-map-frame { height: 600px; min-height: 600px; }
+  .online-map-frame .location-map, .online-map-frame .map-empty { height: 600px; }
+  .map-frame { min-height: 440px; border-radius: 20px; }
+  .location-map { height: 440px; }
+  .fleet-map-frame { min-height: 530px; }
+  .fleet-map { height: 530px; }
+  .fleet-map-frame .map-empty { height: 530px; }
+  .map-empty { height: 440px; }
+  .map-empty strong { font-size: 16px; }
+  .map-empty span { font-size: 12px; }
+  .route-planning-toolbar { right: 18px; bottom: 18px; left: 18px; padding: 14px 16px; border-radius: 15px; }
+  .route-planning-toolbar strong { font-size: 15px; }
+  .route-planning-toolbar span { font-size: 12px; }
+  .route-planning-actions button, .route-point-confirm-actions button { min-height: 38px; padding: 0 12px; border-radius: 9px; font-size: 12px; }
+  .route-point-confirm-card { top: 18px; right: 18px; width: min(330px, calc(100% - 36px)); padding: 16px; border-radius: 15px; }
+  .route-point-confirm-card strong { font-size: 15px; }
+  .route-point-confirm-card span, .route-point-confirm-card label { font-size: 12px; }
+  .route-point-confirm-card input { height: 40px; border-radius: 10px; font-size: 13px; }
+  .route-preview-badge { bottom: 18px; left: 18px; padding: 9px 12px; border-radius: 999px; font-size: 12px; }
+  .route-table-wrap, .fleet-management-table-wrap { padding: 17px 20px 21px; }
+  .route-table th, .fleet-management-table th { padding: 14px 16px; font-size: 12px; }
+  .route-table td, .fleet-management-table td { padding: 16px; font-size: 13px; }
+  .route-table button, .fleet-management-table button { margin-right: 14px; font-size: 12px; }
+  .fleet-management-toolbar { margin-bottom: 16px; padding: 14px; border-radius: 15px; }
+  .fleet-management-stats { gap: 14px; margin-bottom: 17px; }
+  .fleet-management-table-card { border-radius: 17px; }
+  .fleet-management-table-heading { min-height: 72px; padding: 16px 20px; }
+  .fleet-management-table-heading span:not(.status-badge), .route-table-heading span:not(.status-badge) { font-size: 12px; }
+  .fleet-list { gap: 13px; margin-top: 17px; }
+  .fleet-device-card { gap: 14px; padding: 15px; border-radius: 15px; }
+  .fleet-device-card strong { font-size: 14px; }
+  .fleet-device-card span { font-size: 11px; }
+  .fleet-device-meta span:first-child { font-size: 12px; }
+  .empty-module { min-height: 200px; padding: 26px; border-radius: 20px; }
+  .empty-module h2 { font-size: 18px; }
+  .empty-module p, .empty-module span { font-size: 13px; }
+  .camera-panel { padding: 17px; border-radius: 20px; }
+  .panel-title-with-icon strong { font-size: 15px; }
+  .panel-title-with-icon span { font-size: 12px; }
+  .camera-status { padding: 8px 10px; font-size: 11px; }
+  .camera-live-frame { min-height: 350px; border-radius: 16px; }
+  .camera-live-topbar, .camera-hud { right: 15px; left: 15px; }
+  .camera-live-topbar { top: 15px; }
+  .camera-live-topbar span, .camera-hud span { font-size: 12px; }
+  .camera-live-topbar strong { padding: 5px 8px; font-size: 10px; }
+  .camera-hud { bottom: 15px; padding: 10px 12px; border-radius: 12px; }
+  .camera-channel-grid { gap: 10px; margin-top: 13px; }
+  .camera-channel { gap: 10px; padding: 11px; border-radius: 12px; }
+  .camera-channel-preview { width: 41px; height: 41px; border-radius: 10px; }
+  .camera-channel strong { font-size: 12px; }
+  .camera-channel small { font-size: 10px; }
+  .remote-panel { margin-top: 20px; padding-top: 22px; }
+  .remote-subtitle { font-size: 12px; }
+  .remote-target-card { gap: 12px; margin-bottom: 15px; padding: 15px 17px; border-radius: 14px; }
+  .remote-target-card span { font-size: 11px; }
+  .remote-target-card strong { font-size: 15px; }
+  .remote-target-card small { font-size: 12px; }
+  .remote-grid { gap: 15px; }
+  .remote-card { padding: 17px; border-radius: 16px; }
+  .remote-card-header { margin-bottom: 14px; }
+  .remote-card-header strong { font-size: 14px; }
+  .remote-card-header span { font-size: 11px; }
+  .throttle-list { gap: 12px; }
+  .throttle-control { padding: 13px; border-radius: 12px; }
+  .throttle-meta strong { font-size: 13px; }
+  .throttle-meta span { font-size: 11px; }
+  .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 74px auto; gap: 9px; }
+  .throttle-value { height: 40px; border-radius: 9px; font-size: 13px; }
+  .switch-grid { gap: 10px; margin-bottom: 14px; }
+  .switch-control { min-height: 76px; padding: 12px; border-radius: 12px; }
+  .switch-control strong { font-size: 13px; }
+  .switch-control small { font-size: 10px; }
+  .switch-state { min-width: 45px; padding: 5px 8px; font-size: 11px; }
+  .toast { top: 84px; padding: 11px 17px; font-size: 13px; }
+}
+
+/* Desktop scale correction */
+@media (min-width: 761px) {
+  .sidebar { width: 260px; }
+  .main-content { margin-left: 260px; }
+  .brand-row { min-height: 96px; padding: 21px 19px; gap: 12px; }
+  .brand-mark { width: 44px; height: 44px; border-radius: 13px; }
+  .brand-row strong { font-size: 16px; }
+  .brand-row span { font-size: 12px; }
+  .sidebar nav { padding: 17px 12px; }
+  .nav-group-label { padding: 10px 12px 7px; font-size: 11px; }
+  .nav-item { min-height: 45px; gap: 12px; padding: 10px 13px; border-radius: 13px; font-size: 14px; }
+  .sidebar-footer { padding: 17px 20px; font-size: 12px; }
+  .topbar { height: 72px; padding: 0 36px; }
+  .breadcrumb { font-size: 13px; }
+  .icon-button { width: 41px; height: 41px; border-radius: 12px; }
+  .user-chip { padding: 5px 11px 5px 5px; font-size: 13px; }
+  .avatar { width: 33px; height: 33px; }
+  .content-area { max-width: 1540px; padding: 32px 36px 46px; }
+  .page-intro { min-height: 172px; margin-bottom: 22px; padding: 29px 31px; border-radius: 24px; }
+  .page-intro::after { right: 30px; top: 28px; width: 210px; height: 90px; }
+  .eyebrow { margin-bottom: 9px; font-size: 11px; }
+  h1 { margin-bottom: 9px; font-size: clamp(33px, 3.7vw, 48px); }
+  .page-description { max-width: 700px; font-size: 15px; }
+  .api-state { font-size: 13px; }
+  .stat-grid { gap: 16px; margin-bottom: 21px; }
+  .stat-card { min-height: 148px; padding: 19px; border-radius: 20px; }
+  .stat-card::before { right: 19px; bottom: 15px; left: 19px; }
+  .stat-icon { width: 44px; height: 44px; margin-bottom: 17px; border-radius: 14px; }
+  .stat-label { margin-bottom: 7px; font-size: 12px; }
+  .stat-card strong { font-size: 27px; }
+  .stat-rule { top: 19px; right: 19px; width: 45px; }
+  .location-section, .fleet-management-section { padding: 25px; border-radius: 24px; }
+  .section-heading { margin-bottom: 19px; }
+  .section-heading h2 { font-size: 23px; }
+  .status-badge { padding: 8px 11px; font-size: 12px; }
+  .location-query { margin-bottom: 20px; padding: 16px; border-radius: 17px; }
+  .location-query label { margin-bottom: 9px; font-size: 12px; }
+  .input-with-icon input { height: 48px; padding-left: 42px; border-radius: 14px; font-size: 14px; }
+  .input-with-icon > svg { left: 14px; }
+  .device-list-toggle { width: 34px; height: 34px; border-radius: 10px; }
+  .query-hint { font-size: 12px; }
+  .button { min-height: 48px; padding: 0 18px; border-radius: 13px; font-size: 13px; }
+  .form-error { font-size: 13px; }
+  .device-detail-tabs { gap: 27px; margin: 4px -25px 19px; padding: 0 25px; }
+  .device-detail-tab { min-height: 51px; font-size: 14px; }
+  .detail-feature-placeholder { min-height: 350px; padding: 30px; border-radius: 20px; }
+  .detail-feature-placeholder h2 { font-size: 20px; }
+  .detail-feature-placeholder span { font-size: 13px; }
+  .empty-icon { width: 53px; height: 53px; margin-bottom: 14px; border-radius: 16px; }
+  .online-map-layout { gap: 18px; }
+  .online-map-card, .route-table-card { border-radius: 17px; }
+  .online-map-toolbar, .route-table-heading { min-height: 74px; padding: 16px 20px; }
+  .online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { font-size: 19px; }
+  .online-map-actions { gap: 9px; }
+  .online-map-actions .button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 12px; }
+  .online-map-frame { height: 600px; min-height: 600px; }
+  .online-map-frame .location-map, .online-map-frame .map-empty { height: 600px; }
+  .map-frame { min-height: 440px; border-radius: 20px; }
+  .location-map { height: 440px; }
+  .fleet-map-frame { min-height: 530px; }
+  .fleet-map { height: 530px; }
+  .fleet-map-frame .map-empty { height: 530px; }
+  .map-empty { height: 440px; }
+  .map-empty strong { font-size: 16px; }
+  .map-empty span { font-size: 12px; }
+  .route-planning-toolbar { right: 18px; bottom: 18px; left: 18px; padding: 14px 16px; border-radius: 15px; }
+  .route-planning-toolbar strong { font-size: 15px; }
+  .route-planning-toolbar span { font-size: 12px; }
+  .route-planning-actions button, .route-point-confirm-actions button { min-height: 38px; padding: 0 12px; border-radius: 9px; font-size: 12px; }
+  .route-point-confirm-card { top: 18px; right: 18px; width: min(330px, calc(100% - 36px)); padding: 16px; border-radius: 15px; }
+  .route-point-confirm-card strong { font-size: 15px; }
+  .route-point-confirm-card span, .route-point-confirm-card label { font-size: 12px; }
+  .route-point-confirm-card input { height: 40px; border-radius: 10px; font-size: 13px; }
+  .route-preview-badge { bottom: 18px; left: 18px; padding: 9px 12px; border-radius: 999px; font-size: 12px; }
+  .map-command-panel { padding: 20px; border-radius: 20px; }
+  .route-table-wrap, .fleet-management-table-wrap { padding: 17px 20px 21px; }
+  .route-table th, .fleet-management-table th { padding: 14px 16px; font-size: 12px; }
+  .route-table td, .fleet-management-table td { padding: 16px; font-size: 13px; }
+  .route-table button, .fleet-management-table button { margin-right: 14px; font-size: 12px; }
+  .fleet-management-toolbar { margin-bottom: 16px; padding: 14px; border-radius: 15px; }
+  .fleet-management-stats { gap: 14px; margin-bottom: 17px; }
+  .fleet-management-table-card { border-radius: 17px; }
+  .fleet-management-table-heading { min-height: 72px; padding: 16px 20px; }
+  .fleet-management-table-heading span:not(.status-badge), .route-table-heading span:not(.status-badge) { font-size: 12px; }
+  .fleet-list { gap: 13px; margin-top: 17px; }
+  .fleet-device-card { gap: 14px; padding: 15px; border-radius: 15px; }
+  .fleet-device-card strong { font-size: 14px; }
+  .fleet-device-card span { font-size: 11px; }
+  .fleet-device-meta span:first-child { font-size: 12px; }
+  .empty-module { min-height: 200px; padding: 26px; border-radius: 20px; }
+  .empty-module h2 { font-size: 18px; }
+  .empty-module p, .empty-module span { font-size: 13px; }
+  .camera-panel { padding: 17px; border-radius: 20px; }
+  .panel-title-with-icon strong { font-size: 15px; }
+  .panel-title-with-icon span { font-size: 12px; }
+  .camera-status { padding: 8px 10px; font-size: 11px; }
+  .camera-live-frame { min-height: 350px; border-radius: 16px; }
+  .camera-live-topbar, .camera-hud { right: 15px; left: 15px; }
+  .camera-live-topbar { top: 15px; }
+  .camera-live-topbar span, .camera-hud span { font-size: 12px; }
+  .camera-live-topbar strong { padding: 5px 8px; font-size: 10px; }
+  .camera-hud { bottom: 15px; padding: 10px 12px; border-radius: 12px; }
+  .camera-channel-grid { gap: 10px; margin-top: 13px; }
+  .camera-channel { gap: 10px; padding: 11px; border-radius: 12px; }
+  .camera-channel-preview { width: 41px; height: 41px; border-radius: 10px; }
+  .camera-channel strong { font-size: 12px; }
+  .camera-channel small { font-size: 10px; }
+  .remote-panel { margin-top: 20px; padding-top: 22px; }
+  .remote-subtitle { font-size: 12px; }
+  .remote-target-card { gap: 12px; margin-bottom: 15px; padding: 15px 17px; border-radius: 14px; }
+  .remote-target-card span { font-size: 11px; }
+  .remote-target-card strong { font-size: 15px; }
+  .remote-target-card small { font-size: 12px; }
+  .remote-grid { gap: 15px; }
+  .remote-card { padding: 17px; border-radius: 16px; }
+  .remote-card-header { margin-bottom: 14px; }
+  .remote-card-header strong { font-size: 14px; }
+  .remote-card-header span { font-size: 11px; }
+  .throttle-list { gap: 12px; }
+  .throttle-control { padding: 13px; border-radius: 12px; }
+  .throttle-meta strong { font-size: 13px; }
+  .throttle-meta span { font-size: 11px; }
+  .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 74px auto; gap: 9px; }
+  .throttle-value { height: 40px; border-radius: 9px; font-size: 13px; }
+  .switch-grid { gap: 10px; margin-bottom: 14px; }
+  .switch-control { min-height: 76px; padding: 12px; border-radius: 12px; }
+  .switch-control strong { font-size: 13px; }
+  .switch-control small { font-size: 10px; }
+  .switch-state { min-width: 45px; padding: 5px 8px; font-size: 11px; }
+  .toast { top: 84px; padding: 11px 17px; font-size: 13px; }
+}
+
+@media (max-width: 760px) {
+  .sidebar { width: min(284px, 88vw); }
+  .main-content { margin-left: 0; }
+  .topbar { height: 60px; padding: 0 14px; }
+  .content-area { padding: 18px 12px 28px; }
+  .page-intro { min-height: 152px; margin-bottom: 16px; padding: 22px; border-radius: 22px; }
+  .page-intro::after { right: 16px; top: 18px; width: 120px; height: 60px; }
+  .eyebrow { margin-bottom: 8px; font-size: 10px; }
+  h1 { max-width: 88%; font-size: 30px; }
+  .page-description { font-size: 14px; }
+  .stat-grid { gap: 10px; }
+  .stat-card { min-height: 122px; padding: 14px; border-radius: 18px; }
+  .stat-icon { width: 36px; height: 36px; margin-bottom: 12px; border-radius: 12px; }
+  .stat-label { font-size: 11px; }
+  .stat-card strong { font-size: 20px; }
+  .location-section, .fleet-management-section { padding: 15px; border-radius: 22px; }
+  .section-heading { gap: 9px; }
+  .section-heading h2 { font-size: 21px; }
+  .location-query { padding: 12px; border-radius: 16px; }
+  .location-query label { font-size: 11px; }
+  .query-controls { align-items: stretch; flex-direction: column; }
+  .input-with-icon { width: 100%; max-width: none; }
+  .input-with-icon input { height: 44px; border-radius: 13px; font-size: 13px; }
+  .query-controls .button-primary { width: 100%; }
+  .button { min-height: 44px; border-radius: 13px; font-size: 12px; }
+  .query-hint { font-size: 11px; }
+  .device-detail-tabs { gap: 21px; margin: 2px -15px 15px; padding: 0 15px; }
+  .device-detail-tab { min-height: 46px; font-size: 13px; }
+  .online-map-toolbar, .route-table-heading { align-items: flex-start; flex-direction: column; gap: 10px; padding: 14px; }
+  .online-map-toolbar h3, .route-table-heading h3 { font-size: 18px; }
+  .online-map-actions { width: 100%; display: grid; grid-template-columns: 1fr; gap: 7px; }
+  .online-map-actions .button { width: 100%; }
+  .online-map-frame, .online-map-frame .location-map, .online-map-frame .map-empty { min-height: 390px; height: 390px; }
+  .map-frame, .location-map { min-height: 360px; height: 360px; }
+  .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { min-height: 390px; height: 390px; }
+  .route-planning-toolbar { left: 10px; right: 10px; bottom: 10px; padding: 11px 12px; align-items: flex-start; flex-direction: column; }
+  .route-planning-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .route-planning-actions button { min-height: 38px; }
+  .route-planning-actions button:last-child { grid-column: 1 / -1; }
+  .route-point-confirm-card { left: 10px; right: 10px; top: 10px; width: auto; }
+  .route-preview-badge { left: 10px; bottom: 10px; }
+  .map-command-panel { padding: 14px; border-radius: 19px; }
+  .map-command-panel .remote-grid, .remote-grid { grid-template-columns: 1fr; }
+  .fleet-management-toolbar, .fleet-management-table-heading { align-items: stretch; flex-direction: column; }
+  .fleet-search { width: 100%; max-width: none; }
+  .fleet-management-stats { gap: 10px; }
+  .fleet-list { grid-template-columns: 1fr; }
+  .camera-panel { padding: 13px; border-radius: 19px; }
+  .camera-live-frame { min-height: 280px; height: 280px; }
+  .camera-hud { align-items: flex-start; flex-direction: column; }
+  .camera-channel-grid { grid-template-columns: 1fr; }
+  .remote-target-card { grid-template-columns: 1fr; align-items: flex-start; }
+  .throttle-meta { align-items: flex-start; flex-direction: column; }
+  .throttle-meta span { text-align: left; }
+  .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 68px; }
+  .throttle-inputs .button-secondary { grid-column: 1 / -1; }
+  .lower-grid { grid-template-columns: 1fr; }
+  .toast { top: 76px; max-width: min(420px, calc(100vw - 32px)); padding: 11px 17px; border-radius: 999px; font-size: 13px; }
+}
+
+@media (max-width: 430px) {
+  .stat-grid, .fleet-management-stats { grid-template-columns: 1fr; }
+  .stat-card { min-height: 116px; }
+  .fleet-device-card { align-items: flex-start; flex-direction: column; }
+  .fleet-device-meta { width: 100%; display: flex; justify-content: space-between; text-align: left; }
+}
+
+/* Hydrographic control-room skin */
+:root {
+  font-family: "Bahnschrift", "Aptos", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  color: #172330;
+  background: #e7edf0;
+  --deep: #0b1824;
+  --dock: #13283a;
+  --water: #24516a;
+  --water-soft: #dcecf0;
+  --teal: #18a7a0;
+  --teal-dark: #087a78;
+  --sand: #e9e1d0;
+  --paper: #f4f7f6;
+  --paper-strong: #ffffff;
+  --ink: #172330;
+  --muted: #62727d;
+  --line: rgba(23, 35, 48, .13);
+  --line-strong: rgba(23, 35, 48, .22);
+  --red: #c74b46;
+  --amber: #d28b2e;
+  --shadow: 0 18px 44px rgba(19, 40, 58, .10);
+}
+
+body {
+  background: #e7edf0;
+  color: var(--ink);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(24, 167, 160, .28);
+  outline-offset: 2px;
+}
+
+.app-shell { background: #e7edf0; }
+.sidebar {
+  width: 248px;
+  background: var(--deep);
+  border-right: 1px solid rgba(255,255,255,.09);
+  box-shadow: 10px 0 28px rgba(11,24,36,.16);
+}
+.brand-row {
+  min-height: 88px;
+  padding: 19px 18px;
+  border-bottom-color: rgba(255,255,255,.10);
+}
+.brand-row strong { font-size: 15px; letter-spacing: .06em; }
+.brand-row span { color: rgba(239,247,249,.56); }
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  color: #c8fffa;
+  background: var(--teal-dark);
+  border: 1px solid rgba(151,255,245,.36);
+  box-shadow: 0 10px 20px rgba(8,122,120,.24);
+}
+.sidebar nav { padding: 18px 12px; }
+.nav-group { padding-bottom: 13px; }
+.nav-group-label { padding: 10px 11px 7px; color: rgba(239,247,249,.36); font-size: 10px; letter-spacing: .18em; }
+.nav-item {
+  min-height: 44px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: rgba(239,247,249,.64);
+  font-size: 13px;
+}
+.nav-item:hover { color: #f4fffd; background: rgba(255,255,255,.06); }
+.nav-item-active {
+  color: #f4fffd;
+  background: rgba(24,167,160,.19);
+  border-color: rgba(109,235,225,.33);
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+.sidebar-footer { padding: 16px 19px; border-top-color: rgba(255,255,255,.10); color: rgba(239,247,249,.48); }
+.status-dot-muted { color: #6debdc; box-shadow: 0 0 0 4px rgba(109,235,220,.11); }
+
+.main-content { margin-left: 248px; }
+.topbar {
+  height: 66px;
+  padding: 0 34px;
+  background: rgba(244,247,246,.92);
+  border-bottom-color: rgba(23,35,48,.11);
+  backdrop-filter: blur(16px);
+}
+.breadcrumb { color: #7a8992; font-size: 12px; letter-spacing: .02em; }
+.breadcrumb span { color: var(--ink); }
+.icon-button { border-radius: 10px; color: #657783; }
+.icon-button:hover { color: var(--teal-dark); background: rgba(24,167,160,.10); }
+.user-chip { border-radius: 10px; color: #526572; background: rgba(255,255,255,.68); }
+.avatar { border-radius: 8px; background: var(--dock); color: #d6fffa; }
+.content-area { max-width: 1500px; padding: 30px 34px 42px; }
+
+.page-intro {
+  min-height: 164px;
+  margin-bottom: 22px;
+  padding: 27px 30px;
+  border-radius: 14px;
+  border: 1px solid rgba(126,230,219,.24);
+  color: #eef9f7;
+  background: var(--dock);
+  box-shadow: 0 18px 38px rgba(19,40,58,.16);
+}
+.page-intro::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .35;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 74px, rgba(147,232,223,.08) 75px, transparent 76px), repeating-linear-gradient(0deg, transparent 0, transparent 44px, rgba(147,232,223,.06) 45px, transparent 46px);
+}
+.page-intro::after { right: 30px; top: 25px; width: 210px; height: 88px; border-color: rgba(147,232,223,.22); opacity: .9; }
+.eyebrow { color: #6debdc; font-size: 10px; letter-spacing: .2em; }
+h1 { color: #f5fffd; font-size: clamp(29px, 3.5vw, 43px); letter-spacing: -.045em; }
+.page-description { color: rgba(235,249,247,.68); font-size: 14px; }
+.api-state { color: rgba(235,249,247,.62); font-size: 12px; }
+
+.stat-grid { gap: 14px; margin-bottom: 20px; }
+.stat-card {
+  min-height: 136px;
+  padding: 17px;
+  border-radius: 12px;
+  border-color: rgba(23,35,48,.12);
+  background: #f8faf9;
+  box-shadow: 0 10px 24px rgba(19,40,58,.07);
+}
+.stat-card::before { inset: auto 17px 14px; background: linear-gradient(90deg, rgba(24,167,160,.78), transparent); }
+.stat-icon { width: 38px; height: 38px; margin-bottom: 16px; border-radius: 10px; color: var(--teal-dark); background: #d9f0ed; }
+.stat-label { margin-bottom: 6px; color: #71818a; font-size: 11px; letter-spacing: .10em; }
+.stat-card strong { color: var(--ink); font-size: 24px; }
+.stat-rule { right: 17px; top: 17px; border-color: rgba(24,167,160,.34); }
+
+.location-section,
+.fleet-management-section {
+  padding: 22px;
+  border-radius: 14px;
+  border-color: rgba(23,35,48,.12);
+  background: #f7faf9;
+  box-shadow: var(--shadow);
+}
+.section-heading { margin-bottom: 16px; }
+.section-heading h2 { color: var(--ink); font-size: 20px; letter-spacing: -.025em; }
+.status-badge { padding: 6px 10px; border-radius: 8px; font-size: 11px; letter-spacing: .02em; }
+.status-online { color: #087a78; background: #dff4ef; border-color: rgba(24,167,160,.22); }
+.status-pending { color: #24516a; background: #e3edf1; }
+.status-empty { color: #71818a; background: #e9eef0; }
+
+.location-query { margin-bottom: 18px; padding: 14px; border-radius: 10px; border-color: rgba(23,35,48,.12); background: #edf2f2; }
+.location-query label { color: #536873; font-size: 11px; letter-spacing: .10em; }
+.input-with-icon input { height: 44px; border-radius: 9px; border-color: rgba(23,35,48,.18); color: var(--ink); background: #fbfcfb; }
+.input-with-icon input:focus { border-color: rgba(24,167,160,.8); box-shadow: 0 0 0 4px rgba(24,167,160,.12); }
+.query-hint { color: #73848c; font-size: 11px; }
+.button { min-height: 42px; border-radius: 9px; font-size: 12px; letter-spacing: .01em; }
+.button-primary { color: #f4fffd; background: var(--teal-dark); box-shadow: 0 8px 18px rgba(8,122,120,.18); }
+.button-primary:hover { background: #096d6b; filter: none; }
+.button-secondary { color: var(--water); background: #e0edf0; border-color: rgba(36,81,106,.16); }
+.button-danger { border-radius: 9px; background: var(--red); box-shadow: 0 8px 18px rgba(199,75,70,.16); }
+
+.device-detail-tabs { gap: 25px; margin-bottom: 18px; border-bottom-color: rgba(23,35,48,.12); }
+.device-detail-tab { min-height: 46px; color: #7a8992; font-size: 13px; }
+.device-detail-tab-active { color: var(--teal-dark); }
+.device-detail-tab::after { height: 2px; border-radius: 0; }
+.device-detail-tab-active::after { background: var(--teal); }
+.detail-feature-placeholder { min-height: 310px; border-radius: 12px; border-color: rgba(23,35,48,.16); background: #eef3f2; }
+.empty-icon { width: 46px; height: 46px; margin-bottom: 12px; border-radius: 10px; color: var(--teal-dark); background: #dcefeb; }
+.detail-feature-placeholder h2, .empty-module h2 { color: var(--ink); }
+
+.map-frame { border-radius: 11px; border-color: rgba(23,35,48,.16); background: #dce7e8; }
+.online-map-card, .route-table-card { border-radius: 12px; border-color: rgba(23,35,48,.13); background: #f8faf9; box-shadow: 0 10px 22px rgba(19,40,58,.06); }
+.online-map-toolbar, .route-table-heading { background: #f8faf9; border-bottom-color: rgba(23,35,48,.12); }
+.online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { color: var(--ink); font-size: 17px; }
+.online-map-actions .button { min-height: 35px; border-radius: 8px; }
+.route-planning-toolbar, .route-point-confirm-card { border-radius: 10px; }
+.route-preview-badge { border-radius: 8px; }
+.route-table th, .fleet-management-table th { color: #73848c; background: #edf2f2; font-size: 11px; letter-spacing: .06em; }
+.route-table td, .fleet-management-table td { font-size: 12px; }
+.route-table tbody tr:hover, .fleet-management-table tbody tr:hover { background: #edf7f5; }
+.route-table button, .fleet-management-table button { color: #146a87; font-size: 12px; }
+.route-table .route-table-danger, .fleet-management-table .fleet-table-danger { color: var(--red); }
+
+.fleet-management-toolbar { padding: 12px; border-radius: 10px; background: #edf2f2; }
+.fleet-management-table-card { border-radius: 11px; border-color: rgba(23,35,48,.12); background: #fbfcfb; box-shadow: 0 8px 20px rgba(19,40,58,.05); }
+.fleet-management-table-heading { min-height: 64px; border-bottom-color: rgba(23,35,48,.12); }
+.fleet-device-card { border-radius: 11px; border-color: rgba(23,35,48,.14); background: #f7faf9; box-shadow: none; }
+.fleet-device-card:hover { border-color: rgba(24,167,160,.5); background: #fff; transform: translateY(-1px); }
+.fleet-state { border-radius: 7px; }
+.fleet-state-online { color: #087a78; background: #dff4ef; }
+
+.camera-panel { border-radius: 12px; background: var(--deep); box-shadow: 0 16px 30px rgba(11,24,36,.18); }
+.camera-live-frame { border-radius: 9px; }
+.camera-channel { border-radius: 9px; }
+.remote-panel { border-top-color: rgba(23,35,48,.14); }
+.remote-target-card, .remote-card { border-radius: 11px; }
+.remote-target-card { background: #e8f4f1; border-color: rgba(24,167,160,.22); }
+.remote-card { border-color: rgba(23,35,48,.13); background: #f8faf9; box-shadow: 0 8px 20px rgba(19,40,58,.05); }
+.remote-card-header { color: var(--water); }
+.throttle-control, .switch-control { border-radius: 9px; border-color: rgba(23,35,48,.12); }
+.switch-control-on { border-color: rgba(24,167,160,.44); background: #dff4ef; }
+.switch-control-on .switch-state { background: var(--teal-dark); }
+.toast { top: 76px; border-radius: 8px; }
+
+@media (max-width: 900px) {
+  .content-area { padding: 24px 22px 34px; }
+  .page-intro { padding: 24px; }
+}
+
+@media (max-width: 760px) {
+  .sidebar { width: min(284px, 88vw); }
+  .topbar { height: 60px; padding: 0 14px; }
+  .content-area { padding: 16px 12px 28px; }
+  .page-intro { min-height: 148px; margin-bottom: 14px; padding: 20px 18px; border-radius: 12px; }
+  .page-intro::after { right: 16px; top: 18px; width: 120px; height: 60px; }
+  h1 { max-width: 88%; font-size: 29px; }
+  .page-description { max-width: 94%; font-size: 13px; line-height: 1.6; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .stat-card { min-height: 116px; padding: 13px; border-radius: 10px; }
+  .stat-icon { width: 34px; height: 34px; margin-bottom: 12px; border-radius: 9px; }
+  .stat-card strong { font-size: 20px; }
+  .location-section, .fleet-management-section { padding: 14px; border-radius: 12px; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .location-query { padding: 12px; }
+  .query-controls { align-items: stretch; flex-direction: column; }
+  .input-with-icon { width: 100%; max-width: none; }
+  .query-controls .button-primary { width: 100%; }
+  .device-detail-tabs { gap: 20px; margin: 2px -14px 14px; padding: 0 14px; }
+  .device-detail-tab { min-height: 44px; }
+  .online-map-toolbar, .route-table-heading { align-items: flex-start; flex-direction: column; gap: 10px; padding: 14px; }
+  .online-map-actions { width: 100%; display: grid; grid-template-columns: 1fr; gap: 7px; }
+  .online-map-actions .button { width: 100%; }
+  .online-map-frame, .online-map-frame .location-map, .online-map-frame .map-empty { min-height: 360px; height: 360px; }
+  .map-frame, .location-map { min-height: 320px; height: 320px; }
+  .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { min-height: 360px; height: 360px; }
+  .route-planning-toolbar { left: 9px; right: 9px; bottom: 9px; padding: 11px; align-items: stretch; flex-direction: column; }
+  .route-planning-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .route-planning-actions button { min-height: 38px; }
+  .route-planning-actions button:last-child { grid-column: 1 / -1; }
+  .route-point-confirm-card { left: 9px; right: 9px; top: 9px; width: auto; }
+  .route-preview-badge { left: 9px; bottom: 9px; max-width: calc(100% - 18px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .map-command-panel { padding: 13px; border-radius: 11px; }
+  .map-command-panel .remote-grid, .remote-grid { grid-template-columns: 1fr; }
+  .camera-panel { padding: 12px; border-radius: 11px; }
+  .camera-live-frame { min-height: 250px; height: 250px; }
+  .camera-hud { align-items: flex-start; flex-direction: column; }
+  .camera-channel-grid { grid-template-columns: 1fr; }
+  .remote-target-card { grid-template-columns: 1fr; align-items: flex-start; }
+  .throttle-meta { align-items: flex-start; flex-direction: column; }
+  .throttle-meta span { text-align: left; }
+  .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 68px; }
+  .throttle-inputs .button-secondary { grid-column: 1 / -1; }
+  .lower-grid { grid-template-columns: 1fr; }
+  .fleet-management-toolbar, .fleet-management-table-heading { align-items: stretch; flex-direction: column; }
+  .fleet-search { width: 100%; max-width: none; }
+  .fleet-management-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .fleet-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .stat-grid, .fleet-management-stats { grid-template-columns: 1fr 1fr; }
+  .stat-card strong { font-size: 18px; }
+  .fleet-device-card { align-items: flex-start; flex-direction: column; }
+  .fleet-device-meta { width: 100%; display: flex; justify-content: space-between; text-align: left; }
+  .topbar-actions { gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+@media (min-width: 100000px) {
+/* Second pass: chart-room editorial system */
+:root {
+  font-family: "Aptos", "Bahnschrift", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  color: #151b1f;
+  background: #edf0ee;
+  --deep: #11191b;
+  --dock: #1b292c;
+  --water: #1d4d70;
+  --water-soft: #dce7ee;
+  --teal: #0f8f89;
+  --teal-dark: #08726f;
+  --sand: #e7dfd1;
+  --paper: #f4f2ec;
+  --paper-strong: #fffefa;
+  --ink: #151b1f;
+  --muted: #67747a;
+  --line: #c9d1d1;
+  --line-strong: #9ca9aa;
+  --red: #c84e3d;
+  --amber: #e08a32;
+  --signal: #f06a3c;
+  --shadow: 0 12px 24px rgba(21,27,31,.06);
+}
+
+body {
+  background-color: #edf0ee;
+  background-image: linear-gradient(rgba(21,27,31,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(21,27,31,.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.sidebar {
+  width: 224px;
+  background: var(--deep);
+  border-right: 0;
+  box-shadow: 8px 0 20px rgba(17,25,27,.16);
+}
+.brand-row { min-height: 82px; padding: 17px 16px; border-bottom: 1px solid rgba(255,255,255,.16); }
+.brand-row strong { color: #fffdf5; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
+.brand-row span { color: rgba(255,253,245,.52); font-size: 11px; }
+.brand-mark { width: 38px; height: 38px; border: 0; border-radius: 4px; color: #11191b; background: var(--signal); box-shadow: none; }
+.sidebar nav { padding: 20px 10px; }
+.nav-group { padding-bottom: 18px; }
+.nav-group-label { padding: 9px 10px 6px; color: rgba(255,253,245,.34); font-size: 9px; letter-spacing: .22em; }
+.nav-item { min-height: 40px; gap: 11px; padding: 9px 10px; border-radius: 3px; color: rgba(255,253,245,.62); font-size: 12px; }
+.nav-item:hover { color: #fffdf5; background: rgba(255,255,255,.08); }
+.nav-item-active { color: #fffdf5; background: rgba(240,106,60,.16); border: 0; box-shadow: inset 3px 0 0 var(--signal); }
+.sidebar-footer { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.16); color: rgba(255,253,245,.46); font-size: 11px; }
+.status-dot-muted { color: #7be1d7; box-shadow: 0 0 0 3px rgba(123,225,215,.12); }
+
+.main-content { margin-left: 224px; }
+.topbar { height: 58px; padding: 0 32px; background: rgba(244,242,236,.94); border-bottom: 1px solid #bcc6c7; backdrop-filter: blur(10px); }
+.breadcrumb { color: #7b868a; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.breadcrumb span { color: var(--ink); font-weight: 800; }
+.icon-button { width: 34px; height: 34px; border-radius: 3px; color: #55656b; }
+.icon-button:hover { color: var(--signal); background: rgba(240,106,60,.10); }
+.user-chip { padding: 4px 8px 4px 4px; border-radius: 3px; border-color: #c9d1d1; color: #59696f; background: #fffefa; font-size: 11px; }
+.avatar { width: 27px; height: 27px; border-radius: 2px; background: var(--dock); }
+.content-area { max-width: 1460px; padding: 28px 32px 44px; }
+
+.page-intro {
+  min-height: 148px;
+  margin-bottom: 22px;
+  padding: 25px 28px 22px;
+  border: 1px solid #abb9ba;
+  border-left: 7px solid var(--signal);
+  border-radius: 0;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: none;
+}
+.page-intro::before { inset: 0 0 0 auto; width: 42%; opacity: .9; background: repeating-linear-gradient(135deg, transparent 0 16px, rgba(29,77,112,.08) 17px 18px); }
+.page-intro::after { right: 28px; top: 24px; width: 176px; height: 78px; border-top-color: rgba(29,77,112,.35); border-bottom-color: rgba(29,77,112,.20); opacity: 1; }
+.page-intro .eyebrow { color: var(--signal); }
+.eyebrow { color: var(--signal); font-size: 9px; letter-spacing: .24em; }
+h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; letter-spacing: -.055em; }
+.page-description { color: #59686e; font-size: 13px; line-height: 1.65; }
+.api-state { color: #5f6e74; font-size: 11px; }
+
+.stat-grid { gap: 12px; margin-bottom: 20px; }
+.stat-card { min-height: 126px; padding: 16px; border: 1px solid #c4cdcd; border-top: 3px solid var(--water); border-radius: 2px; background: var(--paper-strong); box-shadow: none; }
+.stat-card::before { inset: auto 16px 12px; background: var(--signal); opacity: .72; }
+.stat-icon { width: 34px; height: 34px; margin-bottom: 13px; border-radius: 2px; color: var(--water); background: var(--water-soft); }
+.stat-label { margin-bottom: 5px; color: #728087; font-size: 10px; letter-spacing: .14em; }
+.stat-card strong { color: var(--ink); font-size: 23px; font-weight: 850; }
+.stat-rule { right: 16px; top: 16px; width: 32px; border-color: rgba(240,106,60,.58); }
+
+.location-section, .fleet-management-section { padding: 20px; border: 1px solid #bdc8c9; border-top: 3px solid var(--water); border-radius: 2px; background: var(--paper); box-shadow: none; }
+.section-heading { margin-bottom: 15px; }
+.section-heading h2 { color: var(--ink); font-size: 20px; font-weight: 800; letter-spacing: -.03em; }
+.status-badge { padding: 5px 8px; border-radius: 2px; font-size: 10px; }
+.status-online { color: #08726f; background: #d9eeeb; border-color: #a8d8d2; }
+.status-pending { color: var(--water); background: #e0e9ef; }
+.status-empty { color: #6e7a7e; background: #e7ecec; }
+
+.location-query { margin-bottom: 17px; padding: 13px; border: 1px solid #c7d0d0; border-radius: 2px; background: #e8edec; }
+.location-query label { color: #4f6066; font-size: 10px; letter-spacing: .14em; }
+.input-with-icon input { height: 42px; border-radius: 2px; border-color: #aebbbc; color: var(--ink); background: #fffefa; }
+.input-with-icon input:focus { border-color: var(--signal); box-shadow: 0 0 0 3px rgba(240,106,60,.14); }
+.query-hint { color: #77858a; font-size: 10px; }
+.button { min-height: 40px; border-radius: 2px; font-size: 11px; font-weight: 850; letter-spacing: .05em; }
+.button-primary { color: #fffefa; background: var(--water); box-shadow: none; }
+.button-primary:hover { background: #143b58; filter: none; }
+.button-secondary { color: var(--water); background: #e1e9ed; border-color: #b3c5cc; }
+.button-secondary:hover { color: #143b58; background: #d4e2e8; }
+.button-danger { border-radius: 2px; background: var(--red); box-shadow: none; }
+
+.device-detail-tabs { gap: 23px; margin-bottom: 17px; border-bottom-color: #bac5c6; }
+.device-detail-tab { min-height: 44px; color: #78858a; font-size: 12px; }
+.device-detail-tab-active { color: var(--water); }
+.device-detail-tab::after { height: 3px; border-radius: 0; }
+.device-detail-tab-active::after { background: var(--signal); }
+.detail-feature-placeholder { min-height: 300px; border: 1px dashed #aebbbc; border-radius: 2px; background: #e7eceb; }
+.empty-icon { width: 42px; height: 42px; margin-bottom: 11px; border-radius: 2px; color: var(--water); background: var(--water-soft); }
+
+.map-frame { border: 1px solid #aebbbc; border-radius: 2px; background: #d8e2e3; box-shadow: none; }
+.online-map-card, .route-table-card { border: 1px solid #bdc8c9; border-radius: 2px; background: var(--paper); box-shadow: none; }
+.online-map-toolbar, .route-table-heading { background: var(--paper); border-bottom-color: #bdc8c9; }
+.online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { color: var(--ink); font-size: 16px; font-weight: 800; }
+.online-map-actions .button { min-height: 34px; border-radius: 2px; }
+.route-planning-toolbar, .route-point-confirm-card { border: 1px solid #aebbbc; border-radius: 2px; box-shadow: 0 8px 16px rgba(21,27,31,.14); }
+.route-preview-badge { border-radius: 2px; color: var(--water); border-color: #9bbbc8; background: #eef4f5; }
+.route-table th, .fleet-management-table th { color: #64747a; background: #e5ebea; font-size: 10px; letter-spacing: .12em; }
+.route-table td, .fleet-management-table td { font-size: 12px; }
+.route-table tbody tr:hover, .fleet-management-table tbody tr:hover { background: #edf5f3; }
+.route-table button, .fleet-management-table button { color: var(--water); font-size: 11px; }
+.route-table .route-table-danger, .fleet-management-table .fleet-table-danger { color: var(--red); }
+
+.fleet-management-toolbar { padding: 11px; border-radius: 2px; background: #e8edec; }
+.fleet-management-table-card { border: 1px solid #bdc8c9; border-radius: 2px; background: var(--paper-strong); box-shadow: none; }
+.fleet-management-table-heading { min-height: 60px; border-bottom-color: #bdc8c9; }
+.fleet-device-card { border: 1px solid #c1cbcc; border-radius: 2px; background: var(--paper-strong); box-shadow: none; }
+.fleet-device-card:hover { border-color: var(--signal); background: #fffefa; transform: translateY(-1px); }
+.fleet-state { border-radius: 2px; }
+.fleet-state-online { color: #08726f; background: #d9eeeb; }
+
+.camera-panel { border-radius: 2px; background: var(--deep); box-shadow: none; }
+.camera-live-frame, .camera-channel { border-radius: 2px; }
+.camera-status { border-radius: 2px; }
+.remote-panel { border-top-color: #bdc8c9; }
+.remote-target-card, .remote-card { border-radius: 2px; }
+.remote-target-card { background: #e5f0ee; border-color: #add4cf; }
+.remote-card { border-color: #c0cbcb; background: var(--paper); box-shadow: none; }
+.remote-card-header { color: var(--water); }
+.throttle-control, .switch-control { border-radius: 2px; border-color: #c0cbcb; }
+.switch-control-on { border-color: #7fc6bf; background: #e1f1ee; }
+.switch-control-on .switch-state { background: var(--teal-dark); border-radius: 2px; }
+.toast { top: 68px; border-radius: 2px; }
+
+@media (max-width: 760px) {
+  .sidebar { width: min(276px, 88vw); }
+  .topbar { height: 56px; padding: 0 13px; }
+  .content-area { padding: 15px 11px 28px; }
+  .page-intro { min-height: 142px; margin-bottom: 14px; padding: 20px 17px; border-left-width: 5px; }
+  .page-intro::before { width: 55%; }
+  .page-intro::after { right: 14px; top: 17px; width: 112px; height: 56px; }
+  h1 { max-width: 92%; font-size: 29px; }
+  .page-description { max-width: 95%; font-size: 12px; }
+  .stat-grid { gap: 8px; }
+  .stat-card { min-height: 110px; padding: 12px; }
+  .stat-card strong { font-size: 19px; }
+  .stat-icon { width: 31px; height: 31px; margin-bottom: 10px; }
+  .location-section, .fleet-management-section { padding: 13px; border-top-width: 2px; }
+  .section-heading { gap: 8px; }
+  .location-query { padding: 11px; }
+  .query-controls { align-items: stretch; flex-direction: column; }
+  .input-with-icon { width: 100%; max-width: none; }
+  .query-controls .button-primary { width: 100%; }
+  .device-detail-tabs { gap: 18px; margin: 2px -13px 14px; padding: 0 13px; }
+  .device-detail-tab { min-height: 42px; font-size: 11px; }
+  .online-map-toolbar, .route-table-heading { align-items: flex-start; flex-direction: column; gap: 9px; padding: 13px; }
+  .online-map-actions { width: 100%; display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .online-map-actions .button { width: 100%; }
+  .online-map-frame, .online-map-frame .location-map, .online-map-frame .map-empty { min-height: 350px; height: 350px; }
+  .map-frame, .location-map { min-height: 310px; height: 310px; }
+  .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { min-height: 350px; height: 350px; }
+  .route-planning-toolbar { left: 8px; right: 8px; bottom: 8px; padding: 10px; }
+  .route-planning-actions button { min-height: 37px; }
+  .camera-panel { padding: 11px; }
+  .camera-live-frame { min-height: 240px; height: 240px; }
+  .map-command-panel { padding: 12px; }
+  .fleet-management-stats { gap: 8px; }
+}
+
+@media (max-width: 430px) {
+  .stat-card strong { font-size: 17px; }
+  .stat-label { font-size: 9px; letter-spacing: .10em; }
+  .fleet-device-meta { display: flex; width: 100%; justify-content: space-between; text-align: left; }
+}
+}
+
+/* Desktop scale override must come after the first-theme rules */
+@media (min-width: 761px) {
+  .sidebar { width: 276px; }
+  .main-content { margin-left: 276px; }
+  .brand-row { min-height: 104px; padding: 24px 21px; gap: 14px; }
+  .brand-mark { width: 48px; height: 48px; border-radius: 15px; }
+  .brand-row strong { font-size: 17px; }
+  .brand-row span { margin-top: 5px; font-size: 13px; }
+  .sidebar nav { padding: 20px 13px; }
+  .nav-group-label { padding: 11px 13px 8px; font-size: 12px; }
+  .nav-item { min-height: 48px; gap: 13px; padding: 11px 14px; border-radius: 15px; font-size: 15px; }
+  .sidebar-footer { padding: 19px 22px; font-size: 13px; }
+  .topbar { height: 78px; padding: 0 40px; }
+  .breadcrumb { gap: 8px; font-size: 14px; }
+  .icon-button { width: 44px; height: 44px; border-radius: 14px; }
+  .user-chip { gap: 11px; padding: 6px 12px 6px 6px; font-size: 14px; }
+  .avatar { width: 36px; height: 36px; }
+  .content-area { max-width: 1600px; padding: 38px 40px 52px; }
+  .page-intro { min-height: 188px; margin-bottom: 26px; padding: 34px 36px; border-radius: 28px; }
+  .page-intro::after { right: 34px; top: 32px; width: 230px; height: 100px; }
+  .eyebrow { margin-bottom: 11px; font-size: 12px; letter-spacing: .18em; }
+  h1 { margin-bottom: 11px; font-size: clamp(37px, 4vw, 56px); }
+  .page-description { max-width: 760px; font-size: 17px; line-height: 1.7; }
+  .api-state { gap: 10px; font-size: 14px; }
+  .stat-grid { gap: 19px; margin-bottom: 24px; }
+  .stat-card { min-height: 172px; padding: 22px; border-radius: 24px; }
+  .stat-card::before { right: 22px; bottom: 17px; left: 22px; }
+  .stat-icon { width: 50px; height: 50px; margin-bottom: 20px; border-radius: 17px; }
+  .stat-label { margin-bottom: 9px; font-size: 14px; }
+  .stat-card strong { font-size: 31px; }
+  .stat-rule { top: 22px; right: 22px; width: 52px; height: 10px; }
+  .location-section, .fleet-management-section { padding: 29px; border-radius: 28px; }
+  .section-heading { margin-bottom: 22px; }
+  .section-heading h2 { font-size: 26px; }
+  .status-badge { gap: 9px; padding: 9px 13px; border-radius: 999px; font-size: 13px; }
+  .location-query { margin-bottom: 23px; padding: 18px; border-radius: 20px; }
+  .location-query label { margin-bottom: 10px; font-size: 13px; }
+  .query-controls { gap: 13px; }
+  .input-with-icon input { height: 52px; padding-left: 46px; border-radius: 16px; font-size: 15px; }
+  .input-with-icon > svg { left: 15px; }
+  .device-list-toggle { right: 8px; width: 37px; height: 37px; border-radius: 11px; }
+  .query-hint { margin-top: 10px; font-size: 13px; }
+  .button { min-height: 52px; padding: 0 20px; border-radius: 15px; font-size: 14px; }
+  .form-error { margin-top: 13px; font-size: 15px; }
+  .device-detail-tabs { gap: 31px; margin: 5px -29px 23px; padding: 0 29px; }
+  .device-detail-tab { min-height: 56px; font-size: 15px; }
+  .detail-feature-placeholder { min-height: 390px; padding: 34px; border-radius: 24px; }
+  .detail-feature-placeholder h2 { font-size: 22px; }
+  .detail-feature-placeholder span { max-width: 650px; font-size: 15px; }
+  .empty-icon { width: 60px; height: 60px; margin-bottom: 16px; border-radius: 19px; }
+  .online-map-layout { gap: 20px; }
+  .online-map-card, .route-table-card { border-radius: 20px; }
+  .online-map-toolbar, .route-table-heading { min-height: 82px; padding: 18px 23px; }
+  .online-map-toolbar h3, .route-table-heading h3, .fleet-management-table-heading h3 { font-size: 21px; }
+  .online-map-actions { gap: 11px; }
+  .online-map-actions .button { min-height: 44px; padding: 0 16px; border-radius: 12px; font-size: 13px; }
+  .online-map-frame { height: 650px; min-height: 650px; }
+  .online-map-frame .location-map, .online-map-frame .map-empty { height: 650px; }
+  .map-frame { min-height: 480px; border-radius: 24px; }
+  .location-map { height: 480px; }
+  .fleet-map-frame { min-height: 590px; }
+  .fleet-map { height: 590px; }
+  .fleet-map-frame .map-empty { height: 590px; }
+  .map-empty { height: 480px; gap: 12px; }
+  .map-empty strong { font-size: 18px; }
+  .map-empty span { font-size: 14px; }
+  .route-planning-toolbar { right: 22px; bottom: 22px; left: 22px; gap: 18px; padding: 16px 18px; border-radius: 18px; }
+  .route-planning-toolbar strong { font-size: 16px; }
+  .route-planning-toolbar span { font-size: 14px; }
+  .route-planning-actions { gap: 10px; }
+  .route-planning-actions button, .route-point-confirm-actions button { min-height: 42px; padding: 0 14px; border-radius: 11px; font-size: 13px; }
+  .route-point-confirm-card { top: 22px; right: 22px; width: min(360px, calc(100% - 44px)); padding: 18px; border-radius: 18px; }
+  .route-point-confirm-card strong { font-size: 16px; }
+  .route-point-confirm-card span, .route-point-confirm-card label { font-size: 13px; }
+  .route-point-confirm-card input { height: 44px; border-radius: 12px; font-size: 14px; }
+  .route-preview-badge { bottom: 22px; left: 22px; padding: 11px 14px; border-radius: 999px; font-size: 13px; }
+  .map-command-panel { padding: 23px; border-radius: 23px; }
+  .route-table-wrap, .fleet-management-table-wrap { padding: 20px 23px 25px; }
+  .route-table th, .fleet-management-table th { padding: 16px 18px; font-size: 13px; }
+  .route-table td, .fleet-management-table td { padding: 18px; font-size: 15px; }
+  .route-table button, .fleet-management-table button { margin-right: 16px; font-size: 14px; }
+  .fleet-management-toolbar { margin-bottom: 18px; padding: 17px; border-radius: 18px; }
+  .fleet-management-stats { gap: 17px; margin-bottom: 20px; }
+  .fleet-management-table-card { border-radius: 20px; }
+  .fleet-management-table-heading { min-height: 82px; padding: 19px 23px; }
+  .fleet-management-table-heading span:not(.status-badge), .route-table-heading span:not(.status-badge) { margin-top: 8px; font-size: 14px; }
+  .fleet-list { gap: 16px; margin-top: 21px; }
+  .fleet-device-card { gap: 17px; padding: 18px; border-radius: 18px; }
+  .fleet-device-card strong { margin-bottom: 6px; font-size: 16px; }
+  .fleet-device-card span { font-size: 13px; }
+  .fleet-device-meta span:first-child { font-size: 14px; }
+  .empty-module { min-height: 220px; padding: 30px; border-radius: 24px; }
+  .empty-module h2 { font-size: 20px; }
+  .empty-module p, .empty-module span { font-size: 15px; }
+  .camera-panel { padding: 20px; border-radius: 23px; }
+  .route-panel-header { margin-bottom: 19px; }
+  .panel-title-with-icon strong { font-size: 16px; }
+  .panel-title-with-icon span { font-size: 13px; }
+  .camera-status { padding: 9px 12px; border-radius: 999px; font-size: 12px; }
+  .camera-live-frame { min-height: 390px; border-radius: 19px; }
+  .camera-live-topbar, .camera-hud { right: 18px; left: 18px; }
+  .camera-live-topbar { top: 18px; }
+  .camera-live-topbar span, .camera-hud span { font-size: 13px; }
+  .camera-live-topbar strong { padding: 6px 10px; font-size: 11px; }
+  .camera-hud { bottom: 18px; padding: 12px 14px; border-radius: 14px; }
+  .camera-channel-grid { gap: 12px; margin-top: 16px; }
+  .camera-channel { gap: 12px; padding: 13px; border-radius: 15px; }
+  .camera-channel-preview { width: 46px; height: 46px; border-radius: 12px; }
+  .camera-channel strong { font-size: 14px; }
+  .camera-channel small { font-size: 11px; }
+  .remote-panel { margin-top: 24px; padding-top: 26px; }
+  .remote-subtitle { font-size: 14px; }
+  .remote-target-card { gap: 15px; margin-bottom: 18px; padding: 18px 20px; border-radius: 17px; }
+  .remote-target-card span { font-size: 12px; }
+  .remote-target-card strong { font-size: 17px; }
+  .remote-target-card small { font-size: 13px; }
+  .remote-grid { gap: 18px; }
+  .remote-card { padding: 20px; border-radius: 19px; }
+  .remote-card-header { margin-bottom: 17px; }
+  .remote-card-header strong { font-size: 16px; }
+  .remote-card-header span { font-size: 13px; }
+  .throttle-list { gap: 15px; }
+  .throttle-control { padding: 16px; border-radius: 15px; }
+  .throttle-meta strong { font-size: 15px; }
+  .throttle-meta span { font-size: 13px; }
+  .throttle-inputs { grid-template-columns: minmax(130px, 1fr) 82px auto; gap: 11px; }
+  .throttle-value { height: 44px; border-radius: 11px; font-size: 14px; }
+  .switch-grid { gap: 12px; margin-bottom: 17px; }
+  .switch-control { min-height: 87px; padding: 15px; border-radius: 15px; }
+  .switch-control strong { font-size: 15px; }
+  .switch-control small { font-size: 11px; }
+  .switch-state { min-width: 50px; padding: 6px 9px; border-radius: 999px; font-size: 13px; }
+  .toast { top: 92px; padding: 13px 20px; border-radius: 999px; font-size: 14px; }
+}

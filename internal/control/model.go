@@ -18,16 +18,27 @@ const (
 	// DefaultTTLMS 是遥控指令默认有效期，避免艇端执行过期命令。
 	DefaultTTLMS = 800
 	MaxTTLMS     = 5000
+
+	HeartbeatInterval = 500 * time.Millisecond
 )
 
 var commandRanges = map[string]struct{ min, max int }{
-	"THROTTLE_L":     {-100, 100},
-	"THROTTLE_R":     {-100, 100},
+	"THROTTLE_L":     {0, 100},
+	"THROTTLE_R":     {0, 100},
 	"HATCH_CYLINDER": {0, 1},
 	"DISC_CYLINDER":  {0, 1},
 	"CONVEYOR":       {0, 1},
 	"BRUSH_L":        {0, 1},
 	"BRUSH_R":        {0, 1},
+	"OPERATING_MODE": {0, 1},
+	"CLEANING":       {0, 1},
+	"TRACKING":       {0, 1},
+	"PADDLE_POWER":   {0, 1},
+}
+
+var parameterlessCommands = map[string]int{
+	"HEARTBEAT": 17,
+	"STOP":      23,
 }
 
 // ValidationError 表示请求本身非法，调用方应返回 400 而不是重试发布。
@@ -70,19 +81,40 @@ type RemoteCommandEnvelope struct {
 	Values    map[string]int `json:"values"`
 }
 
-// DeviceCommandPayload 是真正发给艇端 MQTT topic 的精简报文格式。
-type DeviceCommandPayload struct {
-	Cmd       string `json:"cmd"`
-	Value     int    `json:"value"`
-	Timestamp int64  `json:"timestamp"`
-}
+// DeviceCommandPayload 是艇端 IF_CC2IIP 协议要求的纯数字数组。
+type DeviceCommandPayload []int
 
-// DevicePayload 返回艇端当前协议要求的 cmd/value/timestamp 报文。
+// DevicePayload 把语义化指令编码成艇端协议数组。
 func (e RemoteCommandEnvelope) DevicePayload() DeviceCommandPayload {
-	return DeviceCommandPayload{
-		Cmd:       e.Command,
-		Value:     e.Value,
-		Timestamp: e.IssuedAt,
+	if code, ok := parameterlessCommands[e.Command]; ok {
+		return DeviceCommandPayload{code}
+	}
+
+	switch e.Command {
+	case "OPERATING_MODE":
+		return DeviceCommandPayload{20, e.Value}
+	case "TRACKING":
+		return DeviceCommandPayload{24, e.Value}
+	case "CLEANING":
+		return DeviceCommandPayload{38, e.Value}
+	case "THROTTLE_L":
+		return DeviceCommandPayload{39, 0, e.Value}
+	case "THROTTLE_R":
+		return DeviceCommandPayload{39, 1, e.Value}
+	case "BRUSH_L":
+		return DeviceCommandPayload{36, 1, e.Value}
+	case "BRUSH_R":
+		return DeviceCommandPayload{36, 2, e.Value}
+	case "CONVEYOR":
+		return DeviceCommandPayload{36, 3, e.Value}
+	case "PADDLE_POWER":
+		return DeviceCommandPayload{36, 4, e.Value}
+	case "DISC_CYLINDER":
+		return DeviceCommandPayload{36, 5, e.Value}
+	case "HATCH_CYLINDER":
+		return DeviceCommandPayload{36, 6, e.Value}
+	default:
+		return nil
 	}
 }
 
@@ -132,27 +164,25 @@ func normalizeRequest(request RemoteCommandRequest) (RemoteCommandRequest, error
 	if command == "" {
 		return RemoteCommandRequest{}, errors.New("command is required")
 	}
-	if command != "TURN_OFF" {
-		if _, ok := commandRanges[command]; !ok {
-			return RemoteCommandRequest{}, fmt.Errorf("unsupported command: %s", command)
-		}
+	_, isParameterless := parameterlessCommands[command]
+	if _, ok := commandRanges[command]; !ok && !isParameterless {
+		return RemoteCommandRequest{}, fmt.Errorf("unsupported command: %s", command)
 	}
 
-	values, err := normalizeValues(request.Values)
-	if err != nil {
-		return RemoteCommandRequest{}, err
-	}
-
-	if command == "TURN_OFF" {
+	if isParameterless {
 		if request.Value != 0 {
-			return RemoteCommandRequest{}, errors.New("TURN_OFF value must be 0")
+			return RemoteCommandRequest{}, fmt.Errorf("%s value must be 0", command)
 		}
-		for key, value := range values {
-			if value != 0 {
-				return RemoteCommandRequest{}, fmt.Errorf("TURN_OFF requires %s to be 0", key)
-			}
+		request.Values = nil
+	} else {
+		values, err := normalizeValues(request.Values)
+		if err != nil {
+			return RemoteCommandRequest{}, err
 		}
-	} else if values[command] != request.Value {
+		request.Values = values
+	}
+
+	if !isParameterless && request.Values[command] != request.Value {
 		return RemoteCommandRequest{}, fmt.Errorf("command value does not match values[%s]", command)
 	}
 
@@ -167,7 +197,7 @@ func normalizeRequest(request RemoteCommandRequest) (RemoteCommandRequest, error
 	return RemoteCommandRequest{
 		Command: command,
 		Value:   request.Value,
-		Values:  values,
+		Values:  request.Values,
 		TTLMS:   ttlMS,
 	}, nil
 }
@@ -179,10 +209,7 @@ func normalizeValues(values map[string]int) (map[string]int, error) {
 
 	normalized := make(map[string]int, len(commandRanges))
 	for command, commandRange := range commandRanges {
-		value, ok := values[command]
-		if !ok {
-			return nil, fmt.Errorf("values.%s is required", command)
-		}
+		value := values[command]
 		if value < commandRange.min || value > commandRange.max {
 			return nil, fmt.Errorf("values.%s out of range", command)
 		}

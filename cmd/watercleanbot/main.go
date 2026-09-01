@@ -77,6 +77,15 @@ func main() {
 	}, log)
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
+	} else {
+		go commandPublisher.StartHeartbeat(appCtx, func() []string {
+			positions := locationStore.List()
+			targets := make([]string, 0, len(positions))
+			for _, position := range positions {
+				targets = append(targets, position.RobotName)
+			}
+			return targets
+		})
 	}
 
 	server := &http.Server{

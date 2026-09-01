@@ -30,9 +30,9 @@ func TestBuildRemoteCommandAcceptsValidThrottleCommand(t *testing.T) {
 func TestDevicePayloadMatchesUSVCommandProtocol(t *testing.T) {
 	command, err := BuildRemoteCommand("USV-001", 7, RemoteCommandRequest{
 		Command: "THROTTLE_L",
-		Value:   -30,
+		Value:   30,
 		Values: map[string]int{
-			"THROTTLE_L":     -30,
+			"THROTTLE_L":     30,
 			"THROTTLE_R":     0,
 			"HATCH_CYLINDER": 0,
 			"DISC_CYLINDER":  0,
@@ -50,24 +50,12 @@ func TestDevicePayloadMatchesUSVCommandProtocol(t *testing.T) {
 		t.Fatalf("json.Marshal(DevicePayload()) error = %v", err)
 	}
 
-	var decoded map[string]any
+	var decoded []int
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal(payload) error = %v", err)
 	}
-	if _, ok := decoded["cmd"]; !ok {
-		t.Fatalf("payload missing cmd: %s", payload)
-	}
-	if _, ok := decoded["value"]; !ok {
-		t.Fatalf("payload missing value: %s", payload)
-	}
-	if _, ok := decoded["timestamp"]; !ok {
-		t.Fatalf("payload missing timestamp: %s", payload)
-	}
-	if _, ok := decoded["command"]; ok {
-		t.Fatalf("payload should not contain legacy command field: %s", payload)
-	}
-	if _, ok := decoded["values"]; ok {
-		t.Fatalf("payload should not contain legacy values field: %s", payload)
+	if len(decoded) != 3 || decoded[0] != 39 || decoded[1] != 0 || decoded[2] != 30 {
+		t.Fatalf("payload = %s, want [39,0,30]", payload)
 	}
 }
 

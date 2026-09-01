@@ -46,8 +46,8 @@ const DEFAULT_DEVICE_ID = '清澜一号';
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 
 const REMOTE_THROTTLE_COMMANDS = Object.freeze([
-  { cmd: 'THROTTLE_L', label: '左油门', hint: '正=正转，负=反转' },
-  { cmd: 'THROTTLE_R', label: '右油门', hint: '正=正转，负=反转' },
+  { cmd: 'THROTTLE_L', label: '左油门', hint: '范围 0-100' },
+  { cmd: 'THROTTLE_R', label: '右油门', hint: '范围 0-100' },
 ]);
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
@@ -56,6 +56,10 @@ const REMOTE_SWITCH_COMMANDS = Object.freeze([
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_R', label: '右滚刷', onText: '开启', offText: '关闭' },
+  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '自主', offText: '手动' },
+  { cmd: 'CLEANING', label: '垃圾清理', onText: '运行', offText: '停止' },
+  { cmd: 'TRACKING', label: '循迹', onText: '开启', offText: '关闭' },
+  { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电' },
 ]);
 
 const CAMERA_CHANNELS = Object.freeze([
@@ -89,6 +93,10 @@ const INITIAL_REMOTE_VALUES = Object.freeze({
   CONVEYOR: 0,
   BRUSH_L: 0,
   BRUSH_R: 0,
+  OPERATING_MODE: 0,
+  CLEANING: 0,
+  TRACKING: 0,
+  PADDLE_POWER: 0,
 });
 
 let amapPromise;
@@ -1475,13 +1483,13 @@ function RemoteControlPanel({ position, onToast }) {
     setSendingCommand(cmd);
 
     try {
-      await sendRobotCommand(target, {
+      const result = await sendRobotCommand(target, {
         command: cmd,
         value,
         values: nextValues,
         ttlMs: 800,
       });
-      onToast?.('遥控指令已发布', 'success');
+      onToast?.(`已发布 ${JSON.stringify(result.protocol || [])}`, 'success');
       return true;
     } catch (error) {
       const message = getRemoteCommandErrorMessage(error);
@@ -1493,7 +1501,7 @@ function RemoteControlPanel({ position, onToast }) {
   }
 
   function updateThrottle(cmd, rawValue) {
-    const nextValue = clamp(Math.round(Number(rawValue) || 0), -100, 100);
+    const nextValue = clamp(Math.round(Number(rawValue) || 0), 0, 100);
     setValues((currentValues) => ({ ...currentValues, [cmd]: nextValue }));
   }
 
@@ -1510,14 +1518,6 @@ function RemoteControlPanel({ position, onToast }) {
     if (!sent) setValues(previousValues);
   }
 
-  async function turnOffAll() {
-    const previousValues = values;
-    const nextValues = { ...INITIAL_REMOTE_VALUES };
-    setValues(nextValues);
-    const sent = await submitRemoteCommand('TURN_OFF', 0, '全部关闭', '复位完成', nextValues);
-    if (!sent) setValues(previousValues);
-  }
-
   return (
     <section className="remote-panel" aria-label="遥控调试面板">
       <div className="section-heading remote-heading">
@@ -1529,29 +1529,30 @@ function RemoteControlPanel({ position, onToast }) {
         <span className="status-badge status-pending">MQTT 下发</span>
       </div>
 
-      <div className="remote-target-card">
-        <span>控制对象</span>
-        <strong>{remoteDeviceId || '请先查询设备'}</strong>
-        <small>{hasRemoteTarget ? '下方遥控指令将只作用于当前设备。' : '查询到设备位置后即可进行遥控操作。'}</small>
-      </div>
+      <div className="command-console">
+        <div className="command-target-bar">
+          <span>控制对象</span>
+          <strong>{remoteDeviceId || '请先查询设备'}</strong>
+          <small>{hasRemoteTarget ? '下方指令只作用于当前设备' : '查询到设备位置后即可进行遥控操作'}</small>
+        </div>
 
-      <div className="remote-grid">
-        <div className="remote-card">
-          <div className="remote-card-header">
-            <Gauge size={18} />
-            <div><strong>双油门</strong><span>后退 / 停止 / 前进</span></div>
-          </div>
-          <div className="throttle-list">
-            {REMOTE_THROTTLE_COMMANDS.map((command) => (
-              <div className="throttle-control" key={command.cmd}>
-                <div className="throttle-meta">
-                  <strong>{command.label}</strong>
-                  <span>{command.hint}</span>
-                </div>
-                <div className="throttle-inputs">
+        <div className="command-sections">
+          <section className="command-section throttle-card">
+            <div className="remote-card-header">
+              <Gauge size={18} />
+              <div><strong>双油门</strong><span>后退 / 停止 / 前进</span></div>
+            </div>
+            <div className="throttle-list">
+              {REMOTE_THROTTLE_COMMANDS.map((command) => (
+                <div className="throttle-control" key={command.cmd}>
+                  <div className="throttle-meta">
+                    <strong>{command.label}</strong>
+                    <span>{command.hint}</span>
+                  </div>
+                  <div className="throttle-inputs">
                   <input
                     type="range"
-                    min="-100"
+                    min="0"
                     max="100"
                     step="1"
                     value={values[command.cmd]}
@@ -1562,46 +1563,45 @@ function RemoteControlPanel({ position, onToast }) {
                   <input
                     className="throttle-value"
                     type="number"
-                    min="-100"
+                    min="0"
                     max="100"
                     value={values[command.cmd]}
                     disabled={!hasRemoteTarget || isSending}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                  <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isSending}>{sendingCommand === command.cmd ? '发送中' : '下发'}</button>
+                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isSending}>{sendingCommand === command.cmd ? '发送中' : '下发'}</button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </section>
 
-        <div className="remote-card">
-          <div className="remote-card-header">
-            <Settings2 size={18} />
-            <div><strong>执行机构</strong><span>点击切换设备状态</span></div>
-          </div>
-          <div className="switch-grid">
-            {REMOTE_SWITCH_COMMANDS.map((command) => {
-              const enabled = values[command.cmd] === 1;
-              return (
-                <button
-                  className={`switch-control ${enabled ? 'switch-control-on' : ''}`}
-                  type="button"
-                  key={command.cmd}
-                  onClick={() => toggleSwitch(command)}
-                  disabled={!hasRemoteTarget || isSending}
-                  aria-pressed={enabled}
-                >
-                  <span><strong>{command.label}</strong><small>点击切换</small></span>
-                  <span className="switch-state">{enabled ? command.onText : command.offText}</span>
-                </button>
-              );
-            })}
-          </div>
-          <button className="button button-danger" type="button" onClick={turnOffAll} disabled={!hasRemoteTarget || isSending}>{sendingCommand === 'TURN_OFF' ? '发送中' : '全部关闭 / 一键复位'}</button>
+          <section className="command-section actuator-card">
+            <div className="remote-card-header">
+              <Settings2 size={18} />
+              <div><strong>执行机构</strong><span>点击切换设备状态</span></div>
+            </div>
+            <div className="switch-grid">
+              {REMOTE_SWITCH_COMMANDS.map((command) => {
+                const enabled = values[command.cmd] === 1;
+                return (
+                  <button
+                    className={`switch-control ${enabled ? 'switch-control-on' : ''}`}
+                    type="button"
+                    key={command.cmd}
+                    onClick={() => toggleSwitch(command)}
+                    disabled={!hasRemoteTarget || isSending}
+                    aria-pressed={enabled}
+                  >
+                    <span><strong>{command.label}</strong><small>点击切换</small></span>
+                    <span className="switch-state">{enabled ? command.onText : command.offText}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         </div>
-
       </div>
     </section>
   );

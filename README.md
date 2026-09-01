@@ -63,7 +63,11 @@ Content-Type: application/json
     "DISC_CYLINDER": 0,
     "CONVEYOR": 0,
     "BRUSH_L": 0,
-    "BRUSH_R": 0
+    "BRUSH_R": 0,
+    "OPERATING_MODE": 0,
+    "CLEANING": 0,
+    "TRACKING": 0,
+    "PADDLE_POWER": 0
   }
 }
 ```
@@ -138,7 +142,19 @@ MQTT 订阅机器人定位消息
   -> 前端显示已发布或失败
 ```
 
-发布给艇端的 MQTT 报文包含 `commandId`、`seq`、`issuedAt`、`ttlMs` 和完整 `values` 目标状态。指令不使用 retain；生产环境应增加艇端 ACK topic、权限、审计和急停策略。
+HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校验与状态维护；发布给艇端的 MQTT payload 则按 IF_CC2IIP 协议编码为纯数字 JSON 数组：
+
+```text
+心跳              [17]          以 2Hz 自动发送
+控制模式切换      [20,p1]       p1: 0 手动，1 自主
+停船              [23]
+循迹开关          [24,p1]       p1: 0 停止，1 开始
+电源开关          [36,p1,p2]    p1: 1-6 分路编号，p2: 0 关闭，1 开启
+垃圾清理开关      [38,p1]       p1: 0 停止，1 开始
+设置目标油门      [39,p1,p2]    p1: 0 左，1 右；p2: 0-100
+```
+
+例如，左油门设为 30 发布 `[39,0,30]`，明轮上电发布 `[36,4,1]`。HTTP 成功响应中的 `protocol` 字段会返回同一数组，供前端显示实际下发内容。指令不使用 retain；生产环境应增加艇端 ACK topic、权限、审计和急停策略。
 
 ## 规划航线链路
 

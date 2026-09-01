@@ -71,6 +71,7 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 			"seq":       command.Seq,
 			"target":    command.Target,
 			"topic":     "mqtt",
+			"protocol":  command.DevicePayload(),
 		})
 	}
 }

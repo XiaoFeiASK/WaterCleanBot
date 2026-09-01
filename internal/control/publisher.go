@@ -99,30 +99,67 @@ func (p *Publisher) PublishRemoteCommand(ctx context.Context, target string, req
 	if err != nil {
 		return RemoteCommandEnvelope{}, err
 	}
+	if err := p.publishCommand(ctx, command); err != nil {
+		return RemoteCommandEnvelope{}, err
+	}
+	return command, nil
+}
+
+// StartHeartbeat 以 2Hz 向当前已知设备发布 [17]。
+func (p *Publisher) StartHeartbeat(ctx context.Context, targets func() []string) {
+	if targets == nil {
+		return
+	}
+
+	ticker := time.NewTicker(HeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			p.log.Info("mqtt command heartbeat stopped")
+			return
+		case <-ticker.C:
+			for _, target := range targets() {
+				command, err := BuildRemoteCommand(target, p.seq.Add(1), RemoteCommandRequest{Command: "HEARTBEAT"})
+				if err != nil {
+					p.log.Warn("build mqtt heartbeat failed", slog.String("robot_name", target), slog.Any("error", err))
+					continue
+				}
+				if err := p.publishCommand(ctx, command); err != nil {
+					p.log.Warn("publish mqtt heartbeat failed", slog.String("robot_name", target), slog.Any("error", err))
+				}
+			}
+		}
+	}
+}
+
+func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnvelope) error {
 	if p.client == nil || !p.client.IsConnected() {
-		return RemoteCommandEnvelope{}, fmt.Errorf("mqtt command publisher is not connected")
+		return fmt.Errorf("mqtt command publisher is not connected")
 	}
 
 	payload, err := json.Marshal(command.DevicePayload())
 	if err != nil {
-		return RemoteCommandEnvelope{}, fmt.Errorf("encode mqtt command payload: %w", err)
+		return fmt.Errorf("encode mqtt command payload: %w", err)
 	}
 
 	topic := fmt.Sprintf(p.config.TopicTemplate, command.Target)
 	token := p.client.Publish(topic, commandQoS, false, payload)
 	if !token.WaitTimeout(publishTimeout(ctx, 3*time.Second)) {
-		return RemoteCommandEnvelope{}, fmt.Errorf("publish mqtt command timeout")
+		return fmt.Errorf("publish mqtt command timeout")
 	}
 	if err := token.Error(); err != nil {
-		return RemoteCommandEnvelope{}, fmt.Errorf("publish mqtt command: %w", err)
+		return fmt.Errorf("publish mqtt command: %w", err)
 	}
 
 	p.log.Info("mqtt control command published",
 		slog.String("robot_name", command.Target),
 		slog.String("command", command.Command),
+		slog.Any("protocol", []int(command.DevicePayload())),
 		slog.Uint64("seq", command.Seq),
 	)
-	return command, nil
+	return nil
 }
 
 // PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/route。
