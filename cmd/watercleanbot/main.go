@@ -77,7 +77,9 @@ func main() {
 	}, log)
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
-	} else {
+	}
+	// 心跳功能暂时禁用；需要恢复时取消下面代码的注释。
+	/*
 		go commandPublisher.StartHeartbeat(appCtx, func() []string {
 			positions := locationStore.List()
 			targets := make([]string, 0, len(positions))
@@ -86,7 +88,7 @@ func main() {
 			}
 			return targets
 		})
-	}
+	*/
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
