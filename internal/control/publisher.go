@@ -187,6 +187,7 @@ func (p *Publisher) PublishRoute(ctx context.Context, target string, payload str
 	p.log.Info("mqtt route published",
 		slog.String("robot_name", target),
 		slog.Int("bytes", len(payload)),
+		slog.String("protocol", payload),
 	)
 	return nil
 }

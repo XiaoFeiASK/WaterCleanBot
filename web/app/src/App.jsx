@@ -1131,8 +1131,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     if (!routeDeviceId || !route || isRouteBusy) return;
     setRouteAction(`send:${route.id}`);
     try {
-      await sendRobotRoute(routeDeviceId, route.id);
-      onToast?.('路径点已下发到无人艇', 'success');
+      const result = await sendRobotRoute(routeDeviceId, route.id);
+      onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
     } finally {

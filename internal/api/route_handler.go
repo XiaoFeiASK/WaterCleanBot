@@ -162,6 +162,12 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
 			return
 		}
+		// MQTT 载荷保留为数组文本；HTTP 响应同时返回数字数组，便于前端按实际协议展示。
+		var protocolValues []json.Number
+		if err := json.Unmarshal([]byte(protocol), &protocolValues); err != nil || len(protocolValues) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
 
 		publishCtx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 		defer cancel()
@@ -180,7 +186,7 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			"routeId":              route.ID,
 			"target":               robotName,
 			"topic":                "mqtt",
-			"protocol":             protocol,
+			"protocol":             protocolValues,
 			"pointCount":           len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
 		})

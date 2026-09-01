@@ -226,11 +226,23 @@ function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) 
     payload.status !== 'published' ||
     payload.target !== expectedRobotName ||
     payload.routeId !== expectedRouteId ||
-    typeof payload.protocol !== 'string' || !payload.protocol ||
+    !Array.isArray(payload.protocol) ||
     !Number.isInteger(payload.pointCount) || payload.pointCount < 2
   ) {
     throw createRouteError('REQUEST_FAILED');
   }
+
+  const protocol = payload.protocol;
+  if (
+    !Array.isArray(protocol) ||
+    protocol.length !== 2 + payload.pointCount * 3 ||
+    protocol[0] !== 40 ||
+    protocol[1] !== payload.pointCount ||
+    protocol.slice(2).some((value) => typeof value !== 'number' || !Number.isFinite(value))
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+
   return payload;
 }
 
