@@ -26,7 +26,7 @@ type PublisherConfig struct {
 	Password           string
 }
 
-// Publisher 负责把遥控指令发布到 usv/{robotName}/command。
+// Publisher 负责把遥控指令和航线协议发布到 usv/{robotName}/test。
 type Publisher struct {
 	config PublisherConfig
 	log    *slog.Logger
@@ -51,13 +51,13 @@ func (p *Publisher) Start(ctx context.Context) error {
 		p.config.ClientID = "watercleanbot-command-publisher"
 	}
 	if p.config.TopicTemplate == "" {
-		p.config.TopicTemplate = "usv/%s/command"
+		p.config.TopicTemplate = "usv/%s/test"
 	}
 	if !strings.Contains(p.config.TopicTemplate, "%s") {
 		return fmt.Errorf("mqtt command topic template must contain %%s")
 	}
 	if p.config.RouteTopicTemplate == "" {
-		p.config.RouteTopicTemplate = "usv/%s/route"
+		p.config.RouteTopicTemplate = "usv/%s/test"
 	}
 	if !strings.Contains(p.config.RouteTopicTemplate, "%s") {
 		return fmt.Errorf("mqtt route topic template must contain %%s")
@@ -162,7 +162,7 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 	return nil
 }
 
-// PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/route。
+// PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/test。
 func (p *Publisher) PublishRoute(ctx context.Context, target string, payload string) error {
 	target = strings.TrimSpace(target)
 	if err := ValidateTarget(target); err != nil {

@@ -18,13 +18,13 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 遥控指令下发
   -> HTTP 接口接收前端遥控指令
   -> 校验指令目标状态
-  -> MQTT 发布到对应无人艇 command topic
+  -> MQTT 发布到对应无人艇 `usv/{robotName}/test` Topic
 
 规划航线下发
   -> HTTP 接口保存和查询数据库航线
   -> 校验路径点经纬度和到点速度
   -> 编码 [40,点数,经度,纬度,速度,...]
-  -> MQTT 发布到对应无人艇 route topic
+  -> MQTT 发布到对应无人艇 `usv/{robotName}/test` Topic
 ```
 
 当前位置接口：
@@ -138,7 +138,7 @@ MQTT 订阅机器人定位消息
 前端遥控面板
   -> POST /api/robots/{robotName}/commands
   -> 后端校验设备名、油门范围和开关状态
-  -> MQTT 发布 usv/{robotName}/command
+  -> MQTT 发布 usv/{robotName}/test
   -> 前端显示已发布或失败
 ```
 
@@ -167,7 +167,7 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
   -> POST /api/robots/{robotName}/routes 保存到 planned_routes / planned_route_points
   -> GET /api/robots/{robotName}/routes 查询真实数据库航线
   -> POST /api/robots/{robotName}/routes/{routeId}/send 下发
-  -> MQTT 发布 usv/{robotName}/route
+  -> MQTT 发布 usv/{robotName}/test
 ```
 
 艇端路径点发送协议按 `0x28` 编码，HTTP 下发接口会从数据库读取航线并发布纯数字 payload：
