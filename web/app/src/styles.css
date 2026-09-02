@@ -1241,6 +1241,56 @@ h1 { color: #f5fffd; font-size: clamp(29px, 3.5vw, 43px); letter-spacing: -.045e
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 
+/* Mobile finishing pass: keep controls reachable and prevent horizontal overflow. */
+@media (max-width: 760px) {
+  html, body, #root { min-width: 320px; overflow-x: hidden; }
+  .sidebar { height: 100dvh; max-height: 100dvh; }
+  .topbar { min-height: 60px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .breadcrumb { min-width: 0; overflow: hidden; white-space: nowrap; }
+  .breadcrumb span { overflow: hidden; text-overflow: ellipsis; }
+  .topbar-actions { flex-shrink: 0; }
+  .content-area { width: 100%; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+  .page-intro { width: 100%; }
+  .page-intro h1 { overflow-wrap: anywhere; }
+  .page-description { overflow-wrap: anywhere; }
+  .section-heading > * { max-width: 100%; }
+  .status-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .location-query,
+  .map-command-panel,
+  .camera-panel,
+  .remote-card { min-width: 0; }
+  .input-with-icon input,
+  .route-point-confirm-card input,
+  .remote-card input { font-size: 16px; }
+  .query-controls .button,
+  .online-map-actions .button,
+  .route-planning-actions button,
+  .route-point-confirm-actions button,
+  .remote-card button,
+  .map-command-panel button { min-height: 44px; }
+  .online-map-frame,
+  .online-map-frame .location-map,
+  .online-map-frame .map-empty { height: clamp(330px, 68vh, 470px); min-height: 330px; }
+  .map-frame, .location-map { height: clamp(300px, 62vh, 430px); min-height: 300px; }
+  .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { height: clamp(330px, 68vh, 470px); min-height: 330px; }
+  .route-planning-toolbar { max-width: calc(100% - 18px); max-height: 46%; overflow: auto; }
+  .route-point-confirm-card { max-height: calc(100% - 18px); overflow: auto; }
+  .route-preview-badge { max-width: calc(100% - 18px); }
+  .route-table-wrap, .fleet-management-table-wrap { max-width: 100%; overscroll-behavior-x: contain; }
+  .toast { top: calc(70px + env(safe-area-inset-top)); }
+}
+
+@media (max-width: 360px) {
+  .stat-grid, .fleet-management-stats { grid-template-columns: 1fr; }
+  .page-intro { padding: 18px 15px; }
+  .location-section, .fleet-management-section { padding: 12px; }
+  .device-detail-tabs { gap: 16px; }
+  .online-map-frame,
+  .online-map-frame .location-map,
+  .online-map-frame .map-empty,
+  .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { height: 320px; min-height: 320px; }
+}
+
 @media (min-width: 100000px) {
 /* Second pass: chart-room editorial system */
 :root {
