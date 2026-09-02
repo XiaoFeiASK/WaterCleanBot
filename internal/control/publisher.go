@@ -20,12 +20,21 @@ const commandQoS byte = 1
 
 // PublisherConfig 是 MQTT 指令发布器的运行配置。
 type PublisherConfig struct {
-	BrokerURL          string
-	ClientID           string
-	TopicTemplate      string
-	RouteTopicTemplate string
-	Username           string
-	Password           string
+	BrokerURL             string
+	ClientID              string
+	TopicTemplate         string
+	RouteTopicTemplate    string
+	Username              string
+	Password              string
+	HeartbeatStateChanged func(HeartbeatState)
+}
+
+// HeartbeatState 是设备心跳健康状态；仅在状态变化或收到回执时通知观察者。
+type HeartbeatState struct {
+	RobotName string
+	Online    bool
+	LastAckAt time.Time
+	Misses    int
 }
 
 // Publisher 负责把遥控指令和航线协议发布到 usv/{robotName}/web。
@@ -36,7 +45,20 @@ type Publisher struct {
 	seq             atomic.Uint64
 	receiptMu       sync.Mutex
 	pendingReceipts map[string][]chan Receipt
+	heartbeatMu     sync.Mutex
+	heartbeats      map[string]heartbeatTracker
 }
+
+type heartbeatTracker struct {
+	lastAck time.Time
+	misses  int
+	online  bool
+}
+
+const (
+	heartbeatOfflineAfter  = 2 * time.Second
+	heartbeatMissThreshold = 3
+)
 
 // Receipt 是艇端系统状态报文确认的最小信息。
 type Receipt struct {
@@ -67,6 +89,7 @@ func NewPublisher(config PublisherConfig, log *slog.Logger) *Publisher {
 		config:          config,
 		log:             log,
 		pendingReceipts: make(map[string][]chan Receipt),
+		heartbeats:      make(map[string]heartbeatTracker),
 	}
 }
 
@@ -161,6 +184,7 @@ func (p *Publisher) StartHeartbeat(ctx context.Context, targets func() []string)
 			return
 		case <-ticker.C:
 			for _, target := range targets() {
+				p.markHeartbeatSent(target)
 				command, err := BuildRemoteCommand(target, p.seq.Add(1), RemoteCommandRequest{Command: "HEARTBEAT"})
 				if err != nil {
 					p.log.Warn("build mqtt heartbeat failed", slog.String("robot_name", target), slog.Any("error", err))
@@ -265,6 +289,9 @@ func (p *Publisher) handleReceipt(_ mqtt.Client, message mqtt.Message) {
 	if !ok {
 		return
 	}
+	if receipt.ReturnCode == parameterlessCommands["HEARTBEAT"] {
+		p.markHeartbeatAck(receipt.TopicTarget())
+	}
 	key := receiptKey(receipt.TopicTarget(), receipt.ReturnCode)
 	p.receiptMu.Lock()
 	waiters := p.pendingReceipts[key]
@@ -286,6 +313,41 @@ func (p *Publisher) handleReceipt(_ mqtt.Client, message mqtt.Message) {
 		}
 	}
 	p.log.Debug("mqtt command receipt received", slog.String("topic", receipt.Topic), slog.Int("return_code", receipt.ReturnCode))
+}
+
+func (p *Publisher) markHeartbeatSent(target string) {
+	p.heartbeatMu.Lock()
+	state := p.heartbeats[target]
+	wasOffline := state.misses >= heartbeatMissThreshold
+	if state.lastAck.IsZero() || time.Since(state.lastAck) > heartbeatOfflineAfter {
+		state.misses++
+	}
+	previousOnline := state.online
+	state.online = !state.lastAck.IsZero() && time.Since(state.lastAck) <= heartbeatOfflineAfter && state.misses < heartbeatMissThreshold
+	p.heartbeats[target] = state
+	p.heartbeatMu.Unlock()
+	if state.online != previousOnline || (!wasOffline && state.misses >= heartbeatMissThreshold) {
+		p.notifyHeartbeatState(target, state)
+	}
+}
+
+func (p *Publisher) markHeartbeatAck(target string) {
+	p.heartbeatMu.Lock()
+	state := p.heartbeats[target]
+	state.lastAck = time.Now()
+	state.misses = 0
+	state.online = true
+	p.heartbeats[target] = state
+	p.heartbeatMu.Unlock()
+	// 每次回执都更新最后确认时间；观察者只更新健康数据，不产生前端提示。
+	p.notifyHeartbeatState(target, state)
+}
+
+func (p *Publisher) notifyHeartbeatState(target string, state heartbeatTracker) {
+	if p.config.HeartbeatStateChanged == nil {
+		return
+	}
+	p.config.HeartbeatStateChanged(HeartbeatState{RobotName: target, Online: state.online, LastAckAt: state.lastAck, Misses: state.misses})
 }
 
 func (p *Publisher) registerReceipt(target string, code int) chan Receipt {

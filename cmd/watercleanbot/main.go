@@ -74,21 +74,29 @@ func main() {
 		RouteTopicTemplate: cfg.MQTTRouteTopic,
 		Username:           cfg.MQTTUsername,
 		Password:           cfg.MQTTPassword,
+		HeartbeatStateChanged: func(state control.HeartbeatState) {
+			status := "offline"
+			if state.Online {
+				status = "online"
+			}
+			lastAck := int64(0)
+			if !state.LastAckAt.IsZero() {
+				lastAck = state.LastAckAt.UnixMilli()
+			}
+			locationStore.UpdateHeartbeat(state.RobotName, status, lastAck, state.Misses)
+		},
 	}, log)
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
 	}
-	// 心跳功能暂时禁用；需要恢复时取消下面代码的注释。
-	/*
-		go commandPublisher.StartHeartbeat(appCtx, func() []string {
-			positions := locationStore.List()
-			targets := make([]string, 0, len(positions))
-			for _, position := range positions {
-				targets = append(targets, position.RobotName)
-			}
-			return targets
-		})
-	*/
+	go commandPublisher.StartHeartbeat(appCtx, func() []string {
+		positions := locationStore.List()
+		targets := make([]string, 0, len(positions))
+		for _, position := range positions {
+			targets = append(targets, position.RobotName)
+		}
+		return targets
+	})
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

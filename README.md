@@ -144,6 +144,8 @@ MQTT 订阅机器人定位消息
 
 回执确认：后端订阅 `usv/+/web`，解析艇端系统状态报文 `[17,p1,p2,...]`，其中 `p2` 为设备返回的指令代号。遥控指令和航线下发在匹配协议首码后返回 `status: confirmed` 与 `receipt`；若已发布但超时未收到回执，接口返回 `504`。
 
+心跳回执：主程序以 2Hz 静默发布 `[17]`，收到艇端返回的 `[17,p1,17,...]` 后更新位置接口中的 `heartbeatStatus`、`heartbeatLastAckAt` 和 `heartbeatMisses`，不创建 HTTP 请求、不弹出 Toast。连续约 2 秒未收到回执后标记为 `offline`，恢复收到回执后标记为 `online`，前端只更新状态徽标。
+
 HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校验与状态维护；发布给艇端的 MQTT payload 则按 IF_CC2IIP 协议编码为纯数字 JSON 数组：
 
 ```text

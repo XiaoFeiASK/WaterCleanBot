@@ -24,6 +24,11 @@ func NewStore() *Store {
 func (s *Store) Update(position Position) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if previous, ok := s.positions[position.RobotName]; ok {
+		position.HeartbeatStatus = previous.HeartbeatStatus
+		position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
+		position.HeartbeatMisses = previous.HeartbeatMisses
+	}
 	s.positions[position.RobotName] = position
 }
 
@@ -34,9 +39,28 @@ func (s *Store) ReplaceAll(positions []Position) {
 
 	next := make(map[string]Position, len(positions))
 	for _, position := range positions {
+		if previous, ok := s.positions[position.RobotName]; ok {
+			position.HeartbeatStatus = previous.HeartbeatStatus
+			position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
+			position.HeartbeatMisses = previous.HeartbeatMisses
+		}
 		next[position.RobotName] = position
 	}
 	s.positions = next
+}
+
+// UpdateHeartbeat 更新设备心跳状态；状态只作为位置响应中的健康信息，不产生提示消息。
+func (s *Store) UpdateHeartbeat(robotName, status string, lastAckAt int64, misses int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	position, ok := s.positions[robotName]
+	if !ok {
+		return
+	}
+	position.HeartbeatStatus = status
+	position.HeartbeatLastAckAt = lastAckAt
+	position.HeartbeatMisses = misses
+	s.positions[robotName] = position
 }
 
 // Get 读取一台无人船的最新位置。

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func protocolRequest(command string, value int) RemoteCommandRequest {
@@ -93,5 +94,28 @@ func TestRouteCommandCodeAcceptsCoordinateDecimals(t *testing.T) {
 	code, err := routeCommandCode(`[40,2,121.12345678,31.12345678,2]`)
 	if err != nil || code != 40 {
 		t.Fatalf("routeCommandCode() = %d, %v; want 40", code, err)
+	}
+}
+
+func TestHeartbeatStateTracksAckAndMisses(t *testing.T) {
+	var states []HeartbeatState
+	publisher := NewPublisher(PublisherConfig{HeartbeatStateChanged: func(state HeartbeatState) {
+		states = append(states, state)
+	}}, nil)
+	publisher.markHeartbeatSent("USV-001")
+	publisher.markHeartbeatAck("USV-001")
+	if len(states) < 1 || !states[len(states)-1].Online || states[len(states)-1].LastAckAt.IsZero() {
+		t.Fatalf("heartbeat states = %+v, want an online state with ack timestamp", states)
+	}
+	publisher.heartbeatMu.Lock()
+	tracker := publisher.heartbeats["USV-001"]
+	tracker.lastAck = time.Now().Add(-heartbeatOfflineAfter - time.Second)
+	publisher.heartbeats["USV-001"] = tracker
+	publisher.heartbeatMu.Unlock()
+	for i := 0; i < heartbeatMissThreshold; i++ {
+		publisher.markHeartbeatSent("USV-001")
+	}
+	if states[len(states)-1].Online {
+		t.Fatalf("last heartbeat state = %+v, want offline after missed acknowledgements", states[len(states)-1])
 	}
 }

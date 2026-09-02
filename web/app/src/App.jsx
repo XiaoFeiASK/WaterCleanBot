@@ -367,6 +367,12 @@ function getAverage(values) {
 function StatusBadge({ position, loading }) {
   if (loading) return <span className="status-badge status-pending">读取中</span>;
   if (!position) return <span className="status-badge status-empty">未查询</span>;
+  if (position.heartbeatStatus === 'offline') {
+    return <span className="status-badge status-warning"><span className="status-dot" />心跳异常</span>;
+  }
+  if (position.heartbeatStatus === 'online') {
+    return <span className="status-badge status-online"><span className="status-dot" />在线</span>;
+  }
   return (
     <span className="status-badge status-online">
       <span className="status-dot" />
@@ -796,11 +802,11 @@ function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, o
             </thead>
             <tbody>
               {devices.map((device) => {
-                const online = device.status === 1 || syncedDeviceNames.has(device.robotName);
+                const online = device.heartbeatStatus === 'online' || (device.heartbeatStatus !== 'offline' && (device.status === 1 || syncedDeviceNames.has(device.robotName)));
                 return (
                   <tr key={device.robotName}>
                     <td><strong>{device.robotName}</strong><span>{online ? '已纳入实时编队' : '待同步设备'}</span></td>
-                    <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{online ? '在线' : '待接入'}</span></td>
+                    <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{device.heartbeatStatus === 'offline' ? '心跳异常' : (online ? '在线' : '待接入')}</span></td>
                     <td>{formatBattery(device.battery)}</td>
                     <td>{typeof device.speed === 'number' ? `${device.speed} m/s` : '暂无数据'}</td>
                     <td>{typeof device.lng === 'number' && typeof device.lat === 'number' ? `${formatNumber(device.lng, 2)}, ${formatNumber(device.lat, 2)}` : '暂无位置'}</td>
