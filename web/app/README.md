@@ -48,4 +48,4 @@ DELETE /api/robots/{robotName}/routes/{routeId}
 POST /api/robots/{robotName}/routes/{routeId}/send
 ```
 
-规划模式下点击地图后必须先填写“到该点速度（节）”，确认后航点才会进入草稿。保存时前端提交 `GCJ02` 坐标和 `speedKnots`，后端保存到数据库；下发时后端编码为 `[40,点数,经度,纬度,速度,...]`，并与遥控指令统一发布到 `usv/{robotName}/test` Topic。
+规划模式下点击地图后必须先填写“到该点速度（节）”，确认后航点才会进入草稿。保存时前端提交 `GCJ02` 坐标和 `speedKnots`，后端保存到数据库；下发时后端编码为 `[40,点数,经度,纬度,速度,...]`，并与遥控指令统一发布到 `usv/{robotName}/web` Topic。

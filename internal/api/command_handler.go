@@ -53,6 +53,13 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 		command, err := publisher.PublishRemoteCommand(publishCtx, robotName, request)
 		if err != nil {
 			log.Warn("publish robot command failed", slog.String("robot_name", robotName), slog.Any("error", err))
+			if control.IsReceiptTimeout(err) {
+				writeJSON(w, http.StatusGatewayTimeout, map[string]any{
+					"status": "published", "error": "command receipt timeout", "commandId": command.CommandID,
+					"seq": command.Seq, "target": command.Target, "protocol": command.DevicePayload(),
+				})
+				return
+			}
 			if control.IsValidationError(err) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{
 					"error": "invalid command payload",
@@ -66,12 +73,13 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 		}
 
 		writeJSON(w, http.StatusAccepted, map[string]any{
-			"status":    "published",
+			"status":    "confirmed",
 			"commandId": command.CommandID,
 			"seq":       command.Seq,
 			"target":    command.Target,
 			"topic":     "mqtt",
 			"protocol":  command.DevicePayload(),
+			"receipt":   command.Receipt,
 		})
 	}
 }

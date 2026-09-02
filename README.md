@@ -18,13 +18,13 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 遥控指令下发
   -> HTTP 接口接收前端遥控指令
   -> 校验指令目标状态
-  -> MQTT 发布到对应无人艇 `usv/{robotName}/test` Topic
+  -> MQTT 发布到对应无人艇 `usv/{robotName}/web` Topic
 
 规划航线下发
   -> HTTP 接口保存和查询数据库航线
   -> 校验路径点经纬度和到点速度
   -> 编码 [40,点数,经度,纬度,速度,...]
-  -> MQTT 发布到对应无人艇 `usv/{robotName}/test` Topic
+  -> MQTT 发布到对应无人艇 `usv/{robotName}/web` Topic
 ```
 
 当前位置接口：
@@ -138,9 +138,11 @@ MQTT 订阅机器人定位消息
 前端遥控面板
   -> POST /api/robots/{robotName}/commands
   -> 后端校验设备名、油门范围和开关状态
-  -> MQTT 发布 usv/{robotName}/test
-  -> 前端显示已发布或失败
+  -> MQTT 发布 usv/{robotName}/web
+  -> 前端显示已确认或失败
 ```
+
+回执确认：后端订阅 `usv/+/web`，解析艇端系统状态报文 `[17,p1,p2,...]`，其中 `p2` 为设备返回的指令代号。遥控指令和航线下发在匹配协议首码后返回 `status: confirmed` 与 `receipt`；若已发布但超时未收到回执，接口返回 `504`。
 
 HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校验与状态维护；发布给艇端的 MQTT payload 则按 IF_CC2IIP 协议编码为纯数字 JSON 数组：
 
@@ -154,7 +156,7 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
 设置目标油门      [39,p1,p2]    p1: 0 左，1 右；p2: 0-100
 ```
 
-例如，左油门设为 30 发布 `[39,0,30]`，明轮上电发布 `[36,4,1]`。HTTP 成功响应中的 `protocol` 字段会返回同一数组，供前端显示实际下发内容。指令不使用 retain；生产环境应增加艇端 ACK topic、权限、审计和急停策略。
+例如，左油门设为 30 发布 `[39,0,30]`，明轮上电发布 `[36,4,1]`。HTTP 成功响应中的 `protocol` 字段会返回同一数组，供前端显示实际下发内容。后端同时订阅 `usv/+/web`，解析艇端系统状态报文 `[17,p1,p2,...]`，其中 `p2` 是设备返回的指令代号；匹配到协议首码后返回 `status: confirmed` 和 `receipt`。若消息已发布但未在请求超时前收到回执，接口返回 `504`。指令不使用 retain；生产环境仍应增加权限、审计和急停策略。
 
 ## 规划航线链路
 
@@ -167,7 +169,7 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
   -> POST /api/robots/{robotName}/routes 保存到 planned_routes / planned_route_points
   -> GET /api/robots/{robotName}/routes 查询真实数据库航线
   -> POST /api/robots/{robotName}/routes/{routeId}/send 下发
-  -> MQTT 发布 usv/{robotName}/test
+  -> MQTT 发布 usv/{robotName}/web
 ```
 
 艇端路径点发送协议按 `0x28` 编码，HTTP 下发接口会从数据库读取航线并发布纯数字 payload：

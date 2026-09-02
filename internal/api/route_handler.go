@@ -26,7 +26,7 @@ type RouteRepository interface {
 
 // RoutePublisher 是航线下发需要的最小 MQTT 发布能力。
 type RoutePublisher interface {
-	PublishRoute(context.Context, string, string) error
+	PublishRoute(context.Context, string, string) (control.Receipt, error)
 }
 
 // RobotRoutesHandler 查询指定机器人的规划航线列表。
@@ -171,8 +171,16 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 
 		publishCtx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 		defer cancel()
-		if err := publisher.PublishRoute(publishCtx, robotName, protocol); err != nil {
+		receipt, err := publisher.PublishRoute(publishCtx, robotName, protocol)
+		if err != nil {
 			log.Warn("publish robot route failed", slog.String("robot_name", robotName), slog.String("route_id", routeID), slog.Any("error", err))
+			if control.IsReceiptTimeout(err) {
+				writeJSON(w, http.StatusGatewayTimeout, map[string]any{
+					"status": "published", "error": "route receipt timeout", "routeId": route.ID,
+					"target": robotName, "protocol": protocolValues, "pointCount": len(route.Points),
+				})
+				return
+			}
 			if control.IsValidationError(err) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
 				return
@@ -182,13 +190,14 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 		}
 
 		writeJSON(w, http.StatusAccepted, map[string]any{
-			"status":               "published",
+			"status":               "confirmed",
 			"routeId":              route.ID,
 			"target":               robotName,
 			"topic":                "mqtt",
 			"protocol":             protocolValues,
 			"pointCount":           len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
+			"receipt":              receipt,
 		})
 	}
 }

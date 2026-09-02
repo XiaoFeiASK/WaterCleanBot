@@ -19,6 +19,7 @@ export const REMOTE_COMMAND_ERROR_MESSAGES = Object.freeze({
   INVALID_COMMAND: '遥控指令参数无效',
   NOT_FOUND: '未找到该机器人位置，暂不能下发',
   PUBLISH_FAILED: '遥控指令下发失败，请检查 MQTT 服务',
+  RECEIPT_TIMEOUT: '指令已发布，但等待设备回执超时',
   REQUEST_FAILED: '遥控指令请求失败，请检查服务是否正常',
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
@@ -28,6 +29,7 @@ export const ROUTE_ERROR_MESSAGES = Object.freeze({
   INVALID_ROUTE: '航线数据无效，请检查点位和速度',
   NOT_FOUND: '未找到该航线或设备位置',
   PUBLISH_FAILED: '航线下发失败，请检查 MQTT 服务',
+  RECEIPT_TIMEOUT: '航线已发布，但等待设备回执超时',
   REQUEST_FAILED: '航线请求失败，请检查服务是否正常',
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
@@ -164,12 +166,15 @@ function validateCommandResponse(payload, expectedRobotName) {
     throw createRemoteCommandError('REQUEST_FAILED');
   }
   if (
-    payload.status !== 'published' ||
+    payload.status !== 'confirmed' ||
     typeof payload.commandId !== 'string' || !payload.commandId ||
     typeof payload.seq !== 'number' || !Number.isFinite(payload.seq) ||
     payload.target !== expectedRobotName ||
     !Array.isArray(payload.protocol) ||
     !payload.protocol.length ||
+    !payload.receipt || typeof payload.receipt !== 'object' ||
+    !Number.isInteger(payload.receipt.returnCode) ||
+    !Array.isArray(payload.receipt.payload) ||
     payload.protocol.some((value) => !Number.isInteger(value))
   ) {
     throw createRemoteCommandError('REQUEST_FAILED');
@@ -223,10 +228,13 @@ function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) 
     throw createRouteError('REQUEST_FAILED');
   }
   if (
-    payload.status !== 'published' ||
+    payload.status !== 'confirmed' ||
     payload.target !== expectedRobotName ||
     payload.routeId !== expectedRouteId ||
     !Array.isArray(payload.protocol) ||
+    !payload.receipt || typeof payload.receipt !== 'object' ||
+    !Number.isInteger(payload.receipt.returnCode) ||
+    !Array.isArray(payload.receipt.payload) ||
     !Number.isInteger(payload.pointCount) || payload.pointCount < 2
   ) {
     throw createRouteError('REQUEST_FAILED');
@@ -293,6 +301,7 @@ export async function sendRobotCommand(deviceName, commandPayload, signal) {
     if (response.status === 400) throw createRemoteCommandError('INVALID_COMMAND');
     if (response.status === 404) throw createRemoteCommandError('NOT_FOUND');
     if (response.status === 503) throw createRemoteCommandError('PUBLISH_FAILED');
+    if (response.status === 504) throw createRemoteCommandError('RECEIPT_TIMEOUT');
     if (response.status >= 500) throw createRemoteCommandError('SERVER_ERROR');
     if (!response.ok) throw createRemoteCommandError('REQUEST_FAILED');
 
@@ -450,6 +459,7 @@ export async function sendRobotRoute(deviceName, routeId, signal) {
     if (response.status === 400) throw createRouteError('INVALID_ROUTE');
     if (response.status === 404) throw createRouteError('NOT_FOUND');
     if (response.status === 503) throw createRouteError('PUBLISH_FAILED');
+    if (response.status === 504) throw createRouteError('RECEIPT_TIMEOUT');
     if (response.status >= 500) throw createRouteError('SERVER_ERROR');
     if (!response.ok) throw createRouteError('REQUEST_FAILED');
 

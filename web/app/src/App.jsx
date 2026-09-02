@@ -1132,7 +1132,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setRouteAction(`send:${route.id}`);
     try {
       const result = await sendRobotRoute(routeDeviceId, route.id);
-      onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
+      onToast?.(`已确认 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
     } finally {
@@ -1489,7 +1489,7 @@ function RemoteControlPanel({ position, onToast }) {
         values: nextValues,
         ttlMs: 800,
       });
-      onToast?.(`已发布 ${JSON.stringify(result.protocol || [])}`, 'success');
+      onToast?.(`已确认 ${JSON.stringify(result.protocol || [])}`, 'success');
       return true;
     } catch (error) {
       const message = getRemoteCommandErrorMessage(error);

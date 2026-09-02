@@ -69,3 +69,29 @@ func TestThrottleRejectsNegativeProtocolValue(t *testing.T) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
 }
+
+func TestParseReceiptAcceptsSystemStatusAndCommandReturnCode(t *testing.T) {
+	receipt, ok := parseReceipt("usv/清澜一号/web", []byte(`[17,42,40,120000,1]`))
+	if !ok {
+		t.Fatal("parseReceipt rejected a valid system status payload")
+	}
+	if receipt.TopicTarget() != "清澜一号" || receipt.ReturnCode != 40 {
+		t.Fatalf("receipt = %+v, want target 清澜一号 and return code 40", receipt)
+	}
+}
+
+func TestParseReceiptIgnoresCommandPayloadAndWrongTopic(t *testing.T) {
+	if _, ok := parseReceipt("usv/清澜一号/web", []byte(`[40,2,121.1,31.2,2]`)); ok {
+		t.Fatal("parseReceipt accepted an outbound command payload")
+	}
+	if _, ok := parseReceipt("usv/清澜一号/telemetry", []byte(`[17,42,40]`)); ok {
+		t.Fatal("parseReceipt accepted a non-command topic")
+	}
+}
+
+func TestRouteCommandCodeAcceptsCoordinateDecimals(t *testing.T) {
+	code, err := routeCommandCode(`[40,2,121.12345678,31.12345678,2]`)
+	if err != nil || code != 40 {
+		t.Fatalf("routeCommandCode() = %d, %v; want 40", code, err)
+	}
+}
