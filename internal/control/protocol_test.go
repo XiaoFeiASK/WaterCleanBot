@@ -71,22 +71,22 @@ func TestThrottleRejectsNegativeProtocolValue(t *testing.T) {
 	}
 }
 
-func TestParseReceiptAcceptsSystemStatusAndCommandReturnCode(t *testing.T) {
-	receipt, ok := parseReceipt("usv/清澜一号/web", []byte(`[17,42,40,120000,1]`))
+func TestParseHeartbeatReceiptAcceptsHeartbeatReturnCode(t *testing.T) {
+	receipt, ok := parseHeartbeatReceipt("usv/清澜一号/web", []byte(`[17,42,17,120000,1]`))
 	if !ok {
-		t.Fatal("parseReceipt rejected a valid system status payload")
+		t.Fatal("parseHeartbeatReceipt rejected a valid heartbeat payload")
 	}
-	if receipt.TopicTarget() != "清澜一号" || receipt.ReturnCode != 40 {
-		t.Fatalf("receipt = %+v, want target 清澜一号 and return code 40", receipt)
+	if receipt.TopicTarget() != "清澜一号" {
+		t.Fatalf("receipt = %+v, want target 清澜一号", receipt)
 	}
 }
 
-func TestParseReceiptIgnoresCommandPayloadAndWrongTopic(t *testing.T) {
-	if _, ok := parseReceipt("usv/清澜一号/web", []byte(`[40,2,121.1,31.2,2]`)); ok {
-		t.Fatal("parseReceipt accepted an outbound command payload")
+func TestParseHeartbeatReceiptIgnoresCommandPayloadAndWrongTopic(t *testing.T) {
+	if _, ok := parseHeartbeatReceipt("usv/清澜一号/web", []byte(`[40,2,121.1,31.2,2]`)); ok {
+		t.Fatal("parseHeartbeatReceipt accepted an outbound command payload")
 	}
-	if _, ok := parseReceipt("usv/清澜一号/telemetry", []byte(`[17,42,40]`)); ok {
-		t.Fatal("parseReceipt accepted a non-command topic")
+	if _, ok := parseHeartbeatReceipt("usv/清澜一号/telemetry", []byte(`[17,42,17]`)); ok {
+		t.Fatal("parseHeartbeatReceipt accepted a non-command topic")
 	}
 }
 

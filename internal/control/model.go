@@ -79,7 +79,6 @@ type RemoteCommandEnvelope struct {
 	Command   string         `json:"command"`
 	Value     int            `json:"value"`
 	Values    map[string]int `json:"values"`
-	Receipt   *Receipt       `json:"receipt,omitempty"`
 }
 
 // DeviceCommandPayload 是艇端 IF_CC2IIP 协议要求的纯数字数组。

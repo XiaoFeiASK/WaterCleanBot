@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/control"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
@@ -26,7 +25,7 @@ type RouteRepository interface {
 
 // RoutePublisher 是航线下发需要的最小 MQTT 发布能力。
 type RoutePublisher interface {
-	PublishRoute(context.Context, string, string) (control.Receipt, error)
+	PublishRoute(context.Context, string, string) error
 }
 
 // RobotRoutesHandler 查询指定机器人的规划航线列表。
@@ -169,18 +168,9 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			return
 		}
 
-		publishCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		receipt, err := publisher.PublishRoute(publishCtx, robotName, protocol)
+		err = publisher.PublishRoute(r.Context(), robotName, protocol)
 		if err != nil {
 			log.Warn("publish robot route failed", slog.String("robot_name", robotName), slog.String("route_id", routeID), slog.Any("error", err))
-			if control.IsReceiptTimeout(err) {
-				writeJSON(w, http.StatusGatewayTimeout, map[string]any{
-					"status": "published", "error": "route receipt timeout", "routeId": route.ID,
-					"target": robotName, "protocol": protocolValues, "pointCount": len(route.Points),
-				})
-				return
-			}
 			if control.IsValidationError(err) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
 				return
@@ -190,14 +180,13 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 		}
 
 		writeJSON(w, http.StatusAccepted, map[string]any{
-			"status":               "confirmed",
+			"status":               "published",
 			"routeId":              route.ID,
 			"target":               robotName,
 			"topic":                "mqtt",
 			"protocol":             protocolValues,
 			"pointCount":           len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
-			"receipt":              receipt,
 		})
 	}
 }

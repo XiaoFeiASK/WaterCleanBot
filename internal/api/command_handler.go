@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/control"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
@@ -47,19 +46,9 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 			return
 		}
 
-		publishCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-
-		command, err := publisher.PublishRemoteCommand(publishCtx, robotName, request)
+		command, err := publisher.PublishRemoteCommand(r.Context(), robotName, request)
 		if err != nil {
 			log.Warn("publish robot command failed", slog.String("robot_name", robotName), slog.Any("error", err))
-			if control.IsReceiptTimeout(err) {
-				writeJSON(w, http.StatusGatewayTimeout, map[string]any{
-					"status": "published", "error": "command receipt timeout", "commandId": command.CommandID,
-					"seq": command.Seq, "target": command.Target, "protocol": command.DevicePayload(),
-				})
-				return
-			}
 			if control.IsValidationError(err) {
 				writeJSON(w, http.StatusBadRequest, map[string]string{
 					"error": "invalid command payload",
@@ -73,13 +62,12 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 		}
 
 		writeJSON(w, http.StatusAccepted, map[string]any{
-			"status":    "confirmed",
+			"status":    "published",
 			"commandId": command.CommandID,
 			"seq":       command.Seq,
 			"target":    command.Target,
 			"topic":     "mqtt",
 			"protocol":  command.DevicePayload(),
-			"receipt":   command.Receipt,
 		})
 	}
 }

@@ -40,14 +40,12 @@ type HeartbeatState struct {
 
 // Publisher 负责把遥控指令和航线协议发布到 usv/{robotName}/web。
 type Publisher struct {
-	config          PublisherConfig
-	log             *slog.Logger
-	client          mqtt.Client
-	seq             atomic.Uint64
-	receiptMu       sync.Mutex
-	pendingReceipts map[string][]chan Receipt
-	heartbeatMu     sync.Mutex
-	heartbeats      map[string]heartbeatTracker
+	config      PublisherConfig
+	log         *slog.Logger
+	client      mqtt.Client
+	seq         atomic.Uint64
+	heartbeatMu sync.Mutex
+	heartbeats  map[string]heartbeatTracker
 }
 
 type heartbeatTracker struct {
@@ -61,36 +59,12 @@ const (
 	heartbeatMissThreshold = 3
 )
 
-// Receipt 是艇端系统状态报文确认的最小信息。
-type Receipt struct {
-	Topic      string    `json:"topic"`
-	ReturnCode int       `json:"returnCode"`
-	Payload    []int     `json:"payload"`
-	ReceivedAt time.Time `json:"receivedAt"`
-}
-
-// ReceiptTimeoutError 表示 MQTT 已发布但在请求上下文结束前没有收到匹配回执。
-type ReceiptTimeoutError struct {
-	Target string
-	Code   int
-}
-
-func (e ReceiptTimeoutError) Error() string {
-	return fmt.Sprintf("mqtt receipt timeout for %s command %d", e.Target, e.Code)
-}
-
-func IsReceiptTimeout(err error) bool {
-	_, ok := err.(ReceiptTimeoutError)
-	return ok
-}
-
 // NewPublisher 创建 MQTT 指令发布器。
 func NewPublisher(config PublisherConfig, log *slog.Logger) *Publisher {
 	return &Publisher{
-		config:          config,
-		log:             log,
-		pendingReceipts: make(map[string][]chan Receipt),
-		heartbeats:      make(map[string]heartbeatTracker),
+		config:     config,
+		log:        log,
+		heartbeats: make(map[string]heartbeatTracker),
 	}
 }
 
@@ -159,16 +133,9 @@ func (p *Publisher) PublishRemoteCommand(ctx context.Context, target string, req
 	if len(protocol) == 0 {
 		return RemoteCommandEnvelope{}, fmt.Errorf("command protocol is empty")
 	}
-	receiptCh := p.registerReceipt(target, protocol[0])
 	if err := p.publishCommand(ctx, command); err != nil {
-		p.unregisterReceipt(target, protocol[0], receiptCh)
 		return RemoteCommandEnvelope{}, err
 	}
-	receipt, err := p.waitReceipt(ctx, target, protocol[0], receiptCh)
-	if err != nil {
-		return command, err
-	}
-	command.Receipt = &receipt
 	return command, nil
 }
 
@@ -231,32 +198,28 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 }
 
 // PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/web。
-func (p *Publisher) PublishRoute(ctx context.Context, target string, payload string) (Receipt, error) {
+func (p *Publisher) PublishRoute(ctx context.Context, target string, payload string) error {
 	target = strings.TrimSpace(target)
 	if err := ValidateTarget(target); err != nil {
-		return Receipt{}, ValidationError{Err: err}
+		return ValidationError{Err: err}
 	}
 	if strings.TrimSpace(payload) == "" {
-		return Receipt{}, ValidationError{Err: fmt.Errorf("route payload is required")}
+		return ValidationError{Err: fmt.Errorf("route payload is required")}
 	}
 	if p.client == nil || !p.client.IsConnected() {
-		return Receipt{}, fmt.Errorf("mqtt command publisher is not connected")
+		return fmt.Errorf("mqtt command publisher is not connected")
 	}
-	code, err := routeCommandCode(payload)
-	if err != nil {
-		return Receipt{}, ValidationError{Err: err}
+	if _, err := routeCommandCode(payload); err != nil {
+		return ValidationError{Err: err}
 	}
-	receiptCh := p.registerReceipt(target, code)
 
 	topic := fmt.Sprintf(p.config.RouteTopicTemplate, target)
 	token := p.client.Publish(topic, commandQoS, false, []byte(payload))
 	if !token.WaitTimeout(publishTimeout(ctx, 3*time.Second)) {
-		p.unregisterReceipt(target, code, receiptCh)
-		return Receipt{}, fmt.Errorf("publish mqtt route timeout")
+		return fmt.Errorf("publish mqtt route timeout")
 	}
 	if err := token.Error(); err != nil {
-		p.unregisterReceipt(target, code, receiptCh)
-		return Receipt{}, fmt.Errorf("publish mqtt route: %w", err)
+		return fmt.Errorf("publish mqtt route: %w", err)
 	}
 
 	p.log.Info("mqtt route published",
@@ -264,11 +227,7 @@ func (p *Publisher) PublishRoute(ctx context.Context, target string, payload str
 		slog.Int("bytes", len(payload)),
 		slog.String("protocol", payload),
 	)
-	receipt, err := p.waitReceipt(ctx, target, code, receiptCh)
-	if err != nil {
-		return Receipt{}, err
-	}
-	return receipt, nil
+	return nil
 }
 
 func (p *Publisher) subscribeReceipts(client mqtt.Client) {
@@ -285,34 +244,12 @@ func (p *Publisher) subscribeReceipts(client mqtt.Client) {
 }
 
 func (p *Publisher) handleReceipt(_ mqtt.Client, message mqtt.Message) {
-	receipt, ok := parseReceipt(message.Topic(), message.Payload())
+	receipt, ok := parseHeartbeatReceipt(message.Topic(), message.Payload())
 	if !ok {
 		return
 	}
-	if receipt.ReturnCode == parameterlessCommands["HEARTBEAT"] {
-		p.markHeartbeatAck(receipt.TopicTarget())
-	}
-	key := receiptKey(receipt.TopicTarget(), receipt.ReturnCode)
-	p.receiptMu.Lock()
-	waiters := p.pendingReceipts[key]
-	var waiter chan Receipt
-	if len(waiters) > 0 {
-		waiter = waiters[0]
-		waiters = waiters[1:]
-		if len(waiters) == 0 {
-			delete(p.pendingReceipts, key)
-		} else {
-			p.pendingReceipts[key] = waiters
-		}
-	}
-	p.receiptMu.Unlock()
-	if waiter != nil {
-		select {
-		case waiter <- receipt:
-		default:
-		}
-	}
-	p.log.Debug("mqtt command receipt received", slog.String("topic", receipt.Topic), slog.Int("return_code", receipt.ReturnCode))
+	p.markHeartbeatAck(receipt.TopicTarget())
+	p.log.Debug("mqtt heartbeat receipt received", slog.String("topic", receipt.Topic))
 }
 
 func (p *Publisher) markHeartbeatSent(target string) {
@@ -350,47 +287,6 @@ func (p *Publisher) notifyHeartbeatState(target string, state heartbeatTracker) 
 	p.config.HeartbeatStateChanged(HeartbeatState{RobotName: target, Online: state.online, LastAckAt: state.lastAck, Misses: state.misses})
 }
 
-func (p *Publisher) registerReceipt(target string, code int) chan Receipt {
-	ch := make(chan Receipt, 1)
-	p.receiptMu.Lock()
-	key := receiptKey(target, code)
-	p.pendingReceipts[key] = append(p.pendingReceipts[key], ch)
-	p.receiptMu.Unlock()
-	return ch
-}
-
-func (p *Publisher) unregisterReceipt(target string, code int, ch chan Receipt) {
-	p.receiptMu.Lock()
-	defer p.receiptMu.Unlock()
-	key := receiptKey(target, code)
-	waiters := p.pendingReceipts[key]
-	for index, waiter := range waiters {
-		if waiter == ch {
-			waiters = append(waiters[:index], waiters[index+1:]...)
-			break
-		}
-	}
-	if len(waiters) == 0 {
-		delete(p.pendingReceipts, key)
-	} else {
-		p.pendingReceipts[key] = waiters
-	}
-}
-
-func (p *Publisher) waitReceipt(ctx context.Context, target string, code int, ch chan Receipt) (Receipt, error) {
-	defer p.unregisterReceipt(target, code, ch)
-	select {
-	case receipt := <-ch:
-		return receipt, nil
-	case <-ctx.Done():
-		return Receipt{}, ReceiptTimeoutError{Target: target, Code: code}
-	}
-}
-
-func receiptKey(target string, code int) string {
-	return target + "\x00" + strconv.Itoa(code)
-}
-
 func routeCommandCode(payload string) (int, error) {
 	var values []json.Number
 	if err := json.Unmarshal([]byte(payload), &values); err != nil || len(values) == 0 {
@@ -403,19 +299,24 @@ func routeCommandCode(payload string) (int, error) {
 	return code, nil
 }
 
-func parseReceipt(topic string, payload []byte) (Receipt, bool) {
-	parts := strings.Split(topic, "/")
-	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || (parts[2] != "webfeedback" && parts[2] != "web") {
-		return Receipt{}, false
-	}
-	var values []int
-	if err := json.Unmarshal(payload, &values); err != nil || len(values) < 3 || values[0] != 17 {
-		return Receipt{}, false
-	}
-	return Receipt{Topic: topic, ReturnCode: values[2], Payload: values, ReceivedAt: time.Now()}, true
+type heartbeatReceipt struct {
+	Topic   string
+	Payload []int
 }
 
-func (r Receipt) TopicTarget() string {
+func parseHeartbeatReceipt(topic string, payload []byte) (heartbeatReceipt, bool) {
+	parts := strings.Split(topic, "/")
+	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || (parts[2] != "webfeedback" && parts[2] != "web") {
+		return heartbeatReceipt{}, false
+	}
+	var values []int
+	if err := json.Unmarshal(payload, &values); err != nil || len(values) < 3 || values[0] != 17 || values[2] != 17 {
+		return heartbeatReceipt{}, false
+	}
+	return heartbeatReceipt{Topic: topic, Payload: values}, true
+}
+
+func (r heartbeatReceipt) TopicTarget() string {
 	parts := strings.Split(r.Topic, "/")
 	if len(parts) == 3 {
 		return parts[1]

@@ -138,13 +138,13 @@ MQTT 订阅机器人定位消息
 前端遥控面板
   -> POST /api/robots/{robotName}/commands
   -> 后端校验设备名、油门范围和开关状态
-  -> MQTT 发布 usv/{robotName}/web
-  -> 前端显示已确认或失败
+  -> MQTT 发布 usv/{robotName}/websend
+  -> 前端显示已发布或失败
 ```
 
-回执确认：后端订阅 `usv/+/web`，解析艇端系统状态报文 `[17,p1,p2,...]`，其中 `p2` 为设备返回的指令代号。遥控指令和航线下发在匹配协议首码后返回 `status: confirmed` 与 `receipt`；若已发布但超时未收到回执，接口返回 `504`。
+指令和航线下发只确认 MQTT 消息是否成功发布，不等待设备 ACK，也不会因为没有 ACK 返回 `504`。成功响应的 `status` 为 `published`，并返回实际发布的 `protocol` 数组。
 
-心跳回执：主程序以 2Hz 静默发布 `[17]`，收到艇端返回的 `[17,p1,17,...]` 后更新位置接口中的 `heartbeatStatus`、`heartbeatLastAckAt` 和 `heartbeatMisses`，不创建 HTTP 请求、不弹出 Toast。连续约 2 秒未收到回执后标记为 `offline`，恢复收到回执后标记为 `online`，前端只更新状态徽标。
+心跳回执：主程序以 2Hz 静默发布 `[17]`，仅处理艇端返回的 `[17,p1,17,...]` 来更新位置接口中的 `heartbeatStatus`、`heartbeatLastAckAt` 和 `heartbeatMisses`，不用于确认遥控或航线下发。连续约 2 秒未收到回执后标记为 `offline`，恢复收到回执后标记为 `online`，前端只更新状态徽标。
 
 HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校验与状态维护；发布给艇端的 MQTT payload 则按 IF_CC2IIP 协议编码为纯数字 JSON 数组：
 
@@ -158,7 +158,7 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
 设置目标油门      [39,p1,p2]    p1: 0 左，1 右；p2: 0-100
 ```
 
-例如，左油门设为 30 发布 `[39,0,30]`，明轮上电发布 `[36,4,1]`。HTTP 成功响应中的 `protocol` 字段会返回同一数组，供前端显示实际下发内容。后端同时订阅 `usv/+/web`，解析艇端系统状态报文 `[17,p1,p2,...]`，其中 `p2` 是设备返回的指令代号；匹配到协议首码后返回 `status: confirmed` 和 `receipt`。若消息已发布但未在请求超时前收到回执，接口返回 `504`。指令不使用 retain；生产环境仍应增加权限、审计和急停策略。
+例如，左油门设为 30 发布 `[39,0,30]`，明轮上电发布 `[36,4,1]`。HTTP 成功响应中的 `protocol` 字段会返回同一数组，供前端显示实际下发内容。指令不使用 retain；生产环境仍应增加权限、审计和急停策略。
 
 ## 规划航线链路
 

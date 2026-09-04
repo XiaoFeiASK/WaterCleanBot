@@ -1143,7 +1143,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setRouteAction(`send:${route.id}`);
     try {
       const result = await sendRobotRoute(routeDeviceId, route.id);
-      onToast?.(`已确认 ${JSON.stringify(result.protocol)}`, 'success');
+      onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
     } finally {
@@ -1487,19 +1487,13 @@ function CameraPanel({ position, onToast }) {
 
 function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
-  const [sendingCommands, setSendingCommands] = useState(() => new Set());
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
 
-  function isCommandSending(cmd) {
-    return sendingCommands.has(cmd);
-  }
-
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
-    if (!hasRemoteTarget || isCommandSending(cmd)) return false;
+    if (!hasRemoteTarget) return false;
 
     const target = remoteDeviceId;
-    setSendingCommands((current) => new Set(current).add(cmd));
 
     try {
       const result = await sendRobotCommand(target, {
@@ -1508,18 +1502,12 @@ function RemoteControlPanel({ position, onToast }) {
         values: nextValues,
         ttlMs: 800,
       });
-      onToast?.(`已确认 ${JSON.stringify(result.protocol || [])}`, 'success');
+      onToast?.(`已发布 ${JSON.stringify(result.protocol || [])}`, 'success');
       return true;
     } catch (error) {
       const message = getRemoteCommandErrorMessage(error);
       onToast?.(message);
       return false;
-    } finally {
-      setSendingCommands((current) => {
-        const next = new Set(current);
-        next.delete(cmd);
-        return next;
-      });
     }
   }
 
@@ -1579,7 +1567,7 @@ function RemoteControlPanel({ position, onToast }) {
                     max="100"
                     step="1"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
+                    disabled={!hasRemoteTarget}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}百分比`}
                   />
@@ -1589,11 +1577,11 @@ function RemoteControlPanel({ position, onToast }) {
                     min="0"
                     max="100"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
+                    disabled={!hasRemoteTarget}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isCommandSending(command.cmd)}>{isCommandSending(command.cmd) ? '发送中' : '下发'}</button>
+                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget}>下发</button>
                   </div>
                 </div>
               ))}
@@ -1614,7 +1602,7 @@ function RemoteControlPanel({ position, onToast }) {
                     type="button"
                     key={command.cmd}
                     onClick={() => toggleSwitch(command)}
-                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
+                    disabled={!hasRemoteTarget}
                     aria-pressed={enabled}
                   >
                     <span><strong>{command.label}</strong><small>点击切换</small></span>
