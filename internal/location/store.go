@@ -11,12 +11,14 @@ import (
 type Store struct {
 	mu        sync.RWMutex
 	positions map[string]Position
+	distances map[string]float64
 }
 
 // NewStore 创建实时位置存储。
 func NewStore() *Store {
 	return &Store{
 		positions: make(map[string]Position),
+		distances: make(map[string]float64),
 	}
 }
 
@@ -28,6 +30,9 @@ func (s *Store) Update(position Position) {
 		position.HeartbeatStatus = previous.HeartbeatStatus
 		position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
 		position.HeartbeatMisses = previous.HeartbeatMisses
+	}
+	if distance, ok := s.distances[position.RobotName]; ok {
+		position.DistanceMeters = distance
 	}
 	s.positions[position.RobotName] = position
 }
@@ -44,9 +49,23 @@ func (s *Store) ReplaceAll(positions []Position) {
 			position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
 			position.HeartbeatMisses = previous.HeartbeatMisses
 		}
+		if distance, ok := s.distances[position.RobotName]; ok {
+			position.DistanceMeters = distance
+		}
 		next[position.RobotName] = position
 	}
 	s.positions = next
+}
+
+// UpdateDistance 写入设备最新的本次行驶里程反馈。
+func (s *Store) UpdateDistance(robotName string, distanceMeters float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.distances[robotName] = distanceMeters
+	if position, ok := s.positions[robotName]; ok {
+		position.DistanceMeters = distanceMeters
+		s.positions[robotName] = position
+	}
 }
 
 // UpdateHeartbeat 更新设备心跳状态；状态只作为位置响应中的健康信息，不产生提示消息。

@@ -22,6 +22,7 @@ type SubscriberConfig struct {
 	BrokerURL string
 	ClientID  string
 	Topic     string
+	FeedbackTopic string
 	Username  string
 	Password  string
 }
@@ -62,6 +63,9 @@ func (s *Subscriber) Start(ctx context.Context) error {
 	if s.config.Topic == "" {
 		s.config.Topic = "usv/+/telemetry"
 	}
+	if s.config.FeedbackTopic == "" {
+		s.config.FeedbackTopic = "usv/+/webfeedback"
+	}
 
 	options := mqtt.NewClientOptions()
 	options.AddBroker(s.config.BrokerURL)
@@ -97,13 +101,23 @@ func (s *Subscriber) Start(ctx context.Context) error {
 // 调用方：Start 设置的 MQTT OnConnect 回调。
 // 会调用：client.Subscribe。
 func (s *Subscriber) subscribe(client mqtt.Client) {
-	token := client.Subscribe(s.config.Topic, telemetryQoS, s.handleMessage)
-	token.Wait()
-	if err := token.Error(); err != nil {
-		s.log.Error("subscribe mqtt telemetry topic failed", slog.String("topic", s.config.Topic), slog.Any("error", err))
+	for topic, handler := range map[string]mqtt.MessageHandler{s.config.Topic: s.handleMessage, s.config.FeedbackTopic: s.handleFeedback} {
+		token := client.Subscribe(topic, telemetryQoS, handler)
+		token.Wait()
+		if err := token.Error(); err != nil {
+			s.log.Error("subscribe mqtt telemetry topic failed", slog.String("topic", topic), slog.Any("error", err))
+			continue
+		}
+		s.log.Info("mqtt telemetry topic subscribed", slog.String("topic", topic))
+	}
+}
+
+func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
+	robotName, distanceMeters, ok := ParseDistanceFeedback(message.Topic(), message.Payload())
+	if !ok {
 		return
 	}
-	s.log.Info("mqtt telemetry topic subscribed", slog.String("topic", s.config.Topic))
+	s.store.UpdateDistance(robotName, distanceMeters)
 }
 
 // handleMessage 是 MQTT 消息进入后端定位链路的核心入口。

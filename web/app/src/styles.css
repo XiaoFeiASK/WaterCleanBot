@@ -218,6 +218,9 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .online-map-card,
 .route-table-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-radius: 18px; background: rgba(255,253,246,.9); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
 .online-map-toolbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid rgba(19,38,41,.1); background: rgba(255,253,246,.94); }
+.device-distance-strip { display: flex; align-items: baseline; gap: 10px; padding: 10px 18px; border-bottom: 1px solid rgba(19,38,41,.1); color: var(--muted); background: rgba(226,243,239,.45); font-size: 12px; }
+.device-distance-strip strong { color: var(--teal-dark); font-size: 18px; }
+.device-distance-strip small { margin-left: auto; font-size: 11px; }
 .online-map-toolbar h3,
 .route-table-heading h3 { margin: 0; color: var(--ink); font-size: 18px; letter-spacing: -.02em; }
 .online-map-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }

@@ -188,6 +188,11 @@ function formatRouteDurationSeconds(durationSeconds) {
   return `${minutes}分钟`;
 }
 
+function formatDistanceMeters(distanceMeters) {
+  if (typeof distanceMeters !== 'number' || !Number.isFinite(distanceMeters) || distanceMeters < 0) return '暂无数据';
+  return distanceMeters >= 1000 ? `${(distanceMeters / 1000).toFixed(2)} km` : `${distanceMeters.toFixed(1)} m`;
+}
+
 function getDistanceMeters(startPoint, endPoint) {
   const toRadians = (degree) => degree * Math.PI / 180;
   const earthRadiusMeters = 6371000;
@@ -1159,6 +1164,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <button className="button button-secondary" type="button" onClick={() => onToast?.('任务已停止', 'success')}>停止任务</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
+        </div>
+
+        <div className="device-distance-strip" aria-label="设备实时里程">
+          <span>本次已行驶里程</span>
+          <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
+          <small>MQTT 反馈 · 协议 19 / P11</small>
         </div>
 
         <div className="map-frame online-map-frame">

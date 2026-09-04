@@ -60,6 +60,7 @@ func main() {
 		BrokerURL: cfg.MQTTBrokerURL,
 		ClientID:  cfg.MQTTClientID,
 		Topic:     cfg.MQTTTelemetryTopic,
+		FeedbackTopic: cfg.MQTTFeedbackTopic,
 		Username:  cfg.MQTTUsername,
 		Password:  cfg.MQTTPassword,
 	}, locationStore, locationRepository, log)
@@ -72,6 +73,7 @@ func main() {
 		ClientID:           cfg.MQTTCommandClientID,
 		TopicTemplate:      cfg.MQTTCommandTopic,
 		RouteTopicTemplate: cfg.MQTTRouteTopic,
+		FeedbackTopicTemplate: cfg.MQTTFeedbackTopic,
 		Username:           cfg.MQTTUsername,
 		Password:           cfg.MQTTPassword,
 		HeartbeatStateChanged: func(state control.HeartbeatState) {

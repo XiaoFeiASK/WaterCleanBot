@@ -24,6 +24,7 @@ type PublisherConfig struct {
 	ClientID              string
 	TopicTemplate         string
 	RouteTopicTemplate    string
+	FeedbackTopicTemplate string
 	Username              string
 	Password              string
 	HeartbeatStateChanged func(HeartbeatState)
@@ -102,16 +103,19 @@ func (p *Publisher) Start(ctx context.Context) error {
 		p.config.ClientID = "watercleanbot-command-publisher"
 	}
 	if p.config.TopicTemplate == "" {
-		p.config.TopicTemplate = "usv/%s/web"
+		p.config.TopicTemplate = "usv/%s/websend"
 	}
 	if !strings.Contains(p.config.TopicTemplate, "%s") {
 		return fmt.Errorf("mqtt command topic template must contain %%s")
 	}
 	if p.config.RouteTopicTemplate == "" {
-		p.config.RouteTopicTemplate = "usv/%s/web"
+		p.config.RouteTopicTemplate = "usv/%s/websend"
 	}
 	if !strings.Contains(p.config.RouteTopicTemplate, "%s") {
 		return fmt.Errorf("mqtt route topic template must contain %%s")
+	}
+	if p.config.FeedbackTopicTemplate == "" {
+		p.config.FeedbackTopicTemplate = "usv/+/webfeedback"
 	}
 
 	options := mqtt.NewClientOptions()
@@ -268,11 +272,7 @@ func (p *Publisher) PublishRoute(ctx context.Context, target string, payload str
 }
 
 func (p *Publisher) subscribeReceipts(client mqtt.Client) {
-	topics := []string{strings.Replace(p.config.TopicTemplate, "%s", "+", 1)}
-	routeTopic := strings.Replace(p.config.RouteTopicTemplate, "%s", "+", 1)
-	if routeTopic != topics[0] {
-		topics = append(topics, routeTopic)
-	}
+	topics := []string{p.config.FeedbackTopicTemplate}
 	for _, topic := range topics {
 		token := client.Subscribe(topic, commandQoS, p.handleReceipt)
 		token.Wait()
@@ -405,7 +405,7 @@ func routeCommandCode(payload string) (int, error) {
 
 func parseReceipt(topic string, payload []byte) (Receipt, bool) {
 	parts := strings.Split(topic, "/")
-	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || parts[2] != "web" {
+	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || (parts[2] != "webfeedback" && parts[2] != "web") {
 		return Receipt{}, false
 	}
 	var values []int

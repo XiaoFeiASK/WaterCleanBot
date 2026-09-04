@@ -30,3 +30,11 @@ func TestParseUSVDataRejectsTopicPayloadMismatch(t *testing.T) {
 		t.Fatal("ParseUSVData returned nil error for topic/payload mismatch")
 	}
 }
+
+func TestParseDistanceFeedbackReadsP11(t *testing.T) {
+	payload := []byte(`[19,1,2,3,4,5,6,7,8,9,10,123.45]`)
+	robotName, distance, ok := ParseDistanceFeedback("usv/USV-001/webfeedback", payload)
+	if !ok || robotName != "USV-001" || distance != 123.45 {
+		t.Fatalf("feedback = (%q, %v, %v), want USV-001, 123.45, true", robotName, distance, ok)
+	}
+}

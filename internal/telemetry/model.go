@@ -16,6 +16,20 @@ import (
 
 var nonFiniteJSONNumberPattern = regexp.MustCompile(`(?i)(:\s*)(nan|inf|-inf|infinity|-infinity)(\s*[,}])`)
 
+func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool) {
+	parts := strings.Split(topic, "/")
+	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || parts[2] != "webfeedback" {
+		return "", 0, false
+	}
+	var values []json.Number
+	if err := json.Unmarshal(payload, &values); err != nil || len(values) <= 11 || values[0].String() != "19" {
+		return "", 0, false
+	}
+	distance, err := values[11].Float64()
+	if err != nil || !isFiniteNumber(distance) || distance < 0 { return "", 0, false }
+	return parts[1], distance, true
+}
+
 // USVData 对应无人艇发布到 usv/{usvId}/telemetry 的 JSON 报文。
 // 调用方：Subscriber.handleMessage 在收到 MQTT 消息后解析它。
 // 会调用：Position 将合法报文转换成 HTTP 接口已有的 location.Position。

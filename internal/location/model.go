@@ -11,6 +11,7 @@ type Position struct {
 	Speed              float64 `json:"speed"`
 	Battery            float64 `json:"battery"`
 	Status             int     `json:"status"`
+	DistanceMeters     float64 `json:"distanceMeters"`
 	HeartbeatStatus    string  `json:"heartbeatStatus,omitempty"`
 	HeartbeatLastAckAt int64   `json:"heartbeatLastAckAt,omitempty"`
 	HeartbeatMisses    int     `json:"heartbeatMisses,omitempty"`
