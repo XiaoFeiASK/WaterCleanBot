@@ -1487,16 +1487,19 @@ function CameraPanel({ position, onToast }) {
 
 function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
-  const [sendingCommand, setSendingCommand] = useState('');
+  const [sendingCommands, setSendingCommands] = useState(() => new Set());
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
-  const isSending = Boolean(sendingCommand);
+
+  function isCommandSending(cmd) {
+    return sendingCommands.has(cmd);
+  }
 
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
-    if (!hasRemoteTarget || isSending) return false;
+    if (!hasRemoteTarget || isCommandSending(cmd)) return false;
 
     const target = remoteDeviceId;
-    setSendingCommand(cmd);
+    setSendingCommands((current) => new Set(current).add(cmd));
 
     try {
       const result = await sendRobotCommand(target, {
@@ -1512,7 +1515,11 @@ function RemoteControlPanel({ position, onToast }) {
       onToast?.(message);
       return false;
     } finally {
-      setSendingCommand('');
+      setSendingCommands((current) => {
+        const next = new Set(current);
+        next.delete(cmd);
+        return next;
+      });
     }
   }
 
@@ -1572,7 +1579,7 @@ function RemoteControlPanel({ position, onToast }) {
                     max="100"
                     step="1"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget || isSending}
+                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}百分比`}
                   />
@@ -1582,11 +1589,11 @@ function RemoteControlPanel({ position, onToast }) {
                     min="0"
                     max="100"
                     value={values[command.cmd]}
-                    disabled={!hasRemoteTarget || isSending}
+                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isSending}>{sendingCommand === command.cmd ? '发送中' : '下发'}</button>
+                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget || isCommandSending(command.cmd)}>{isCommandSending(command.cmd) ? '发送中' : '下发'}</button>
                   </div>
                 </div>
               ))}
@@ -1607,7 +1614,7 @@ function RemoteControlPanel({ position, onToast }) {
                     type="button"
                     key={command.cmd}
                     onClick={() => toggleSwitch(command)}
-                    disabled={!hasRemoteTarget || isSending}
+                    disabled={!hasRemoteTarget || isCommandSending(command.cmd)}
                     aria-pressed={enabled}
                   >
                     <span><strong>{command.label}</strong><small>点击切换</small></span>

@@ -169,7 +169,7 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			return
 		}
 
-		publishCtx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+		publishCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		receipt, err := publisher.PublishRoute(publishCtx, robotName, protocol)
 		if err != nil {

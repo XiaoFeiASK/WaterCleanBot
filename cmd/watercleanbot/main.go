@@ -57,25 +57,25 @@ func main() {
 	go locationTask.Start(appCtx)
 
 	telemetrySubscriber := telemetry.NewSubscriber(telemetry.SubscriberConfig{
-		BrokerURL: cfg.MQTTBrokerURL,
-		ClientID:  cfg.MQTTClientID,
-		Topic:     cfg.MQTTTelemetryTopic,
+		BrokerURL:     cfg.MQTTBrokerURL,
+		ClientID:      cfg.MQTTClientID,
+		Topic:         cfg.MQTTTelemetryTopic,
 		FeedbackTopic: cfg.MQTTFeedbackTopic,
-		Username:  cfg.MQTTUsername,
-		Password:  cfg.MQTTPassword,
+		Username:      cfg.MQTTUsername,
+		Password:      cfg.MQTTPassword,
 	}, locationStore, locationRepository, log)
 	if err := telemetrySubscriber.Start(appCtx); err != nil {
 		log.Error("start mqtt telemetry subscriber failed", slog.Any("error", err))
 	}
 
 	commandPublisher := control.NewPublisher(control.PublisherConfig{
-		BrokerURL:          cfg.MQTTBrokerURL,
-		ClientID:           cfg.MQTTCommandClientID,
-		TopicTemplate:      cfg.MQTTCommandTopic,
-		RouteTopicTemplate: cfg.MQTTRouteTopic,
+		BrokerURL:             cfg.MQTTBrokerURL,
+		ClientID:              cfg.MQTTCommandClientID,
+		TopicTemplate:         cfg.MQTTCommandTopic,
+		RouteTopicTemplate:    cfg.MQTTRouteTopic,
 		FeedbackTopicTemplate: cfg.MQTTFeedbackTopic,
-		Username:           cfg.MQTTUsername,
-		Password:           cfg.MQTTPassword,
+		Username:              cfg.MQTTUsername,
+		Password:              cfg.MQTTPassword,
 		HeartbeatStateChanged: func(state control.HeartbeatState) {
 			status := "offline"
 			if state.Online {
@@ -91,14 +91,15 @@ func main() {
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
 	}
-	go commandPublisher.StartHeartbeat(appCtx, func() []string {
-		positions := locationStore.List()
-		targets := make([]string, 0, len(positions))
-		for _, position := range positions {
-			targets = append(targets, position.RobotName)
-		}
-		return targets
-	})
+	// 暂时停用后台心跳发送；心跳实现保留，后续可取消注释恢复。
+	// go commandPublisher.StartHeartbeat(appCtx, func() []string {
+	// 	positions := locationStore.List()
+	// 	targets := make([]string, 0, len(positions))
+	// 	for _, position := range positions {
+	// 		targets = append(targets, position.RobotName)
+	// 	}
+	// 	return targets
+	// })
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

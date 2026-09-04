@@ -47,7 +47,7 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 			return
 		}
 
-		publishCtx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+		publishCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
 		command, err := publisher.PublishRemoteCommand(publishCtx, robotName, request)

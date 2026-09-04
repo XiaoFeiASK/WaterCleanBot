@@ -3,7 +3,7 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:8080')
 ).replace(/\/$/, '');
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
-const COMMAND_REQUEST_TIMEOUT_MS = 5000;
+const COMMAND_REQUEST_TIMEOUT_MS = 3000;
 const ROUTE_REQUEST_TIMEOUT_MS = 8000;
 const CAMERA_REQUEST_TIMEOUT_MS = 6000;
 
