@@ -32,7 +32,7 @@ func (s *Store) Update(position Position) {
 		position.HeartbeatMisses = previous.HeartbeatMisses
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
-		position.DistanceMeters = distance
+		position.DistanceMeters = &distance
 	}
 	s.positions[position.RobotName] = position
 }
@@ -50,7 +50,7 @@ func (s *Store) ReplaceAll(positions []Position) {
 			position.HeartbeatMisses = previous.HeartbeatMisses
 		}
 		if distance, ok := s.distances[position.RobotName]; ok {
-			position.DistanceMeters = distance
+			position.DistanceMeters = &distance
 		}
 		next[position.RobotName] = position
 	}
@@ -63,7 +63,7 @@ func (s *Store) UpdateDistance(robotName string, distanceMeters float64) {
 	defer s.mu.Unlock()
 	s.distances[robotName] = distanceMeters
 	if position, ok := s.positions[robotName]; ok {
-		position.DistanceMeters = distanceMeters
+		position.DistanceMeters = &distanceMeters
 		s.positions[robotName] = position
 	}
 }

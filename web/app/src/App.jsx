@@ -39,7 +39,7 @@ import {
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 
-const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 5000);
+const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 1000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = '清澜一号';
@@ -1166,12 +1166,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           </div>
         </div>
 
-        <div className="device-distance-strip" aria-label="设备实时里程">
-          <span>本次已行驶里程</span>
-          <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
-          <small>MQTT 反馈 · 协议 19 / P11</small>
-        </div>
-
         <div className="map-frame online-map-frame">
           <LocationMap
             position={position}
@@ -1181,6 +1175,11 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             previewRoutePoints={previewRoutePoints}
             onMapPoint={addDraftRoutePoint}
           />
+          <div className="device-distance-overlay" aria-label="设备实时里程">
+            <span>本次已行驶里程</span>
+            <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
+            <small>MQTT 反馈 · 协议 19 / P11</small>
+          </div>
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
               <div>
