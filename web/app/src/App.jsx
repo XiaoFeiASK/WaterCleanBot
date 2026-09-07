@@ -236,6 +236,19 @@ function formatDistanceMeters(distanceMeters) {
   return distanceMeters >= 1000 ? `${(distanceMeters / 1000).toFixed(2)} km` : `${distanceMeters.toFixed(1)} m`;
 }
 
+function formatHeading(heading) {
+  return typeof heading === 'number' && Number.isFinite(heading) ? `${heading.toFixed(1)}°` : '暂无数据';
+}
+
+function formatSpeed(speed) {
+  return typeof speed === 'number' && Number.isFinite(speed) ? `${speed.toFixed(1)} m/s` : '暂无数据';
+}
+
+function formatCoordinates(position) {
+  if (!position || !Number.isFinite(position.lat) || !Number.isFinite(position.lng)) return '暂无数据';
+  return `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
+}
+
 function getDistanceMeters(startPoint, endPoint) {
   const toRadians = (degree) => degree * Math.PI / 180;
   const earthRadiusMeters = 6371000;
@@ -1218,16 +1231,27 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             previewRoutePoints={previewRoutePoints}
             onMapPoint={addDraftRoutePoint}
           />
-          <div className="device-distance-overlay" aria-label="设备实时里程">
-            <span>本次已行驶里程</span>
-            <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
-            <span>当前控制状态</span>
-            <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
-            <span>指令返回码</span>
-            <strong>{position?.commandResultCode ?? '等待反馈'}</strong>
-            <span>设备状态</span>
-            <strong>{position?.deviceStatusOk === false ? '设备异常' : position?.deviceStatusOk === true ? '正常' : '等待反馈'}</strong>
-            <small>MQTT 反馈 · 17 / 19 / 20 / 21</small>
+          <div className="device-distance-overlay" aria-label="设备实时状态">
+            <div className="telemetry-primary">
+              <span>航程</span>
+              <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
+            </div>
+            <div className="telemetry-primary">
+              <span>控制状态</span>
+              <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
+            </div>
+            <div className="telemetry-item telemetry-item-wide">
+              <span>经纬度</span>
+              <strong>{formatCoordinates(position)}</strong>
+            </div>
+            <div className="telemetry-item">
+              <span>航向</span>
+              <strong>{formatHeading(position?.heading)}</strong>
+            </div>
+            <div className="telemetry-item">
+              <span>航速</span>
+              <strong>{formatSpeed(position?.speed)}</strong>
+            </div>
           </div>
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
