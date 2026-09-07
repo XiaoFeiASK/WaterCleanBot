@@ -22,6 +22,15 @@ func NewStore() *Store {
 	}
 }
 
+func mergeFeedback(position *Position, previous Position) {
+	position.ControlMode = previous.ControlMode
+	position.CommandResultCode = previous.CommandResultCode
+	position.LeftThrottle = previous.LeftThrottle
+	position.RightThrottle = previous.RightThrottle
+	position.Actuators = previous.Actuators
+	position.DeviceStatusOK = previous.DeviceStatusOK
+}
+
 // Update 写入或覆盖一台无人船的最新位置。
 func (s *Store) Update(position Position) {
 	s.mu.Lock()
@@ -30,6 +39,7 @@ func (s *Store) Update(position Position) {
 		position.HeartbeatStatus = previous.HeartbeatStatus
 		position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
 		position.HeartbeatMisses = previous.HeartbeatMisses
+		mergeFeedback(&position, previous)
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
 		position.DistanceMeters = &distance
@@ -48,6 +58,7 @@ func (s *Store) ReplaceAll(positions []Position) {
 			position.HeartbeatStatus = previous.HeartbeatStatus
 			position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
 			position.HeartbeatMisses = previous.HeartbeatMisses
+			mergeFeedback(&position, previous)
 		}
 		if distance, ok := s.distances[position.RobotName]; ok {
 			position.DistanceMeters = &distance
@@ -55,6 +66,22 @@ func (s *Store) ReplaceAll(positions []Position) {
 		next[position.RobotName] = position
 	}
 	s.positions = next
+}
+
+// UpdateFeedback 合并设备通过 webfeedback 上报的最新状态。
+func (s *Store) UpdateFeedback(robotName string, feedback Position) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	position := s.positions[robotName]
+	position.RobotName = robotName
+	if feedback.ControlMode != nil { position.ControlMode = feedback.ControlMode }
+	if feedback.CommandResultCode != nil { position.CommandResultCode = feedback.CommandResultCode }
+	if feedback.LeftThrottle != nil { position.LeftThrottle = feedback.LeftThrottle }
+	if feedback.RightThrottle != nil { position.RightThrottle = feedback.RightThrottle }
+	if feedback.Battery != 0 { position.Battery = feedback.Battery }
+	if feedback.Actuators != nil { position.Actuators = feedback.Actuators }
+	if feedback.DeviceStatusOK != nil { position.DeviceStatusOK = feedback.DeviceStatusOK }
+	s.positions[robotName] = position
 }
 
 // UpdateDistance 写入设备最新的本次行驶里程反馈。

@@ -23,8 +23,8 @@ const (
 )
 
 var commandRanges = map[string]struct{ min, max int }{
-	"THROTTLE_L":     {0, 100},
-	"THROTTLE_R":     {0, 100},
+	"THROTTLE_L":     {-100, 100},
+	"THROTTLE_R":     {-100, 100},
 	"HATCH_CYLINDER": {0, 1},
 	"DISC_CYLINDER":  {0, 1},
 	"CONVEYOR":       {0, 1},

@@ -44,10 +44,11 @@ const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = '清澜一号';
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
+const CONTROL_MODE_LABELS = Object.freeze({ 0: '界面手动', 1: '界面自主', 2: '遥控器手动' });
 
 const REMOTE_THROTTLE_COMMANDS = Object.freeze([
-  { cmd: 'THROTTLE_L', label: '左油门', hint: '范围 0-100' },
-  { cmd: 'THROTTLE_R', label: '右油门', hint: '范围 0-100' },
+  { cmd: 'THROTTLE_L', label: '左油门', hint: '范围 -100-100' },
+  { cmd: 'THROTTLE_R', label: '右油门', hint: '范围 -100-100' },
 ]);
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
@@ -1178,7 +1179,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           <div className="device-distance-overlay" aria-label="设备实时里程">
             <span>本次已行驶里程</span>
             <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
-            <small>MQTT 反馈 · 协议 19 / P11</small>
+            <span>当前控制状态</span>
+            <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
+            <small>MQTT 反馈 · 控制状态协议 17</small>
           </div>
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
@@ -1490,6 +1493,23 @@ function RemoteControlPanel({ position, onToast }) {
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
 
+  useEffect(() => {
+    if (!position) return;
+    setValues((current) => ({
+      ...current,
+      ...(position.leftThrottle == null ? {} : { THROTTLE_L: position.leftThrottle }),
+      ...(position.rightThrottle == null ? {} : { THROTTLE_R: position.rightThrottle }),
+      ...(position.actuators ? {
+        BRUSH_L: position.actuators.leftBrush ?? current.BRUSH_L,
+        BRUSH_R: position.actuators.rightBrush ?? current.BRUSH_R,
+        CONVEYOR: position.actuators.conveyor ?? current.CONVEYOR,
+        PADDLE_POWER: position.actuators.paddlePower ?? current.PADDLE_POWER,
+        DISC_CYLINDER: position.actuators.discCylinder ?? current.DISC_CYLINDER,
+        HATCH_CYLINDER: position.actuators.hatchCylinder ?? current.HATCH_CYLINDER,
+      } : {}),
+    }));
+  }, [position?.leftThrottle, position?.rightThrottle, position?.actuators]);
+
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
     if (!hasRemoteTarget) return false;
 
@@ -1512,7 +1532,7 @@ function RemoteControlPanel({ position, onToast }) {
   }
 
   function updateThrottle(cmd, rawValue) {
-    const nextValue = clamp(Math.round(Number(rawValue) || 0), 0, 100);
+    const nextValue = clamp(Math.round(Number(rawValue) || 0), -100, 100);
     setValues((currentValues) => ({ ...currentValues, [cmd]: nextValue }));
   }
 
@@ -1563,7 +1583,7 @@ function RemoteControlPanel({ position, onToast }) {
                   <div className="throttle-inputs">
                   <input
                     type="range"
-                    min="0"
+                    min="-100"
                     max="100"
                     step="1"
                     value={values[command.cmd]}
@@ -1574,7 +1594,7 @@ function RemoteControlPanel({ position, onToast }) {
                   <input
                     className="throttle-value"
                     type="number"
-                    min="0"
+                    min="-100"
                     max="100"
                     value={values[command.cmd]}
                     disabled={!hasRemoteTarget}

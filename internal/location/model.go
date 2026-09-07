@@ -15,4 +15,10 @@ type Position struct {
 	HeartbeatStatus    string  `json:"heartbeatStatus,omitempty"`
 	HeartbeatLastAckAt int64   `json:"heartbeatLastAckAt,omitempty"`
 	HeartbeatMisses    int     `json:"heartbeatMisses,omitempty"`
+	ControlMode        *int `json:"controlMode,omitempty"`
+	CommandResultCode  *int `json:"commandResultCode,omitempty"`
+	LeftThrottle       *int `json:"leftThrottle,omitempty"`
+	RightThrottle      *int `json:"rightThrottle,omitempty"`
+	Actuators          map[string]int `json:"actuators,omitempty"`
+	DeviceStatusOK     *bool `json:"deviceStatusOk,omitempty"`
 }

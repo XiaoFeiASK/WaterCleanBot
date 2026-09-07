@@ -113,6 +113,10 @@ func (s *Subscriber) subscribe(client mqtt.Client) {
 }
 
 func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
+	if robotName, feedback, ok := ParseStatusFeedback(message.Topic(), message.Payload()); ok {
+		s.store.UpdateFeedback(robotName, feedback)
+		return
+	}
 	robotName, distanceMeters, ok := ParseDistanceFeedback(message.Topic(), message.Payload())
 	if !ok {
 		return

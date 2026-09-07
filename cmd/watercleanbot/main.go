@@ -76,31 +76,10 @@ func main() {
 		FeedbackTopicTemplate: cfg.MQTTFeedbackTopic,
 		Username:              cfg.MQTTUsername,
 		Password:              cfg.MQTTPassword,
-		HeartbeatStateChanged: func(state control.HeartbeatState) {
-			status := "offline"
-			if state.Online {
-				status = "online"
-			}
-			lastAck := int64(0)
-			if !state.LastAckAt.IsZero() {
-				lastAck = state.LastAckAt.UnixMilli()
-			}
-			locationStore.UpdateHeartbeat(state.RobotName, status, lastAck, state.Misses)
-		},
 	}, log)
 	if err := commandPublisher.Start(appCtx); err != nil {
 		log.Error("start mqtt command publisher failed", slog.Any("error", err))
 	}
-	// 暂时停用后台心跳发送；心跳实现保留，后续可取消注释恢复。
-	// go commandPublisher.StartHeartbeat(appCtx, func() []string {
-	// 	positions := locationStore.List()
-	// 	targets := make([]string, 0, len(positions))
-	// 	for _, position := range positions {
-	// 		targets = append(targets, position.RobotName)
-	// 	}
-	// 	return targets
-	// })
-
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), log),

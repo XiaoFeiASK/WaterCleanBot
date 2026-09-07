@@ -38,3 +38,10 @@ func TestParseDistanceFeedbackReadsP11(t *testing.T) {
 		t.Fatalf("feedback = (%q, %v, %v), want USV-001, 123.45, true", robotName, distance, ok)
 	}
 }
+
+func TestParseStatusFeedbackMappings(t *testing.T) {
+	robot, p, ok := ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,7,2]`))
+	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 2 || p.CommandResultCode == nil || *p.CommandResultCode != 7 { t.Fatalf("bad 17 mapping: %+v", p) }
+	_, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[21,88,-20,35,0]`))
+	if !ok || p.LeftThrottle == nil || *p.LeftThrottle != -20 || p.RightThrottle == nil || *p.RightThrottle != 35 { t.Fatalf("bad 21 mapping: %+v", p) }
+}
