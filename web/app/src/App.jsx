@@ -42,7 +42,7 @@ import { wgs84ToGcj02 } from './coordinates';
 const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 1000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
-const DEFAULT_DEVICE_ID = '清澜一号';
+const DEFAULT_DEVICE_ID = 'USV-001';
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 const CONTROL_MODE_LABELS = Object.freeze({ 0: '界面手动', 1: '界面自主', 2: '遥控器手动' });
 const DEVICE_FEEDBACK_CACHE_PREFIX = 'watercleanbot.deviceFeedback.';
@@ -123,7 +123,7 @@ const DEVICE_DETAIL_TABS = Object.freeze([
 ]);
 
 const FLEET_FALLBACK_DEVICES = Object.freeze([
-  { robotName: '清澜一号', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
+  { robotName: 'USV-001', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
   { robotName: '清澜二号', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
   { robotName: '巡岸备用艇', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
 ]);

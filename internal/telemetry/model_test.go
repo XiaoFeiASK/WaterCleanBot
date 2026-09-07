@@ -40,7 +40,11 @@ func TestParseDistanceFeedbackReadsP11(t *testing.T) {
 }
 
 func TestParseStatusFeedbackMappings(t *testing.T) {
-	robot, p, ok := ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,7,205755,2]`))
+	robot, p, ok := ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,0,205755,1]`))
+	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 1 || p.CommandResultCode == nil || *p.CommandResultCode != 0 {
+		t.Fatalf("exact 17 feedback mapping = (%q, %+v, %v)", robot, p, ok)
+	}
+	robot, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,7,205755,2]`))
 	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 2 || p.CommandResultCode == nil || *p.CommandResultCode != 7 { t.Fatalf("bad 17 mapping: %+v", p) }
 	_, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[21,88,-20,35,0]`))
 	if !ok || p.LeftThrottle == nil || *p.LeftThrottle != -20 || p.RightThrottle == nil || *p.RightThrottle != 35 { t.Fatalf("bad 21 mapping: %+v", p) }
