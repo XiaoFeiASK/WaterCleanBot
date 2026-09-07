@@ -14,8 +14,8 @@ func ParseStatusFeedback(topic string, payload []byte) (string, location.Positio
     p := location.Position{RobotName: parts[1]}
     switch v[0] {
     case 17:
-        if len(v) < 4 || v[3] < 0 || v[3] > 2 { return "", location.Position{}, false }
-        result, mode := v[2], v[3]; p.CommandResultCode = &result; p.ControlMode = &mode
+        if len(v) < 5 || v[4] < 0 || v[4] > 2 { return "", location.Position{}, false }
+        result, mode := v[2], v[4]; p.CommandResultCode = &result; p.ControlMode = &mode
     case 20:
         if len(v) < 8 { return "", location.Position{}, false }
         names := []string{"leftBrush", "rightBrush", "conveyor", "paddlePower", "discCylinder", "hatchCylinder"}

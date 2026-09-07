@@ -45,6 +45,48 @@ const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = '清澜一号';
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 const CONTROL_MODE_LABELS = Object.freeze({ 0: '界面手动', 1: '界面自主', 2: '遥控器手动' });
+const DEVICE_FEEDBACK_CACHE_PREFIX = 'watercleanbot.deviceFeedback.';
+
+function readDeviceFeedbackCache(robotName) {
+  try {
+    const cached = window.localStorage.getItem(`${DEVICE_FEEDBACK_CACHE_PREFIX}${robotName}`);
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheDeviceFeedback(position) {
+  if (!position?.robotName) return;
+  const feedback = {
+    controlMode: position.controlMode,
+    commandResultCode: position.commandResultCode,
+    actuators: position.actuators,
+    deviceStatusOk: position.deviceStatusOk,
+    leftThrottle: position.leftThrottle,
+    rightThrottle: position.rightThrottle,
+  };
+  try {
+    window.localStorage.setItem(`${DEVICE_FEEDBACK_CACHE_PREFIX}${position.robotName}`, JSON.stringify(feedback));
+  } catch {
+    // 本地缓存不可用时，仍以接口响应直接更新页面。
+  }
+}
+
+function applyDeviceFeedbackCache(position) {
+  if (!position?.robotName) return position;
+  const cached = readDeviceFeedbackCache(position.robotName);
+  if (!cached || typeof cached !== 'object') return position;
+  return {
+    ...position,
+    controlMode: position.controlMode ?? cached.controlMode,
+    commandResultCode: position.commandResultCode ?? cached.commandResultCode,
+    actuators: position.actuators ?? cached.actuators,
+    deviceStatusOk: position.deviceStatusOk ?? cached.deviceStatusOk,
+    leftThrottle: position.leftThrottle ?? cached.leftThrottle,
+    rightThrottle: position.rightThrottle ?? cached.rightThrottle,
+  };
+}
 
 const REMOTE_THROTTLE_COMMANDS = Object.freeze([
   { cmd: 'THROTTLE_L', label: '左油门', hint: '范围 -100-100' },
@@ -1181,7 +1223,11 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
             <span>当前控制状态</span>
             <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
-            <small>MQTT 反馈 · 控制状态协议 17</small>
+            <span>指令返回码</span>
+            <strong>{position?.commandResultCode ?? '等待反馈'}</strong>
+            <span>设备状态</span>
+            <strong>{position?.deviceStatusOk === false ? '设备异常' : position?.deviceStatusOk === true ? '正常' : '等待反馈'}</strong>
+            <small>MQTT 反馈 · 17 / 19 / 20 / 21</small>
           </div>
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
@@ -1782,7 +1828,9 @@ function App() {
       const nextPosition = await fetchRobotLocation(normalizedCode);
       if (showInlineLoading && requestSeq !== locationRequestSeqRef.current) return;
       if (!showInlineLoading && normalizedCode !== activeDeviceIdRef.current) return;
-      setPosition(nextPosition);
+      const feedbackPosition = applyDeviceFeedbackCache(nextPosition);
+      cacheDeviceFeedback(feedbackPosition);
+      setPosition(feedbackPosition);
       if (options.centerMap) setMapCenterSeq((currentSeq) => currentSeq + 1);
       if (!options.silent) showToast('位置查询成功', 'success');
     } catch (requestError) {
