@@ -1207,6 +1207,19 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
+  async function stopTask() {
+    if (!routeDeviceId || isRouteBusy) return;
+    setRouteAction('stop');
+    try {
+      const result = await sendRobotCommand(routeDeviceId, { command: 'STOP' });
+      onToast?.(`停船指令已发布 ${JSON.stringify(result.protocol || [])}`, 'success');
+    } catch (error) {
+      onToast?.(getRemoteCommandErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
   return (
     <div className="online-map-layout">
       <section className="online-map-card">
@@ -1217,7 +1230,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           </div>
           <div className="online-map-actions">
             <button className="button button-primary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
-            <button className="button button-secondary" type="button" onClick={() => onToast?.('任务已停止', 'success')}>停止任务</button>
+            <button className="button button-secondary" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
         </div>
