@@ -2,7 +2,7 @@
 
 # WaterCleanBot Frontend
 
-正式前端基于 React + Vite，视觉结构参考 `../1/` 原型，业务数据只通过后端 HTTP API 获取。
+正式前端基于 React + Vite，视觉结构参考 `../1/` 原型，业务数据通过后端 HTTP API 与 SSE 获取。
 
 ## 开发
 
@@ -15,6 +15,7 @@ npm run dev
 
 ```text
 GET /api/robots/locations
+GET /api/robots/locations/stream  # SSE 实时位置流
 GET /api/robots/{robotName}/location
 GET /api/robots/{robotName}/cameras
 ```
@@ -35,7 +36,7 @@ GET /api/robots/{robotName}/cameras
 }
 ```
 
-当前后端提供全量和单机器人位置查询接口；设备列表、告警和任务模块仍会显示无数据状态，不使用前端模拟数据。
+前端启动时建立一条 EventSource 连接，先接收 `snapshot` 全量快照，再接收 `position` 增量事件；断线时浏览器自动重连，不再按固定间隔轮询定位接口。
 
 ## 航线规划
 

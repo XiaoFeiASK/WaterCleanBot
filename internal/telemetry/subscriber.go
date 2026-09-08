@@ -1,4 +1,4 @@
-// 文件作用：连接 MQTT Broker，订阅无人艇遥测 topic，并把最新位置写入数据库和内存缓存。
+// 文件作用：连接 MQTT Broker，把无人艇遥测立即写入实时内存，并提交异步数据库快照。
 
 package telemetry
 
@@ -29,24 +29,24 @@ type SubscriberConfig struct {
 
 // Subscriber 负责把 MQTT 遥测消息接入现有定位链路。
 // 调用方：cmd/watercleanbot/main.go 创建并启动它。
-// 会调用：ParseUSVData、location.Repository.UpsertCurrentPosition、location.Store.Update。
+// 会调用：ParseUSVData、location.Store.Update、location.SnapshotWriter.Submit。
 type Subscriber struct {
-	config     SubscriberConfig
-	store      *location.Store
-	repository *location.Repository
-	log        *slog.Logger
-	client     mqtt.Client
+	config SubscriberConfig
+	store  *location.Store
+	writer *location.SnapshotWriter
+	log    *slog.Logger
+	client mqtt.Client
 }
 
 // NewSubscriber 创建 MQTT 遥测订阅器。
 // 调用方：cmd/watercleanbot/main.go。
 // 会调用：无，只组装依赖。
-func NewSubscriber(config SubscriberConfig, store *location.Store, repository *location.Repository, log *slog.Logger) *Subscriber {
+func NewSubscriber(config SubscriberConfig, store *location.Store, writer *location.SnapshotWriter, log *slog.Logger) *Subscriber {
 	return &Subscriber{
-		config:     config,
-		store:      store,
-		repository: repository,
-		log:        log,
+		config: config,
+		store:  store,
+		writer: writer,
+		log:    log,
 	}
 }
 
@@ -114,17 +114,14 @@ func (s *Subscriber) subscribe(client mqtt.Client) {
 
 func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
 	if position, ok := ParseNavigationFeedback(message.Topic(), message.Payload()); ok {
-		if previous, exists := s.store.Get(position.RobotName); exists {
-			position.Battery = previous.Battery
-			position.Status = previous.Status
-		}
-		updated, err := s.repository.UpsertCurrentPosition(context.Background(), position, time.Now().UnixMilli())
-		if err != nil {
-			s.log.Error("upsert navigation feedback failed", slog.String("robot_name", position.RobotName), slog.Any("error", err))
-			return
-		}
-		if updated {
-			s.store.UpdateNavigation(position)
+		receivedAt := time.Now().UnixMilli()
+		position.SourceTimestampMS = receivedAt
+		position.ReceivedAtMS = receivedAt
+
+		// 实时路径只写内存并广播，不等待 PostgreSQL。
+		applied, updated := s.store.UpdateNavigation(position)
+		if updated && s.writer != nil {
+			s.writer.Submit(applied)
 		}
 		return
 	}
@@ -141,7 +138,7 @@ func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
 
 // handleMessage 是 MQTT 消息进入后端定位链路的核心入口。
 // 调用方：subscribe 注册给 MQTT client。
-// 会调用：ParseUSVData -> Repository.UpsertCurrentPosition -> Store.Update。
+// 会调用：ParseUSVData -> Store.Update -> SnapshotWriter.Submit。
 func (s *Subscriber) handleMessage(_ mqtt.Client, message mqtt.Message) {
 	data, err := ParseUSVData(message.Topic(), message.Payload())
 	if err != nil {
@@ -150,16 +147,17 @@ func (s *Subscriber) handleMessage(_ mqtt.Client, message mqtt.Message) {
 	}
 
 	position := data.Position()
-	updated, err := s.repository.UpsertCurrentPosition(context.Background(), position, data.Timestamp)
-	if err != nil {
-		s.log.Error("upsert robot location failed", slog.String("robot_name", position.RobotName), slog.Any("error", err))
-		return
-	}
+	position.SourceTimestampMS = data.Timestamp
+	position.ReceivedAtMS = time.Now().UnixMilli()
+
+	// 先立即更新实时内存；数据库持久化由 SnapshotWriter 在后台合并执行。
+	applied, updated := s.store.Update(position)
 	if !updated {
 		s.log.Debug("stale robot telemetry ignored", slog.String("robot_name", position.RobotName), slog.Int64("timestamp", data.Timestamp))
 		return
 	}
-
-	s.store.Update(position)
+	if s.writer != nil {
+		s.writer.Submit(applied)
+	}
 	s.log.Debug("robot telemetry applied", slog.String("robot_name", position.RobotName), slog.Int64("timestamp", data.Timestamp))
 }

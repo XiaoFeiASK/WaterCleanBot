@@ -76,10 +76,6 @@ type userResponse struct {
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if !h.allowOrigin(r, false) {
-		authError(w, 403, "untrusted_origin", "请求来源不受信任", nil)
-		return
-	}
 	var req registerRequest
 	if decodeBody(w, r, &req) != nil {
 		authError(w, 400, "invalid_request", "注册信息格式错误", nil)
@@ -94,10 +90,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, userResponse{u})
 }
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	if !h.allowOrigin(r, false) {
-		authError(w, 403, "untrusted_origin", "请求来源不受信任", nil)
-		return
-	}
 	var req loginRequest
 	if decodeBody(w, r, &req) != nil {
 		authError(w, 400, "invalid_request", "登录信息格式错误", nil)
@@ -119,10 +111,6 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, userResponse{u})
 }
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	if !h.allowOrigin(r, true) {
-		authError(w, 403, "untrusted_origin", "请求来源不受信任", nil)
-		return
-	}
 	cookie, _ := r.Cookie(sessionCookieName)
 	if cookie != nil {
 		_ = h.service.Logout(r.Context(), cookie.Value)
@@ -131,10 +119,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	if !h.allowOrigin(r, true) {
-		authError(w, 403, "untrusted_origin", "请求来源不受信任", nil)
-		return
-	}
 	u, sess, ok := h.current(w, r)
 	if !ok {
 		return
@@ -153,10 +137,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password_changed"})
 }
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	if !h.allowOrigin(r, true) {
-		authError(w, 403, "untrusted_origin", "请求来源不受信任", nil)
-		return
-	}
 	u, _, ok := h.current(w, r)
 	if !ok {
 		return
@@ -219,21 +199,6 @@ func (h *AuthHandler) setCookie(w http.ResponseWriter, token string, remember bo
 }
 func (h *AuthHandler) clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true, Secure: h.service.Config().CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
-}
-func (h *AuthHandler) allowOrigin(r *http.Request, required bool) bool {
-	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		if !required {
-			return true
-		}
-		return r.Header.Get("Sec-Fetch-Site") == "same-origin"
-	}
-	for _, v := range h.service.Config().AllowedOrigins {
-		if origin == v {
-			return true
-		}
-	}
-	return false
 }
 func (h *AuthHandler) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

@@ -1,5 +1,5 @@
 // Vite 开发环境通过 /api 代理到 HTTP 后端；生产默认使用 HTTP，部署 HTTPS 时由反向代理负责。
-const API_BASE_URL = (
+export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:8080')
 ).replace(/\/$/, '');
 const LOCATION_REQUEST_TIMEOUT_MS = 8000;
@@ -129,6 +129,34 @@ export async function fetchRobotLocation(deviceName, signal) {
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+// subscribeRobotLocations 建立一条浏览器原生 SSE 连接。
+// 服务端会先发送 snapshot 全量事件，再持续发送 position 增量事件；EventSource 会自动重连。
+export function subscribeRobotLocations({ onSnapshot, onPosition, onOpen, onError } = {}) {
+  const stream = new EventSource(`${API_BASE_URL}/api/robots/locations/stream`);
+
+  stream.addEventListener('snapshot', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (!Array.isArray(payload)) throw new Error('invalid location snapshot');
+      onSnapshot?.(payload.map((position) => validateLocationPayload(position)));
+    } catch (error) {
+      onError?.(error);
+    }
+  });
+
+  stream.addEventListener('position', (event) => {
+    try {
+      onPosition?.(validateLocationPayload(JSON.parse(event.data)));
+    } catch (error) {
+      onError?.(error);
+    }
+  });
+
+  stream.onopen = () => onOpen?.();
+  stream.onerror = (event) => onError?.(event);
+  return () => stream.close();
 }
 
 export async function fetchAllRobotLocations(signal) {

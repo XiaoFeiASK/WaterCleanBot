@@ -11,6 +11,8 @@ type Position struct {
 	Speed              float64        `json:"speed"`
 	Battery            float64        `json:"battery"`
 	Status             int            `json:"status"`
+	SourceTimestampMS  int64          `json:"sourceTimestampMs,omitempty"`
+	ReceivedAtMS       int64          `json:"receivedAtMs,omitempty"`
 	HeadingRate        *float64       `json:"headingRate,omitempty"`
 	Pitch              *float64       `json:"pitch,omitempty"`
 	PitchRate          *float64       `json:"pitchRate,omitempty"`

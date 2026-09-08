@@ -1,4 +1,4 @@
-// 文件作用：封装机器人当前位置的数据库查询逻辑。
+// 文件作用：封装机器人当前位置的数据库快照读写。
 
 package location
 
@@ -11,25 +11,24 @@ import (
 
 const currentPositionQueryTimeout = 5 * time.Second
 
-// Repository 负责从数据库读取机器人位置数据。
+// Repository 负责读取和持久化机器人最后位置快照。
 type Repository struct {
 	db *sql.DB
 }
 
-// NewRepository 创建机器人位置数据仓库。
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// ListCurrentPositions 查询所有机器人的当前位置。
-// 调用方：location.Task.refreshPositions，用于定时把数据库最新位置同步到内存缓存。
-// 会调用：PostgreSQL robot_current_locations 表。
+// ListCurrentPositions 只用于后端启动时恢复最后位置，不参与运行期实时刷新。
 func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
 	defer cancel()
 
 	rows, err := r.db.QueryContext(queryCtx, `
-		SELECT robot_name, lat, lng, heading, speed, battery, status
+		SELECT robot_name, lat, lng, heading, speed, battery, status,
+		       COALESCE(source_timestamp_ms, 0),
+		       (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint
 		FROM robot_current_locations
 		ORDER BY robot_name
 	`)
@@ -49,6 +48,8 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 			&position.Speed,
 			&position.Battery,
 			&position.Status,
+			&position.SourceTimestampMS,
+			&position.ReceivedAtMS,
 		); err != nil {
 			return nil, err
 		}
@@ -57,30 +58,20 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
 	return positions, nil
 }
 
-// UpsertCurrentPosition 写入或覆盖一台机器人的最新 MQTT 位置。
-// 调用方：telemetry.Subscriber.handleMessage。
-// 会调用：PostgreSQL robot_current_locations 表；只有新时间戳不会早于库里时间戳时才覆盖。
-func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Position, sourceTimestampMS int64) (bool, error) {
+// UpsertCurrentPosition 写入最后位置快照；按服务端接收时间防止较旧任务覆盖新快照。
+func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Position, receivedAtMS int64) (bool, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
 	defer cancel()
 
 	var robotName string
 	err := r.db.QueryRowContext(queryCtx, `
 		INSERT INTO robot_current_locations (
-			robot_name,
-			lat,
-			lng,
-			heading,
-			speed,
-			battery,
-			status,
-			source_timestamp_ms
+			robot_name, lat, lng, heading, speed, battery, status, source_timestamp_ms, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9 / 1000.0))
 		ON CONFLICT (robot_name) DO UPDATE SET
 			lat = EXCLUDED.lat,
 			lng = EXCLUDED.lng,
@@ -89,9 +80,8 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 			battery = EXCLUDED.battery,
 			status = EXCLUDED.status,
 			source_timestamp_ms = EXCLUDED.source_timestamp_ms,
-			updated_at = now()
-		WHERE robot_current_locations.source_timestamp_ms IS NULL
-		   OR EXCLUDED.source_timestamp_ms >= robot_current_locations.source_timestamp_ms
+			updated_at = EXCLUDED.updated_at
+		WHERE EXCLUDED.updated_at >= robot_current_locations.updated_at
 		RETURNING robot_name
 	`,
 		position.RobotName,
@@ -101,7 +91,8 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 		position.Speed,
 		position.Battery,
 		position.Status,
-		sourceTimestampMS,
+		position.SourceTimestampMS,
+		receivedAtMS,
 	).Scan(&robotName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

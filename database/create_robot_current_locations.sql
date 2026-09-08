@@ -35,6 +35,6 @@ COMMENT ON COLUMN robot_current_locations.heading IS '航向角，单位为度�
 COMMENT ON COLUMN robot_current_locations.speed IS '当前速度，对应接口字段 speed。';
 COMMENT ON COLUMN robot_current_locations.battery IS '电量百分比，对应接口字段 battery。';
 COMMENT ON COLUMN robot_current_locations.status IS '机器人状态码，对应接口字段 status。';
-COMMENT ON COLUMN robot_current_locations.source_timestamp_ms IS '无人艇 MQTT 遥测报文中的原始毫秒时间戳，用于避免旧消息覆盖新位置。';
+COMMENT ON COLUMN robot_current_locations.source_timestamp_ms IS '位置来源时间戳：优先保留 MQTT 设备时间，导航反馈无设备时间时使用服务端接收时间。';
 COMMENT ON COLUMN robot_current_locations.geom IS '由 lng/lat 自动生成的 PostGIS 点位，SRID 4326。';
 COMMENT ON COLUMN robot_current_locations.updated_at IS '当前位置最后更新时间。';

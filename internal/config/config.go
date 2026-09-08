@@ -13,7 +13,7 @@ import (
 type Config struct {
 	HTTPAddr                    string
 	AppEnv                      string
-	LocationUpdateInterval      time.Duration
+	LocationSnapshotInterval    time.Duration
 	DatabaseURL                 string
 	MQTTBrokerURL               string
 	MQTTClientID                string
@@ -27,7 +27,6 @@ type Config struct {
 	CameraHLSBaseURL            string
 	AuthRegistrationEnabled     bool
 	AuthCookieSecure            bool
-	AuthAllowedOrigins          []string
 	AuthTrustedProxies          []string
 	InitialSuperuserUsername    string
 	InitialSuperuserPassword    string
@@ -39,15 +38,14 @@ func Load() Config {
 	loadDotEnv(".env")
 	return Config{
 		HTTPAddr: getenv("HTTP_ADDR", ":8080"), AppEnv: getenv("APP_ENV", "local"),
-		LocationUpdateInterval: getDuration("LOCATION_UPDATE_INTERVAL", 5*time.Second),
-		DatabaseURL:            getenv("DATABASE_URL", "postgres://waterbot:waterbot_dev_password@localhost:5432/waterbot?sslmode=disable"),
-		MQTTBrokerURL:          getenv("MQTT_BROKER_URL", "tcp://localhost:1883"), MQTTClientID: getenv("MQTT_CLIENT_ID", "watercleanbot-backend"),
+		LocationSnapshotInterval: getDuration("LOCATION_SNAPSHOT_INTERVAL", time.Second),
+		DatabaseURL:              getenv("DATABASE_URL", "postgres://waterbot:waterbot_dev_password@localhost:5432/waterbot?sslmode=disable"),
+		MQTTBrokerURL:            getenv("MQTT_BROKER_URL", "tcp://localhost:1883"), MQTTClientID: getenv("MQTT_CLIENT_ID", "watercleanbot-backend"),
 		MQTTTelemetryTopic: getenv("MQTT_TELEMETRY_TOPIC", "usv/+/telemetry"), MQTTCommandClientID: getenv("MQTT_COMMAND_CLIENT_ID", "watercleanbot-command-publisher"),
 		MQTTCommandTopic: getenv("MQTT_COMMAND_TOPIC", "usv/%s/websend"), MQTTRouteTopic: getenv("MQTT_ROUTE_TOPIC", "usv/%s/websend"),
 		MQTTFeedbackTopic: getenv("MQTT_FEEDBACK_TOPIC", "usv/+/webfeedback"), MQTTUsername: getenv("MQTT_USERNAME", ""), MQTTPassword: getenv("MQTT_PASSWORD", ""),
 		CameraHLSBaseURL:        getenv("CAMERA_HLS_BASE_URL", "http://localhost:8888"),
 		AuthRegistrationEnabled: getBool("AUTH_REGISTRATION_ENABLED", true), AuthCookieSecure: getBool("AUTH_COOKIE_SECURE", false),
-		AuthAllowedOrigins:       getList("AUTH_ALLOWED_ORIGINS", []string{"http://127.0.0.1:5175", "http://localhost:5175"}),
 		AuthTrustedProxies:       getList("AUTH_TRUSTED_PROXIES", nil),
 		InitialSuperuserUsername: os.Getenv("INITIAL_SUPERUSER_USERNAME"), InitialSuperuserPassword: os.Getenv("INITIAL_SUPERUSER_PASSWORD"),
 		InitialSuperuserEmail: os.Getenv("INITIAL_SUPERUSER_EMAIL"), InitialSuperuserDisplayName: os.Getenv("INITIAL_SUPERUSER_DISPLAY_NAME"),

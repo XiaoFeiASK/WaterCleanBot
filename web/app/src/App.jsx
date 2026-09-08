@@ -29,7 +29,6 @@ import {
 import {
   createRobotRoute,
   deleteRobotRoute,
-  fetchAllRobotLocations,
   fetchRobotCameras,
   fetchRobotLocation,
   getLocationErrorMessage,
@@ -40,10 +39,10 @@ import {
   fetchRobotRoutes,
   sendRobotRoute,
   sendRobotCommand,
+  subscribeRobotLocations,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 
-const POLL_INTERVAL_MS = Number(import.meta.env.VITE_LOCATION_POLL_INTERVAL_MS || 1000);
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = 'USV-001';
@@ -522,6 +521,10 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             center: nextPosition,
             zoom: 14,
             resizeEnable: true,
+            layers: [
+              new AMap.TileLayer.Satellite(),
+              new AMap.TileLayer.RoadNet(),
+            ],
           });
           centeredSeqRef.current = centerSeq;
           if (typeof mapRef.current.on === 'function') {
@@ -685,6 +688,10 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
             center: firstPosition,
             zoom: 13,
             resizeEnable: true,
+            layers: [
+              new AMap.TileLayer.Satellite(),
+              new AMap.TileLayer.RoadNet(),
+            ],
           });
           if (typeof mapRef.current.on === 'function') {
             zoomHandlerRef.current = () => {
@@ -1822,8 +1829,6 @@ function App() {
   const [toast, setToast] = useState(null);
   const activeDeviceIdRef = useRef(activeDeviceId);
   const locationRequestSeqRef = useRef(0);
-  const initialLocationLoadRef = useRef(false);
-  const fleetLoadingRef = useRef(false);
   const toastTimerRef = useRef(null);
   activeDeviceIdRef.current = activeDeviceId;
 
@@ -1831,25 +1836,6 @@ function App() {
     setToast({ message, type });
     window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 2800);
-  }
-
-  async function loadFleetLocations(options = {}) {
-    if (fleetLoadingRef.current) return;
-
-    fleetLoadingRef.current = true;
-    setFleetLoading(true);
-    try {
-      const nextPositions = await fetchAllRobotLocations();
-      setFleetPositions(nextPositions);
-      setFleetError('');
-    } catch (requestError) {
-      const message = getLocationErrorMessage(requestError);
-      setFleetError(message);
-      if (!options.silent) showToast(message);
-    } finally {
-      fleetLoadingRef.current = false;
-      setFleetLoading(false);
-    }
   }
 
   async function loadLocation(code = deviceId, options = {}) {
@@ -1904,37 +1890,67 @@ function App() {
       loadLocation(normalizedCode);
       return;
     }
+    const deviceChanged = normalizedCode !== activeDeviceIdRef.current;
     setActiveDeviceId(normalizedCode);
     activeDeviceIdRef.current = normalizedCode;
-    loadLocation(normalizedCode, { centerMap: true });
+    if (!deviceChanged) loadLocation(normalizedCode, { centerMap: true });
   }
 
   function openDeviceDetail(robotName) {
     const normalizedName = robotName.trim();
     if (!normalizedName) return;
     setDeviceId(normalizedName);
+    const deviceChanged = normalizedName !== activeDeviceIdRef.current;
     setActiveDeviceId(normalizedName);
     activeDeviceIdRef.current = normalizedName;
     saveActivePage('device-detail');
     setActivePage('device-detail');
     setSidebarOpen(false);
-    loadLocation(normalizedName, { silent: true, centerMap: true });
+    if (!deviceChanged) loadLocation(normalizedName, { silent: true, centerMap: true });
   }
 
   useEffect(() => {
-    if (!activeDeviceId) return undefined;
-    if (!initialLocationLoadRef.current) {
-      initialLocationLoadRef.current = true;
-      loadLocation(activeDeviceId, { silent: true, centerMap: true });
-    }
-    const timer = window.setInterval(() => loadLocation(activeDeviceId, { silent: true }), POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    if (!activeDeviceId) return;
+    loadLocation(activeDeviceId, { silent: true, centerMap: true });
   }, [activeDeviceId]);
 
   useEffect(() => {
-    loadFleetLocations({ silent: true });
-    const timer = window.setInterval(() => loadFleetLocations({ silent: true }), POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    // SSE 会先发送原子全量快照，再持续推送增量；不并发发起 HTTP 全量查询，避免旧响应覆盖新位置。
+    setFleetLoading(true);
+    return subscribeRobotLocations({
+      onOpen: () => setFleetError(''),
+      onSnapshot: (nextPositions) => {
+        setFleetPositions(nextPositions);
+        setFleetLoading(false);
+        setFleetError('');
+        const activePosition = nextPositions.find((item) => item.robotName === activeDeviceIdRef.current);
+        if (activePosition) {
+          const feedbackPosition = applyDeviceFeedbackCache(activePosition);
+          cacheDeviceFeedback(feedbackPosition);
+          setPosition(feedbackPosition);
+        }
+      },
+      onPosition: (nextPosition) => {
+        setFleetPositions((current) => {
+          const index = current.findIndex((item) => item.robotName === nextPosition.robotName);
+          if (index < 0) return [...current, nextPosition].sort((a, b) => a.robotName.localeCompare(b.robotName));
+          const next = [...current];
+          next[index] = nextPosition;
+          return next;
+        });
+        setFleetError('');
+        if (nextPosition.robotName === activeDeviceIdRef.current) {
+          const feedbackPosition = applyDeviceFeedbackCache(nextPosition);
+          cacheDeviceFeedback(feedbackPosition);
+          setPosition(feedbackPosition);
+          setError('');
+        }
+      },
+      onError: () => {
+        // EventSource 会自动重连；保留最后位置，避免短暂断线导致页面闪空。
+        setFleetError('实时位置连接暂时中断，正在重连');
+      },
+    });
   }, []);
 
   useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);

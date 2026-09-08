@@ -1,4 +1,4 @@
-// 文件作用：启动实时定位后端服务，暴露机器人位置查询接口并运行定位任务。
+// 文件作用：启动实时定位后端服务，接入 MQTT、SSE 和异步位置快照。
 
 package main
 
@@ -60,7 +60,6 @@ func main() {
 	authService := auth.NewService(authRepository, auth.Config{
 		RegistrationEnabled: cfg.AuthRegistrationEnabled,
 		CookieSecure:        cfg.AuthCookieSecure,
-		AllowedOrigins:      cfg.AuthAllowedOrigins,
 		TrustedProxies:      cfg.AuthTrustedProxies,
 		SessionDuration:     24 * time.Hour,
 		RememberDuration:    30 * 24 * time.Hour,
@@ -78,8 +77,16 @@ func main() {
 		log.Error("ensure route schema failed", slog.Any("error", err))
 		os.Exit(1)
 	}
-	locationTask := location.NewTask(locationStore, locationRepository, cfg.LocationUpdateInterval, log)
-	go locationTask.Start(appCtx)
+	if err := location.LoadInitialPositions(appCtx, locationStore, locationRepository); err != nil {
+		// 数据库快照只用于冷启动恢复；失败不应阻止 MQTT 实时定位服务启动。
+		log.Warn("load initial robot locations failed", slog.Any("error", err))
+	}
+	locationWriter := location.NewSnapshotWriter(locationRepository, cfg.LocationSnapshotInterval, log)
+	locationWriterDone := make(chan struct{})
+	go func() {
+		defer close(locationWriterDone)
+		locationWriter.Start(appCtx)
+	}()
 
 	telemetrySubscriber := telemetry.NewSubscriber(telemetry.SubscriberConfig{
 		BrokerURL:     cfg.MQTTBrokerURL,
@@ -88,7 +95,7 @@ func main() {
 		FeedbackTopic: cfg.MQTTFeedbackTopic,
 		Username:      cfg.MQTTUsername,
 		Password:      cfg.MQTTPassword,
-	}, locationStore, locationRepository, log)
+	}, locationStore, locationWriter, log)
 	if err := telemetrySubscriber.Start(appCtx); err != nil {
 		log.Error("start mqtt telemetry subscriber failed", slog.Any("error", err))
 	}
@@ -126,6 +133,11 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", slog.Any("error", err))
 		os.Exit(1)
+	}
+	select {
+	case <-locationWriterDone:
+	case <-shutdownCtx.Done():
+		log.Warn("location snapshot writer shutdown timed out")
 	}
 	log.Info("watercleanbot location service stopped")
 }

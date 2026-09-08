@@ -2,7 +2,7 @@
 
 # WaterCleanBot
 
-WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持极简：**暴露定位接口、运行定位刷新任务，并支持通过 MQTT 发布遥控指令和规划航线路径点**。
+WaterCleanBot 是水面垃圾清洁机器人项目。后端通过 MQTT 接收实时定位，使用内存作为运行期状态源，通过 SSE 推送前端，并异步保存 PostgreSQL 最后位置快照。
 
 前端页面原型已经基本定型，仍保留在 `web/1/`，当前不改页面结构和交互内容。
 
@@ -11,9 +11,10 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 当前后端先做两件事：
 
 ```text
-后台实时定位任务
-  -> 查询数据库中的机器人最新位置
-  -> HTTP 接口查询机器人最新位置
+实时定位接收与推送
+  -> MQTT 位置到达后立即更新内存
+  -> SSE 实时推送前端
+  -> PostgreSQL 低频异步保存最后快照
 
 遥控指令下发
   -> HTTP 接口接收前端遥控指令
@@ -31,6 +32,7 @@ WaterCleanBot 是水面垃圾清洁机器人项目。当前后端阶段先保持
 
 ```text
 GET /api/robots/locations
+GET /api/robots/locations/stream  # SSE
 GET /api/robots/{robotName}/location
 POST /api/robots/{robotName}/commands
 GET /api/robots/{robotName}/cameras
@@ -83,15 +85,16 @@ WaterCleanBot/
 ├─ internal/
 │  ├─ api/
 │  │  ├─ router.go                  # 注册实时定位接口
-│  │  └─ location_handler.go        # 返回机器人最新位置
+│  │  └─ location_handler.go        # HTTP 查询与 SSE 位置流
 │  │
 │  ├─ config/
-│  │  └─ config.go                  # 读取 HTTP 端口、环境、定位任务间隔
+│  │  └─ config.go                  # 读取 HTTP、MQTT 和快照持久化配置
 │  │
 │  ├─ location/
 │  │  ├─ model.go                   # 实时位置数据结构
-│  │  ├─ store.go                   # 内存保存机器人最新位置
-│  │  └─ task.go                    # 实时定位后台任务
+│  │  ├─ store.go                   # 实时位置内存状态与 SSE 广播
+│  │  ├─ snapshot_writer.go         # 合并并异步持久化最后位置
+│  │  └─ task.go                    # 启动时加载数据库快照
 │  │
 │  └─ logger/
 │     └─ logger.go                  # 日志初始化
@@ -110,25 +113,22 @@ WaterCleanBot/
 
 MQTT 遥测报文中的 `lat`、`lng` 采用 WGS-84，后端和 PostGIS 均按 WGS-84（SRID 4326）保存与返回。前端仅在传入高德地图 JS API 前转换为 GCJ-02；高德地图点击得到的航点已是 GCJ-02，不能重复转换。
 
-当前最小实现：
+当前实现：
 
 ```text
-location.Task
-  -> 周期性查询 robot_current_locations 表
-  -> location.Store 缓存最新位置
-  -> api.LocationHandler 读取单台或全量最新位置
-  -> 前端或调试工具通过 HTTP 获取位置
-```
+进程启动
+  -> 从 robot_current_locations 加载一次最后位置快照
+  -> 启动 MQTT 订阅
 
-后续接入 MQTT 后，可以把链路扩展成：
-
-```text
-MQTT 订阅机器人定位消息
+MQTT telemetry / [18,...] webfeedback（设备可按 5Hz 上报）
   -> 校验定位数据
-  -> 写入 PostgreSQL/PostGIS
-  -> 更新最新位置缓存
-  -> HTTP 接口返回最新位置
+  -> location.Store 立即更新内存
+  -> /api/robots/locations/stream 立即通过 SSE 推送前端
+  -> SnapshotWriter 按设备只保留最新待写快照
+  -> 每 LOCATION_SNAPSHOT_INTERVAL（默认 1s）异步写 PostgreSQL
 ```
+
+数据库不再周期性覆盖实时内存；数据库故障也不会阻塞 MQTT 到内存/SSE 的实时链路。HTTP 单台和全量查询接口保留用于显式查询与调试。
 
 ## 遥控下发链路
 
@@ -265,6 +265,6 @@ PATCH  /api/auth/profile
 POST   /api/auth/change-password
 ```
 
-数据库迁移会在后端启动时自动执行，创建 `users` 与 `user_sessions`。开发环境可使用 HTTP；生产环境必须设置 `APP_ENV=production`、`AUTH_COOKIE_SECURE=true` 并通过 HTTPS 提供站点。`AUTH_ALLOWED_ORIGINS` 应填写实际可信前端来源，`AUTH_TRUSTED_PROXIES` 仅填写真实反向代理 IP。
+数据库迁移会在后端启动时自动执行，创建 `users` 与 `user_sessions`。开发环境可使用 HTTP；生产环境必须设置 `APP_ENV=production`、`AUTH_COOKIE_SECURE=true` 并通过 HTTPS 提供站点。`AUTH_TRUSTED_PROXIES` 仅填写真实反向代理 IP。
 
 > 安全边界：当前登录会阻止未登录用户进入前端控制台，但机器人、航线、遥控等既有业务 API 尚未加入服务端鉴权，仍可被直接调用。因此本期不构成完整的业务访问控制；下一阶段应为这些接口增加 Session 鉴权和角色授权。

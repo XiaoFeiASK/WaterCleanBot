@@ -11,7 +11,6 @@ import (
 type Config struct {
 	RegistrationEnabled bool
 	CookieSecure        bool
-	AllowedOrigins      []string
 	TrustedProxies      []string
 	SessionDuration     time.Duration
 	RememberDuration    time.Duration
