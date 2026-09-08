@@ -14,6 +14,7 @@ var (
 	ErrUsernameExists = errors.New("username already exists")
 	ErrEmailExists    = errors.New("email already exists")
 	ErrNotFound       = errors.New("user not found")
+	ErrInvalidRole    = errors.New("invalid user role")
 )
 
 type Repository struct{ db *sql.DB }
@@ -44,6 +45,9 @@ func uniqueError(err error) error {
 }
 
 func (r *Repository) CreateUser(ctx context.Context, username, displayName, email, passwordHash, role string) (User, error) {
+	if !IsValidRole(role) {
+		return User{}, ErrInvalidRole
+	}
 	q := `INSERT INTO users (username, display_name, email, password_hash, role) VALUES ($1,$2,$3,$4,$5) RETURNING ` + userColumns
 	u, err := scanUser(r.db.QueryRowContext(ctx, q, username, displayName, email, passwordHash, role))
 	return u, uniqueError(err)
@@ -55,8 +59,8 @@ func (r *Repository) CreateUserWithSession(ctx context.Context, username, displa
 		return User{}, err
 	}
 	defer tx.Rollback()
-	q := `INSERT INTO users (username, display_name, email, password_hash, role) VALUES ($1,$2,$3,$4,'user') RETURNING ` + userColumns
-	u, err := scanUser(tx.QueryRowContext(ctx, q, username, displayName, email, passwordHash))
+	q := `INSERT INTO users (username, display_name, email, password_hash, role) VALUES ($1,$2,$3,$4,$5) RETURNING ` + userColumns
+	u, err := scanUser(tx.QueryRowContext(ctx, q, username, displayName, email, passwordHash, RoleUser))
 	if err != nil {
 		return User{}, uniqueError(err)
 	}
@@ -92,7 +96,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (User, error) {
 
 func (r *Repository) SuperuserExists(ctx context.Context) (bool, error) {
 	var exists bool
-	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE role='superuser')`).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE role=$1)`, RoleSuperuser).Scan(&exists)
 	return exists, err
 }
 

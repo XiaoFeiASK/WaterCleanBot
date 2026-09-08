@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name VARCHAR(40) NOT NULL,
     email VARCHAR(254) NOT NULL,
     password_hash TEXT NOT NULL,
-    role VARCHAR(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'superuser')),
+    role VARCHAR(16) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'superuser', 'admin')),
     status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

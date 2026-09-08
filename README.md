@@ -246,6 +246,8 @@ http://localhost:8080/api/robots/清澜一号/location
 
 应用现支持真实 PostgreSQL 账号、bcrypt 密码哈希和服务端 Session。启动后访问前端 `/register` 注册普通用户，或在 `.env` 中同时配置以下四项初始化第一个超级用户：
 
+角色按权限从低到高分为：`user`（普通用户）、`superuser`（超级用户）、`admin`（管理员用户）。
+
 ```text
 INITIAL_SUPERUSER_USERNAME=
 INITIAL_SUPERUSER_PASSWORD=

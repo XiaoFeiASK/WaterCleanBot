@@ -201,6 +201,6 @@ func (s *Service) InitializeSuperuser(ctx context.Context, username, name, email
 	if err != nil {
 		return err
 	}
-	_, err = s.repo.CreateUser(ctx, username, name, email, hash, "superuser")
+	_, err = s.repo.CreateUser(ctx, username, name, email, hash, RoleSuperuser)
 	return err
 }

@@ -42,6 +42,7 @@ import {
   subscribeRobotLocations,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
+import { getRoleName } from './roles';
 
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
@@ -1810,7 +1811,6 @@ function App() {
   const { user, signOut } = useAuth();
   const navigateTo = useNavigate();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const roleNames = { user: '普通用户', admin: '管理员', superuser: '超级用户' };
   async function handleSignOut() {
     await signOut();
     navigateTo('/login', { replace: true });
@@ -2047,7 +2047,7 @@ function App() {
                 <span className="user-label">{user?.displayName}</span><ChevronDown size={14} />
               </button>
               {accountMenuOpen && <div className="account-dropdown" role="menu">
-                <div className="account-dropdown-meta"><strong>{user?.displayName}</strong><span>{roleNames[user?.role] || user?.role}</span></div>
+                <div className="account-dropdown-meta"><strong>{user?.displayName}</strong><span>{getRoleName(user?.role)}</span></div>
                 <button role="menuitem" onClick={() => navigateTo('/account')}><UserRound size={16} />账号设置</button>
                 <button role="menuitem" onClick={handleSignOut}><LogOut size={16} />退出登录</button>
               </div>}

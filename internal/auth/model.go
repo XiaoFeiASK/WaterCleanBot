@@ -2,6 +2,36 @@ package auth
 
 import "time"
 
+const (
+	RoleUser      = "user"
+	RoleSuperuser = "superuser"
+	RoleAdmin     = "admin"
+)
+
+// RoleLevel returns the permission level in ascending order:
+// ordinary user < superuser < administrator. Unknown roles have no permissions.
+func RoleLevel(role string) int {
+	switch role {
+	case RoleUser:
+		return 1
+	case RoleSuperuser:
+		return 2
+	case RoleAdmin:
+		return 3
+	default:
+		return 0
+	}
+}
+
+func IsValidRole(role string) bool {
+	return RoleLevel(role) > 0
+}
+
+func HasMinimumRole(role, minimum string) bool {
+	minimumLevel := RoleLevel(minimum)
+	return minimumLevel > 0 && RoleLevel(role) >= minimumLevel
+}
+
 type User struct {
 	ID           string     `json:"id"`
 	Username     string     `json:"username"`
