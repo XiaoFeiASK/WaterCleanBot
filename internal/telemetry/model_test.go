@@ -4,6 +4,36 @@ package telemetry
 
 import "testing"
 
+func TestParseNavigationFeedback(t *testing.T) {
+	payload := []byte(`[18,106.3975,29.9087,135,1.5,2.5,0.2,-1.5,-0.1,245.6,0.3,4.2,18,4]`)
+	position, ok := ParseNavigationFeedback("usv/USV-001/webfeedback", payload)
+	if !ok {
+		t.Fatal("ParseNavigationFeedback rejected valid payload")
+	}
+	if position.RobotName != "USV-001" || position.Lng != 106.3975 || position.Lat != 29.9087 || position.Heading != 135 {
+		t.Fatalf("unexpected position: %+v", position)
+	}
+	if position.Speed != 4.2*knotsToMetersPerSecond || position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
+		t.Fatalf("unexpected speed mapping: %+v", position)
+	}
+	if position.SatelliteCount == nil || *position.SatelliteCount != 18 || position.GNSSSolutionStatus == nil || *position.GNSSSolutionStatus != 4 {
+		t.Fatalf("unexpected GNSS mapping: %+v", position)
+	}
+}
+
+func TestParseNavigationFeedbackRejectsInvalidPayload(t *testing.T) {
+	tests := [][]byte{
+		[]byte(`[18,181,29.9087,135,0,0,0,0,0,0,0,4.2,18,4]`),
+		[]byte(`[18,106.3975,91,135,0,0,0,0,0,0,0,4.2,18,4]`),
+		[]byte(`[18,106.3975,29.9087,135,0,0,0,0,0,0,0,4.2,18,3]`),
+	}
+	for _, payload := range tests {
+		if _, ok := ParseNavigationFeedback("usv/USV-001/webfeedback", payload); ok {
+			t.Fatalf("accepted invalid payload: %s", payload)
+		}
+	}
+}
+
 func TestParseUSVDataAcceptsNaNBatteryAndMissingTimestamp(t *testing.T) {
 	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":nan,"status":0,"usvId":"USV-001"}`)
 
@@ -45,7 +75,11 @@ func TestParseStatusFeedbackMappings(t *testing.T) {
 		t.Fatalf("exact 17 feedback mapping = (%q, %+v, %v)", robot, p, ok)
 	}
 	robot, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,7,205755,2]`))
-	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 2 || p.CommandResultCode == nil || *p.CommandResultCode != 7 { t.Fatalf("bad 17 mapping: %+v", p) }
+	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 2 || p.CommandResultCode == nil || *p.CommandResultCode != 7 {
+		t.Fatalf("bad 17 mapping: %+v", p)
+	}
 	_, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[21,88,-20,35,0]`))
-	if !ok || p.LeftThrottle == nil || *p.LeftThrottle != -20 || p.RightThrottle == nil || *p.RightThrottle != 35 { t.Fatalf("bad 21 mapping: %+v", p) }
+	if !ok || p.LeftThrottle == nil || *p.LeftThrottle != -20 || p.RightThrottle == nil || *p.RightThrottle != 35 {
+		t.Fatalf("bad 21 mapping: %+v", p)
+	}
 }

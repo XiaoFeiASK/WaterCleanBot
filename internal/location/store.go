@@ -23,6 +23,16 @@ func NewStore() *Store {
 }
 
 func mergeFeedback(position *Position, previous Position) {
+	position.HeadingRate = previous.HeadingRate
+	position.Pitch = previous.Pitch
+	position.PitchRate = previous.PitchRate
+	position.Roll = previous.Roll
+	position.RollRate = previous.RollRate
+	position.Altitude = previous.Altitude
+	position.Heave = previous.Heave
+	position.SpeedKnots = previous.SpeedKnots
+	position.SatelliteCount = previous.SatelliteCount
+	position.GNSSSolutionStatus = previous.GNSSSolutionStatus
 	position.ControlMode = previous.ControlMode
 	position.CommandResultCode = previous.CommandResultCode
 	position.LeftThrottle = previous.LeftThrottle
@@ -68,19 +78,58 @@ func (s *Store) ReplaceAll(positions []Position) {
 	s.positions = next
 }
 
+// UpdateNavigation 合并设备通过 [18,...] webfeedback 上报的导航定位信息。
+func (s *Store) UpdateNavigation(position Position) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if previous, ok := s.positions[position.RobotName]; ok {
+		position.Battery = previous.Battery
+		position.Status = previous.Status
+		position.HeartbeatStatus = previous.HeartbeatStatus
+		position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
+		position.HeartbeatMisses = previous.HeartbeatMisses
+		position.DistanceMeters = previous.DistanceMeters
+		position.ControlMode = previous.ControlMode
+		position.CommandResultCode = previous.CommandResultCode
+		position.LeftThrottle = previous.LeftThrottle
+		position.RightThrottle = previous.RightThrottle
+		position.Actuators = previous.Actuators
+		position.DeviceStatusOK = previous.DeviceStatusOK
+	}
+	if distance, ok := s.distances[position.RobotName]; ok {
+		position.DistanceMeters = &distance
+	}
+	s.positions[position.RobotName] = position
+}
+
 // UpdateFeedback 合并设备通过 webfeedback 上报的最新状态。
 func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	position := s.positions[robotName]
 	position.RobotName = robotName
-	if feedback.ControlMode != nil { position.ControlMode = feedback.ControlMode }
-	if feedback.CommandResultCode != nil { position.CommandResultCode = feedback.CommandResultCode }
-	if feedback.LeftThrottle != nil { position.LeftThrottle = feedback.LeftThrottle }
-	if feedback.RightThrottle != nil { position.RightThrottle = feedback.RightThrottle }
-	if feedback.Battery != 0 { position.Battery = feedback.Battery }
-	if feedback.Actuators != nil { position.Actuators = feedback.Actuators }
-	if feedback.DeviceStatusOK != nil { position.DeviceStatusOK = feedback.DeviceStatusOK }
+	if feedback.ControlMode != nil {
+		position.ControlMode = feedback.ControlMode
+	}
+	if feedback.CommandResultCode != nil {
+		position.CommandResultCode = feedback.CommandResultCode
+	}
+	if feedback.LeftThrottle != nil {
+		position.LeftThrottle = feedback.LeftThrottle
+	}
+	if feedback.RightThrottle != nil {
+		position.RightThrottle = feedback.RightThrottle
+	}
+	if feedback.Battery != 0 {
+		position.Battery = feedback.Battery
+	}
+	if feedback.Actuators != nil {
+		position.Actuators = feedback.Actuators
+	}
+	if feedback.DeviceStatusOK != nil {
+		position.DeviceStatusOK = feedback.DeviceStatusOK
+	}
 	s.positions[robotName] = position
 }
 

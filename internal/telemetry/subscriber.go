@@ -19,12 +19,12 @@ const telemetryQoS byte = 1
 // 调用方：cmd/watercleanbot/main.go 从 config.Config 组装它。
 // 会调用：无，只保存配置值。
 type SubscriberConfig struct {
-	BrokerURL string
-	ClientID  string
-	Topic     string
+	BrokerURL     string
+	ClientID      string
+	Topic         string
 	FeedbackTopic string
-	Username  string
-	Password  string
+	Username      string
+	Password      string
 }
 
 // Subscriber 负责把 MQTT 遥测消息接入现有定位链路。
@@ -113,6 +113,21 @@ func (s *Subscriber) subscribe(client mqtt.Client) {
 }
 
 func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
+	if position, ok := ParseNavigationFeedback(message.Topic(), message.Payload()); ok {
+		if previous, exists := s.store.Get(position.RobotName); exists {
+			position.Battery = previous.Battery
+			position.Status = previous.Status
+		}
+		updated, err := s.repository.UpsertCurrentPosition(context.Background(), position, time.Now().UnixMilli())
+		if err != nil {
+			s.log.Error("upsert navigation feedback failed", slog.String("robot_name", position.RobotName), slog.Any("error", err))
+			return
+		}
+		if updated {
+			s.store.UpdateNavigation(position)
+		}
+		return
+	}
 	if robotName, feedback, ok := ParseStatusFeedback(message.Topic(), message.Payload()); ok {
 		s.store.UpdateFeedback(robotName, feedback)
 		return
