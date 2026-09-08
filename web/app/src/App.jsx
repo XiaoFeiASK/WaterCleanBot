@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 import Hls from 'hls.js';
 import {
   Bell,
@@ -18,6 +20,8 @@ import {
   Radio,
   Search,
   Settings2,
+  LogOut,
+  UserRound,
   ShipWheel,
   Video,
   Wifi,
@@ -1796,6 +1800,14 @@ function StatCard({ icon: Icon, label, value = '暂无数据' }) {
 }
 
 function App() {
+  const { user, signOut } = useAuth();
+  const navigateTo = useNavigate();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const roleNames = { user: '普通用户', admin: '管理员', superuser: '超级用户' };
+  async function handleSignOut() {
+    await signOut();
+    navigateTo('/login', { replace: true });
+  }
   const [activePage, setActivePage] = useState(getStoredActivePage);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deviceId, setDeviceId] = useState(DEFAULT_DEVICE_ID);
@@ -2013,7 +2025,17 @@ function App() {
           <div className="breadcrumb"><span>首页</span><ChevronRight size={14} />{pageNames[activePage] || '页面'}</div>
           <div className="topbar-actions">
             <button className="icon-button" onClick={showNotImplemented} title="通知" aria-label="通知"><Bell size={18} /></button>
-            <div className="user-chip"><span className="avatar"><Settings2 size={15} /></span><span className="user-label">账号未接入</span></div>
+            <div className="account-menu-wrap">
+              <button className="user-chip user-chip-button" onClick={() => setAccountMenuOpen((open) => !open)} aria-expanded={accountMenuOpen} aria-haspopup="menu">
+                <span className="avatar">{user?.displayName?.slice(0, 1) || <Settings2 size={15} />}</span>
+                <span className="user-label">{user?.displayName}</span><ChevronDown size={14} />
+              </button>
+              {accountMenuOpen && <div className="account-dropdown" role="menu">
+                <div className="account-dropdown-meta"><strong>{user?.displayName}</strong><span>{roleNames[user?.role] || user?.role}</span></div>
+                <button role="menuitem" onClick={() => navigateTo('/account')}><UserRound size={16} />账号设置</button>
+                <button role="menuitem" onClick={handleSignOut}><LogOut size={16} />退出登录</button>
+              </div>}
+            </div>
           </div>
         </header>
         <div className="content-area">{pageContent}</div>

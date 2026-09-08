@@ -233,7 +233,7 @@ http://localhost:8080/api/robots/清澜一号/location
 
 ## 当前刻意不做
 
-- 不做账号权限。
+- 已接入账号登录与 Session；业务 API 的角色权限仍待接入。
 - 不做任务管理。
 - 不做告警管理。
 - 不做命令 ACK 和审计入库。
@@ -241,3 +241,30 @@ http://localhost:8080/api/robots/清澜一号/location
 - 不做完整 PostgreSQL 业务读写。
 
 这些能力等实时定位链路跑通后，再逐步加回来。
+
+## 账号与登录
+
+应用现支持真实 PostgreSQL 账号、bcrypt 密码哈希和服务端 Session。启动后访问前端 `/register` 注册普通用户，或在 `.env` 中同时配置以下四项初始化第一个超级用户：
+
+```text
+INITIAL_SUPERUSER_USERNAME=
+INITIAL_SUPERUSER_PASSWORD=
+INITIAL_SUPERUSER_EMAIL=
+INITIAL_SUPERUSER_DISPLAY_NAME=
+```
+
+认证接口：
+
+```text
+GET    /api/auth/config
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
+PATCH  /api/auth/profile
+POST   /api/auth/change-password
+```
+
+数据库迁移会在后端启动时自动执行，创建 `users` 与 `user_sessions`。开发环境可使用 HTTP；生产环境必须设置 `APP_ENV=production`、`AUTH_COOKIE_SECURE=true` 并通过 HTTPS 提供站点。`AUTH_ALLOWED_ORIGINS` 应填写实际可信前端来源，`AUTH_TRUSTED_PROXIES` 仅填写真实反向代理 IP。
+
+> 安全边界：当前登录会阻止未登录用户进入前端控制台，但机器人、航线、遥控等既有业务 API 尚未加入服务端鉴权，仍可被直接调用。因此本期不构成完整的业务访问控制；下一阶段应为这些接口增加 Session 鉴权和角色授权。

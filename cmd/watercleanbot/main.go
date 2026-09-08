@@ -15,7 +15,9 @@ import (
 
 	_ "github.com/lib/pq"
 
+	dbmigrations "github.com/XiaoFeiASK/WaterCleanBot/database"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/api"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/auth"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/config"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/control"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
@@ -27,6 +29,10 @@ import (
 func main() {
 	cfg := config.Load()
 	log := logger.New(cfg.AppEnv)
+	if err := cfg.Validate(); err != nil {
+		log.Error("invalid configuration", slog.Any("error", err))
+		os.Exit(1)
+	}
 
 	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -45,6 +51,25 @@ func main() {
 		os.Exit(1)
 	}
 	cancel()
+
+	if err := dbmigrations.Up(appCtx, db); err != nil {
+		log.Error("database migration failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	authRepository := auth.NewRepository(db)
+	authService := auth.NewService(authRepository, auth.Config{
+		RegistrationEnabled: cfg.AuthRegistrationEnabled,
+		CookieSecure:        cfg.AuthCookieSecure,
+		AllowedOrigins:      cfg.AuthAllowedOrigins,
+		TrustedProxies:      cfg.AuthTrustedProxies,
+		SessionDuration:     24 * time.Hour,
+		RememberDuration:    30 * 24 * time.Hour,
+	}, log)
+	if err := authService.InitializeSuperuser(appCtx, cfg.InitialSuperuserUsername, cfg.InitialSuperuserDisplayName, cfg.InitialSuperuserEmail, cfg.InitialSuperuserPassword); err != nil {
+		log.Error("initialize superuser failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	go authService.Cleanup(appCtx)
 
 	locationStore := location.NewStore()
 	locationRepository := location.NewRepository(db)
@@ -82,7 +107,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), authService, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

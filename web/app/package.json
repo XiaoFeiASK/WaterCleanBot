@@ -7,16 +7,23 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:coordinates": "node --test src/coordinates.test.js"
+    "test:coordinates": "node --test src/coordinates.test.js",
+    "test": "vitest run src/auth-api.test.js",
+    "test:all": "npm run test:coordinates && npm run test"
   },
   "dependencies": {
     "hls.js": "^1.7.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.5"
+    "jsdom": "^26.1.0",
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
   }
 }
