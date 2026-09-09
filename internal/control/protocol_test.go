@@ -23,7 +23,9 @@ func TestIFCC2IIPCommandEncoding(t *testing.T) {
 		{name: "heartbeat", request: RemoteCommandRequest{Command: "HEARTBEAT"}, expected: DeviceCommandPayload{17}},
 		{name: "autonomous mode", request: protocolRequest("OPERATING_MODE", 1), expected: DeviceCommandPayload{20, 1}},
 		{name: "stop", request: RemoteCommandRequest{Command: "STOP"}, expected: DeviceCommandPayload{23}},
-		{name: "tracking", request: protocolRequest("TRACKING", 1), expected: DeviceCommandPayload{0xEA, 0x01, 0xEB}},
+		{name: "tracking start", request: protocolRequest("TRACKING", 1), expected: DeviceCommandPayload{24, 1}},
+		{name: "tracking stop", request: protocolRequest("TRACKING", 0), expected: DeviceCommandPayload{24, 0}},
+		{name: "dock eject", request: RemoteCommandRequest{Command: "DOCK_EJECT"}, expected: DeviceCommandPayload{0xEA, 0x01, 0xEB}},
 		{name: "left brush", request: protocolRequest("BRUSH_L", 1), expected: DeviceCommandPayload{36, 1, 1}},
 		{name: "right brush", request: protocolRequest("BRUSH_R", 1), expected: DeviceCommandPayload{36, 2, 1}},
 		{name: "conveyor", request: protocolRequest("CONVEYOR", 1), expected: DeviceCommandPayload{36, 3, 1}},
@@ -76,8 +78,8 @@ func TestRouteCommandCodeAcceptsCoordinateDecimals(t *testing.T) {
 	}
 }
 
-func TestTrackingSerializesAsRawHexFrame(t *testing.T) {
-	command, err := BuildRemoteCommand("USV-001", 1, protocolRequest("TRACKING", 1))
+func TestDockEjectSerializesAsRawHexFrame(t *testing.T) {
+	command, err := BuildRemoteCommand("USV-001", 1, RemoteCommandRequest{Command: "DOCK_EJECT"})
 	if err != nil {
 		t.Fatalf("BuildRemoteCommand() error = %v", err)
 	}
@@ -88,6 +90,25 @@ func TestTrackingSerializesAsRawHexFrame(t *testing.T) {
 	}
 	want := []byte{0xEA, 0x01, 0xEB}
 	if !reflect.DeepEqual(payload, want) {
-		t.Fatalf("tracking payload = % X, want % X", payload, want)
+		t.Fatalf("dock eject payload = % X, want % X", payload, want)
+	}
+}
+
+func TestTrackingSerializesAsProtocolArray(t *testing.T) {
+	for _, test := range []struct {
+		value int
+		want  string
+	}{{0, "[24,0]"}, {1, "[24,1]"}} {
+		command, err := BuildRemoteCommand("USV-001", 1, protocolRequest("TRACKING", test.value))
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := encodeCommandPayload(command)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(payload) != test.want {
+			t.Fatalf("tracking payload = %s, want %s", payload, test.want)
+		}
 	}
 }

@@ -69,7 +69,7 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 			"topic":     "mqtt",
 			"protocol":  command.DevicePayload(),
 		}
-		if command.Command == "TRACKING" {
+		if command.Command == "DOCK_EJECT" {
 			response["protocolHex"] = "[EA 01 EB]"
 		}
 		writeJSON(w, http.StatusAccepted, response)

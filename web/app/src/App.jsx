@@ -43,6 +43,7 @@ import {
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 import { getRoleName } from './roles';
+import { DockEjectButton, TrackingSwitch } from './CommandControls';
 
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
@@ -1044,7 +1045,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [routesLoading, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState('');
   const [routeAction, setRouteAction] = useState('');
-  const [trackingBusy, setTrackingBusy] = useState(false);
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
@@ -1218,28 +1218,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
-  async function triggerTracking() {
-    if (trackingBusy) return;
-    if (!routeDeviceId) {
-      onToast?.('请先查询需要控制的设备');
-      return;
-    }
-    setTrackingBusy(true);
-    try {
-      const result = await sendRobotCommand(routeDeviceId, {
-        command: 'TRACKING',
-        value: 1,
-        values: { TRACKING: 1 },
-        ttlMs: 800,
-      });
-      onToast?.(`循迹指令已发布 ${result.protocolHex || '[EA 01 EB]'}`, 'success');
-    } catch (error) {
-      onToast?.(getRemoteCommandErrorMessage(error));
-    } finally {
-      setTrackingBusy(false);
-    }
-  }
-
   async function stopTask() {
     if (!routeDeviceId || isRouteBusy) return;
     setRouteAction('stop');
@@ -1277,16 +1255,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             previewRoutePoints={previewRoutePoints}
             onMapPoint={addDraftRoutePoint}
           />
-          <button
-            className={`tracking-map-switch ${trackingBusy ? 'tracking-map-switch-sending' : ''}`}
-            type="button"
-            onClick={triggerTracking}
-            aria-busy={trackingBusy}
-            title="下发循迹 MQTT 指令 EA 01 EB"
-          >
-            <span>{trackingBusy ? '下发中' : '循迹开关'}</span>
-            <small>EA 01 EB</small>
-          </button>
+          <TrackingSwitch deviceId={routeDeviceId} onToast={onToast} />
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
               <span>航程</span>
@@ -1737,7 +1706,7 @@ function RemoteControlPanel({ position, onToast }) {
           <section className="command-section actuator-card">
             <div className="remote-card-header">
               <Settings2 size={18} />
-              <div><strong>执行机构</strong><span>点击切换设备状态</span></div>
+              <div><strong>执行机构</strong><span>切换设备状态或下发动作</span></div>
             </div>
             <div className="switch-grid">
               {REMOTE_SWITCH_COMMANDS.map((command) => {
@@ -1756,6 +1725,7 @@ function RemoteControlPanel({ position, onToast }) {
                   </button>
                 );
               })}
+              <DockEjectButton deviceId={remoteDeviceId} onToast={onToast} />
             </div>
           </section>
         </div>

@@ -144,11 +144,11 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 
 func encodeCommandPayload(command RemoteCommandEnvelope) ([]byte, error) {
 	protocol := command.DevicePayload()
-	if command.Command == "TRACKING" {
+	if command.Command == "DOCK_EJECT" {
 		payload := make([]byte, len(protocol))
 		for i, value := range protocol {
 			if value < 0 || value > 0xFF {
-				return nil, fmt.Errorf("tracking protocol byte out of range: %d", value)
+				return nil, fmt.Errorf("dock eject protocol byte out of range: %d", value)
 			}
 			payload[i] = byte(value)
 		}

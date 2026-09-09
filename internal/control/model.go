@@ -36,9 +36,10 @@ var commandRanges = map[string]struct{ min, max int }{
 	"PADDLE_POWER":   {0, 1},
 }
 
-var parameterlessCommands = map[string]int{
-	"HEARTBEAT": 17,
-	"STOP":      23,
+var parameterlessCommands = map[string]DeviceCommandPayload{
+	"HEARTBEAT":  {17},
+	"STOP":       {23},
+	"DOCK_EJECT": {0xEA, 0x01, 0xEB},
 }
 
 // ValidationError 表示请求本身非法，调用方应返回 400 而不是重试发布。
@@ -86,16 +87,16 @@ type DeviceCommandPayload []int
 
 // DevicePayload 把语义化指令编码成艇端协议数组。
 func (e RemoteCommandEnvelope) DevicePayload() DeviceCommandPayload {
-	if code, ok := parameterlessCommands[e.Command]; ok {
-		return DeviceCommandPayload{code}
+	if payload, ok := parameterlessCommands[e.Command]; ok {
+		return append(DeviceCommandPayload(nil), payload...)
 	}
 
 	switch e.Command {
 	case "OPERATING_MODE":
 		return DeviceCommandPayload{20, e.Value}
 	case "TRACKING":
-		// 循迹表示按已下发航线出发，艇端要求固定的十六进制帧 EA 01 EB。
-		return DeviceCommandPayload{0xEA, 0x01, 0xEB}
+		// 0x18：1 开始按航线循迹，0 停止循迹。
+		return DeviceCommandPayload{24, e.Value}
 	case "CLEANING":
 		return DeviceCommandPayload{38, e.Value}
 	case "THROTTLE_L":
