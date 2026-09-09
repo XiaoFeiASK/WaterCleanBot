@@ -1674,3 +1674,48 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
     display: none;
   }
 }
+
+/* Route mission controls: make the route-follow action distinct from setup and stop controls. */
+.route-launch-action {
+  display: grid;
+  gap: 4px;
+}
+.route-launch-action > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-align: center;
+  white-space: nowrap;
+}
+.route-launch-button {
+  min-width: 150px;
+}
+.route-support-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.button-danger-soft {
+  color: var(--red);
+  background: rgba(199, 75, 70, .08);
+  border-color: rgba(199, 75, 70, .24);
+}
+.button-danger-soft:hover {
+  background: rgba(199, 75, 70, .14);
+}
+
+@media (max-width: 760px) {
+  .route-launch-action,
+  .route-support-actions {
+    width: 100%;
+  }
+  .route-support-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .route-launch-action > span {
+    text-align: left;
+  }
+}

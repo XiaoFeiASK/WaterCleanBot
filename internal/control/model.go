@@ -81,7 +81,7 @@ type RemoteCommandEnvelope struct {
 	Values    map[string]int `json:"values"`
 }
 
-// DeviceCommandPayload 是艇端 IF_CC2IIP 协议要求的纯数字数组。
+// DeviceCommandPayload 是艇端 IF_CC2IIP 协议要求的数字载荷。
 type DeviceCommandPayload []int
 
 // DevicePayload 把语义化指令编码成艇端协议数组。
@@ -94,7 +94,8 @@ func (e RemoteCommandEnvelope) DevicePayload() DeviceCommandPayload {
 	case "OPERATING_MODE":
 		return DeviceCommandPayload{20, e.Value}
 	case "TRACKING":
-		return DeviceCommandPayload{24, e.Value}
+		// 循迹表示按已下发航线出发，艇端要求固定的十六进制帧 EA 01 EB。
+		return DeviceCommandPayload{0xEA, 0x01, 0xEB}
 	case "CLEANING":
 		return DeviceCommandPayload{38, e.Value}
 	case "THROTTLE_L":

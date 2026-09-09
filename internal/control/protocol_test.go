@@ -23,7 +23,7 @@ func TestIFCC2IIPCommandEncoding(t *testing.T) {
 		{name: "heartbeat", request: RemoteCommandRequest{Command: "HEARTBEAT"}, expected: DeviceCommandPayload{17}},
 		{name: "autonomous mode", request: protocolRequest("OPERATING_MODE", 1), expected: DeviceCommandPayload{20, 1}},
 		{name: "stop", request: RemoteCommandRequest{Command: "STOP"}, expected: DeviceCommandPayload{23}},
-		{name: "tracking", request: protocolRequest("TRACKING", 1), expected: DeviceCommandPayload{24, 1}},
+		{name: "tracking", request: protocolRequest("TRACKING", 1), expected: DeviceCommandPayload{0xEA, 0x01, 0xEB}},
 		{name: "left brush", request: protocolRequest("BRUSH_L", 1), expected: DeviceCommandPayload{36, 1, 1}},
 		{name: "right brush", request: protocolRequest("BRUSH_R", 1), expected: DeviceCommandPayload{36, 2, 1}},
 		{name: "conveyor", request: protocolRequest("CONVEYOR", 1), expected: DeviceCommandPayload{36, 3, 1}},
@@ -73,5 +73,21 @@ func TestRouteCommandCodeAcceptsCoordinateDecimals(t *testing.T) {
 	code, err := routeCommandCode(`[40,2,121.12345678,31.12345678,2]`)
 	if err != nil || code != 40 {
 		t.Fatalf("routeCommandCode() = %d, %v; want 40", code, err)
+	}
+}
+
+func TestTrackingSerializesAsRawHexFrame(t *testing.T) {
+	command, err := BuildRemoteCommand("USV-001", 1, protocolRequest("TRACKING", 1))
+	if err != nil {
+		t.Fatalf("BuildRemoteCommand() error = %v", err)
+	}
+
+	payload, err := encodeCommandPayload(command)
+	if err != nil {
+		t.Fatalf("encodeCommandPayload() error = %v", err)
+	}
+	want := []byte{0xEA, 0x01, 0xEB}
+	if !reflect.DeepEqual(payload, want) {
+		t.Fatalf("tracking payload = % X, want % X", payload, want)
 	}
 }

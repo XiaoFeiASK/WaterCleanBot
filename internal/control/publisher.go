@@ -30,17 +30,17 @@ type PublisherConfig struct {
 
 // Publisher 负责把遥控指令和航线协议发布到 usv/{robotName}/web。
 type Publisher struct {
-	config      PublisherConfig
-	log         *slog.Logger
-	client      mqtt.Client
-	seq         atomic.Uint64
+	config PublisherConfig
+	log    *slog.Logger
+	client mqtt.Client
+	seq    atomic.Uint64
 }
 
 // NewPublisher 创建 MQTT 指令发布器。
 func NewPublisher(config PublisherConfig, log *slog.Logger) *Publisher {
 	return &Publisher{
-		config:     config,
-		log:        log,
+		config: config,
+		log:    log,
 	}
 }
 
@@ -119,7 +119,7 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 		return fmt.Errorf("mqtt command publisher is not connected")
 	}
 
-	payload, err := json.Marshal(command.DevicePayload())
+	payload, err := encodeCommandPayload(command)
 	if err != nil {
 		return fmt.Errorf("encode mqtt command payload: %w", err)
 	}
@@ -140,6 +140,21 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 		slog.Uint64("seq", command.Seq),
 	)
 	return nil
+}
+
+func encodeCommandPayload(command RemoteCommandEnvelope) ([]byte, error) {
+	protocol := command.DevicePayload()
+	if command.Command == "TRACKING" {
+		payload := make([]byte, len(protocol))
+		for i, value := range protocol {
+			if value < 0 || value > 0xFF {
+				return nil, fmt.Errorf("tracking protocol byte out of range: %d", value)
+			}
+			payload[i] = byte(value)
+		}
+		return payload, nil
+	}
+	return json.Marshal(protocol)
 }
 
 // PublishRoute 发布一条已经编码好的路径点协议到 usv/{robotName}/web。

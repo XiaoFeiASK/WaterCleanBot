@@ -105,7 +105,6 @@ const REMOTE_SWITCH_COMMANDS = Object.freeze([
   { cmd: 'BRUSH_R', label: '右滚刷', onText: '开启', offText: '关闭' },
   { cmd: 'OPERATING_MODE', label: '运行模式', onText: '自主', offText: '手动' },
   { cmd: 'CLEANING', label: '垃圾清理', onText: '运行', offText: '停止' },
-  { cmd: 'TRACKING', label: '循迹', onText: '开启', offText: '关闭' },
   { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电' },
 ]);
 
@@ -142,7 +141,6 @@ const INITIAL_REMOTE_VALUES = Object.freeze({
   BRUSH_R: 0,
   OPERATING_MODE: 0,
   CLEANING: 0,
-  TRACKING: 0,
   PADDLE_POWER: 0,
 });
 
@@ -1219,6 +1217,24 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
+  async function startTracking() {
+    if (!routeDeviceId || !previewRoute || isRouteBusy) return;
+    setRouteAction('tracking');
+    try {
+      const result = await sendRobotCommand(routeDeviceId, {
+        command: 'TRACKING',
+        value: 1,
+        values: { TRACKING: 1 },
+        ttlMs: 800,
+      });
+      onToast?.(`已按当前航线出发 ${result.protocolHex || '[EA 01 EB]'}`, 'success');
+    } catch (error) {
+      onToast?.(getRemoteCommandErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
   async function stopTask() {
     if (!routeDeviceId || isRouteBusy) return;
     setRouteAction('stop');
@@ -1240,10 +1256,18 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <p className="eyebrow">在线地图</p>
             <h3>在线地图 - {deviceName}</h3>
           </div>
-          <div className="online-map-actions">
-            <button className="button button-primary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
-            <button className="button button-secondary" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
-            <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
+          <div className="online-map-actions" aria-label="航线任务操作">
+            <div className="route-launch-action">
+              <button className="button button-primary route-launch-button" type="button" onClick={startTracking} disabled={!previewRoute || isRouteBusy}>
+                {routeAction === 'tracking' ? '出发中' : '按当前航线出发'}
+              </button>
+              <span>{previewRoute ? '循迹 · EA 01 EB' : '请先预览一条航线'}</span>
+            </div>
+            <div className="route-support-actions">
+              <button className="button button-secondary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
+              <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
+              <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
+            </div>
           </div>
         </div>
 

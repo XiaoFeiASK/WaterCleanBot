@@ -61,13 +61,17 @@ func RobotCommandHandler(store *location.Store, publisher RemoteCommandPublisher
 			return
 		}
 
-		writeJSON(w, http.StatusAccepted, map[string]any{
+		response := map[string]any{
 			"status":    "published",
 			"commandId": command.CommandID,
 			"seq":       command.Seq,
 			"target":    command.Target,
 			"topic":     "mqtt",
 			"protocol":  command.DevicePayload(),
-		})
+		}
+		if command.Command == "TRACKING" {
+			response["protocolHex"] = "[EA 01 EB]"
+		}
+		writeJSON(w, http.StatusAccepted, response)
 	}
 }

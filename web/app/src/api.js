@@ -206,6 +206,9 @@ function validateCommandResponse(payload, expectedRobotName) {
   ) {
     throw createRemoteCommandError('REQUEST_FAILED');
   }
+  if (payload.protocolHex != null && typeof payload.protocolHex !== 'string') {
+    throw createRemoteCommandError('REQUEST_FAILED');
+  }
   return payload;
 }
 
