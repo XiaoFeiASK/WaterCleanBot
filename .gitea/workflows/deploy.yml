@@ -17,5 +17,9 @@ jobs:
           cd /opt/watercleanbot
           git config --global --add safe.directory /opt/watercleanbot || true
           git fetch --prune gitea main
-          git reset --hard gitea/main
-          bash scripts/deploy-production.sh --no-git
+          # Execute the NEW deployment script before resetting the old checkout.
+          # It preserves .env before Git stops tracking that file.
+          update_script="$(mktemp)"
+          trap 'rm -f -- "$update_script"' EXIT
+          git show gitea/main:scripts/deploy-production.sh > "$update_script"
+          bash "$update_script"

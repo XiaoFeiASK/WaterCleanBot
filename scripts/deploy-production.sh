@@ -10,13 +10,42 @@ if [[ "${1:-}" == "--no-git" ]]; then
   RUN_GIT_UPDATE=0
 fi
 
+# Serialize automated and manual deployments on the server.
+exec 9>/run/lock/watercleanbot-deploy.lock
+flock -n 9 || { echo "Another deployment is running." >&2; exit 1; }
+
 cd "$APP_DIR"
 
 if [[ "$RUN_GIT_UPDATE" == "1" ]]; then
   git config --global --add safe.directory "$APP_DIR" || true
   git fetch --prune "$DEPLOY_REMOTE" "$DEPLOY_BRANCH"
+  # Preserve host-specific secrets even during the first tracked -> ignored .env migration.
+  test -f .env || { echo "Missing server .env; refusing deployment." >&2; exit 1; }
+  install -d -m 700 /var/backups/watercleanbot
+  env_backup="$(mktemp /var/backups/watercleanbot/env.XXXXXX)"
+  env_mode="$(stat -c %a .env)"
+  cp -p .env "$env_backup"
+  chmod 600 "$env_backup"
+  restore_env() {
+    local status=$?
+    cp -p "$env_backup" "$APP_DIR/.env"
+    chmod "$env_mode" "$APP_DIR/.env"
+    exit "$status"
+  }
+  trap restore_env EXIT
   git reset --hard "$DEPLOY_REMOTE/$DEPLOY_BRANCH"
+  cp -p "$env_backup" .env
+  chmod "$env_mode" .env
+  trap - EXIT
 fi
+
+# Fail before replacing application artifacts when first-time setup is incomplete.
+test -f .env || { echo "Missing server .env." >&2; exit 1; }
+if ! grep -Eq '^CAMERA_HLS_BASE_URL=/video/?[[:space:]]*$' .env; then
+  echo "Set CAMERA_HLS_BASE_URL=/video in the server .env (see deploy/README.md)." >&2
+  exit 1
+fi
+APP_DIR="$APP_DIR" bash "$APP_DIR/scripts/install-video-proxy.sh"
 
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 export GOSUMDB="${GOSUMDB:-sum.golang.google.cn}"

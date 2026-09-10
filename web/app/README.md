@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。摄像头播放地址由后端返回，默认指向 MediaMTX HLS 端口 `http://localhost:8888`。机器人位置页面调用已确认的位置接口：
+开发服务器会把 `/api` 请求代理到 `http://localhost:8080`。摄像头播放地址由后端返回，默认使用同源入口 `/video`（开发由 Vite 转发，生产由 Nginx 转发）。机器人位置页面调用已确认的位置接口：
 
 ```text
 GET /api/robots/locations

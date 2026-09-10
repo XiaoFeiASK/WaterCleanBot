@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:coordinates": "node --test src/coordinates.test.js",
     "test": "vitest run src/auth-api.test.js src/roles.test.js src/CommandControls.test.jsx",
-    "test:all": "npm run test:coordinates && npm run test"
+    "test:all": "npm run test:coordinates && npm run test:video-proxy && npm run test",
+    "test:video-proxy": "node --test video-proxy.test.js"
   },
   "dependencies": {
     "hls.js": "^1.7.0",

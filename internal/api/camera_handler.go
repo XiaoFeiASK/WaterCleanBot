@@ -62,7 +62,7 @@ func RobotCamerasHandler(streams []CameraStream) http.HandlerFunc {
 func cameraHLSURLBuilder(hlsBaseURL string) func(string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(hlsBaseURL), "/")
 	if baseURL == "" {
-		baseURL = "http://localhost:8888"
+		baseURL = "/video"
 	}
 
 	return func(path string) string {
