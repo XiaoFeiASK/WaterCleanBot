@@ -44,7 +44,7 @@ func Load() Config {
 		MQTTTelemetryTopic: getenv("MQTT_TELEMETRY_TOPIC", "usv/+/telemetry"), MQTTCommandClientID: getenv("MQTT_COMMAND_CLIENT_ID", "watercleanbot-command-publisher"),
 		MQTTCommandTopic: getenv("MQTT_COMMAND_TOPIC", "usv/%s/websend"), MQTTRouteTopic: getenv("MQTT_ROUTE_TOPIC", "usv/%s/websend"),
 		MQTTFeedbackTopic: getenv("MQTT_FEEDBACK_TOPIC", "usv/+/webfeedback"), MQTTUsername: getenv("MQTT_USERNAME", ""), MQTTPassword: getenv("MQTT_PASSWORD", ""),
-		CameraHLSBaseURL:        getenv("CAMERA_HLS_BASE_URL", "http://localhost:8888"),
+		CameraHLSBaseURL:        getenv("CAMERA_HLS_BASE_URL", "/video"),
 		AuthRegistrationEnabled: getBool("AUTH_REGISTRATION_ENABLED", true), AuthCookieSecure: getBool("AUTH_COOKIE_SECURE", false),
 		AuthTrustedProxies:       getList("AUTH_TRUSTED_PROXIES", nil),
 		InitialSuperuserUsername: os.Getenv("INITIAL_SUPERUSER_USERNAME"), InitialSuperuserPassword: os.Getenv("INITIAL_SUPERUSER_PASSWORD"),
