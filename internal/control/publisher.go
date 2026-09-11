@@ -15,13 +15,17 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-const commandQoS byte = 1
+const (
+	commandQoS   byte = 1
+	dockEjectQoS byte = 0
+)
 
 // PublisherConfig 是 MQTT 指令发布器的运行配置。
 type PublisherConfig struct {
 	BrokerURL             string
 	ClientID              string
 	TopicTemplate         string
+	DockEjectTopic        string
 	RouteTopicTemplate    string
 	FeedbackTopicTemplate string
 	Username              string
@@ -57,6 +61,12 @@ func (p *Publisher) Start(ctx context.Context) error {
 	}
 	if !strings.Contains(p.config.TopicTemplate, "%s") {
 		return fmt.Errorf("mqtt command topic template must contain %%s")
+	}
+	if p.config.DockEjectTopic == "" {
+		p.config.DockEjectTopic = "a40i/sub"
+	}
+	if strings.ContainsAny(p.config.DockEjectTopic, "+#") {
+		return fmt.Errorf("mqtt dock eject topic must not contain wildcards")
 	}
 	if p.config.RouteTopicTemplate == "" {
 		p.config.RouteTopicTemplate = "usv/%s/websend"
@@ -124,8 +134,8 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 		return fmt.Errorf("encode mqtt command payload: %w", err)
 	}
 
-	topic := fmt.Sprintf(p.config.TopicTemplate, command.Target)
-	token := p.client.Publish(topic, commandQoS, false, payload)
+	topic, qos := p.commandPublishTarget(command)
+	token := p.client.Publish(topic, qos, false, payload)
 	if !token.WaitTimeout(publishTimeout(ctx, 3*time.Second)) {
 		return fmt.Errorf("publish mqtt command timeout")
 	}
@@ -136,10 +146,20 @@ func (p *Publisher) publishCommand(ctx context.Context, command RemoteCommandEnv
 	p.log.Info("mqtt control command published",
 		slog.String("robot_name", command.Target),
 		slog.String("command", command.Command),
+		slog.String("topic", topic),
+		slog.Int("qos", int(qos)),
 		slog.Any("protocol", []int(command.DevicePayload())),
 		slog.Uint64("seq", command.Seq),
 	)
 	return nil
+}
+
+// commandPublishTarget 为船坞弹出选择独立的固定 Topic；其他遥控指令仍按设备名发布。
+func (p *Publisher) commandPublishTarget(command RemoteCommandEnvelope) (string, byte) {
+	if command.Command == "DOCK_EJECT" {
+		return p.config.DockEjectTopic, dockEjectQoS
+	}
+	return fmt.Sprintf(p.config.TopicTemplate, command.Target), commandQoS
 }
 
 func encodeCommandPayload(command RemoteCommandEnvelope) ([]byte, error) {

@@ -104,6 +104,7 @@ func main() {
 		BrokerURL:             cfg.MQTTBrokerURL,
 		ClientID:              cfg.MQTTCommandClientID,
 		TopicTemplate:         cfg.MQTTCommandTopic,
+		DockEjectTopic:        cfg.MQTTDockEjectTopic,
 		RouteTopicTemplate:    cfg.MQTTRouteTopic,
 		FeedbackTopicTemplate: cfg.MQTTFeedbackTopic,
 		Username:              cfg.MQTTUsername,

@@ -20,6 +20,7 @@ type Config struct {
 	MQTTTelemetryTopic          string
 	MQTTCommandClientID         string
 	MQTTCommandTopic            string
+	MQTTDockEjectTopic          string
 	MQTTRouteTopic              string
 	MQTTFeedbackTopic           string
 	MQTTUsername                string
@@ -42,7 +43,8 @@ func Load() Config {
 		DatabaseURL:              getenv("DATABASE_URL", "postgres://waterbot:waterbot_dev_password@localhost:5432/waterbot?sslmode=disable"),
 		MQTTBrokerURL:            getenv("MQTT_BROKER_URL", "tcp://localhost:1883"), MQTTClientID: getenv("MQTT_CLIENT_ID", "watercleanbot-backend"),
 		MQTTTelemetryTopic: getenv("MQTT_TELEMETRY_TOPIC", "usv/+/telemetry"), MQTTCommandClientID: getenv("MQTT_COMMAND_CLIENT_ID", "watercleanbot-command-publisher"),
-		MQTTCommandTopic: getenv("MQTT_COMMAND_TOPIC", "usv/%s/websend"), MQTTRouteTopic: getenv("MQTT_ROUTE_TOPIC", "usv/%s/websend"),
+		MQTTCommandTopic: getenv("MQTT_COMMAND_TOPIC", "usv/%s/websend"), MQTTDockEjectTopic: getenv("MQTT_DOCK_EJECT_TOPIC", "a40i/sub"),
+		MQTTRouteTopic:    getenv("MQTT_ROUTE_TOPIC", "usv/%s/websend"),
 		MQTTFeedbackTopic: getenv("MQTT_FEEDBACK_TOPIC", "usv/+/webfeedback"), MQTTUsername: getenv("MQTT_USERNAME", ""), MQTTPassword: getenv("MQTT_PASSWORD", ""),
 		CameraHLSBaseURL:        getenv("CAMERA_HLS_BASE_URL", "/video"),
 		AuthRegistrationEnabled: getBool("AUTH_REGISTRATION_ENABLED", true), AuthCookieSecure: getBool("AUTH_COOKIE_SECURE", false),

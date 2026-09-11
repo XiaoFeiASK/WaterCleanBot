@@ -138,7 +138,8 @@ MQTT telemetry / [18,...] webfeedback（设备可按 5Hz 上报）
 前端遥控面板
   -> POST /api/robots/{robotName}/commands
   -> 后端校验设备名、油门范围和开关状态
-  -> MQTT 发布 usv/{robotName}/websend
+  -> 普通遥控指令通过 MQTT 发布到 usv/{robotName}/websend（QoS 1）
+  -> 船坞弹出 [EA 01 EB] 发布到 MQTT_DOCK_EJECT_TOPIC（默认 a40i/sub，QoS 0）
   -> 前端显示已发布或失败
 ```
 

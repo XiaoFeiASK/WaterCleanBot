@@ -94,6 +94,38 @@ func TestDockEjectSerializesAsRawHexFrame(t *testing.T) {
 	}
 }
 
+func TestDockEjectUsesDedicatedTopicWithQoSZero(t *testing.T) {
+	publisher := NewPublisher(PublisherConfig{
+		TopicTemplate:  "usv/%s/websend",
+		DockEjectTopic: "a40i/sub",
+	}, nil)
+	command, err := BuildRemoteCommand("USV-001", 1, RemoteCommandRequest{Command: "DOCK_EJECT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic, qos := publisher.commandPublishTarget(command)
+	if topic != "a40i/sub" || qos != 0 {
+		t.Fatalf("dock eject destination = %q (QoS %d), want a40i/sub (QoS 0)", topic, qos)
+	}
+}
+
+func TestRegularCommandKeepsDeviceTopicAndQoSOne(t *testing.T) {
+	publisher := NewPublisher(PublisherConfig{
+		TopicTemplate:  "usv/%s/websend",
+		DockEjectTopic: "a40i/sub",
+	}, nil)
+	command, err := BuildRemoteCommand("USV-001", 1, RemoteCommandRequest{Command: "HEARTBEAT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic, qos := publisher.commandPublishTarget(command)
+	if topic != "usv/USV-001/websend" || qos != 1 {
+		t.Fatalf("regular command destination = %q (QoS %d), want usv/USV-001/websend (QoS 1)", topic, qos)
+	}
+}
+
 func TestTrackingSerializesAsProtocolArray(t *testing.T) {
 	for _, test := range []struct {
 		value int
