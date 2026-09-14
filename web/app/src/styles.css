@@ -384,6 +384,9 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .switch-state { flex-shrink: 0; min-width: 42px; padding: 5px 8px; color: #6d7e81; background: rgba(19,38,41,.07); border-radius: 999px; font-size: 12px; font-weight: 900; text-align: center; }
 .switch-control-on { border-color: rgba(24,169,153,.42); background: rgba(24,169,153,.12); }
 .switch-control-on .switch-state { color: #fffef7; background: var(--teal-dark); }
+.switch-control-prominent { border: 2px solid rgba(24,169,153,.5); box-shadow: 0 8px 18px rgba(24,169,153,.12); }
+.switch-control-prominent .switch-state { min-width: 58px; padding: 8px 10px; color: #fffef7; background: var(--water); font-size: 13px; }
+.switch-control-prominent:hover { border-color: var(--teal-dark); box-shadow: 0 10px 22px rgba(24,169,153,.2); }
 .button-danger { width: 100%; color: #fffef7; background: linear-gradient(135deg, #bd3b3b, #7f2525); box-shadow: 0 12px 24px rgba(189,59,59,.14); }
 .button-danger:hover { filter: brightness(.96); }
 .fleet-management-section { padding: 22px; background: rgba(255,253,246,.88); border: 1px solid var(--line); border-radius: 26px; box-shadow: var(--shadow); }
@@ -1688,7 +1691,7 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   gap: 10px;
   min-height: 58px;
   padding: 10px 13px;
-  border: 1px solid var(--line);
+  border: 2px solid var(--teal-dark);
   border-radius: 12px;
   color: var(--ink);
   background: rgba(248, 250, 249, .97);
@@ -1728,6 +1731,9 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 .tracking-map-switch[aria-checked="true"] .tracking-map-toggle { background: var(--teal-dark); }
 .tracking-map-switch[aria-checked="true"] .tracking-map-toggle > span { transform: translateX(14px); }
 .tracking-map-switch[aria-busy="true"] { cursor: wait; }
+.dock-eject-control { position: relative; }
+.dock-eject-indicator { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; background: #c43c3c; box-shadow: 0 0 0 3px rgba(196,60,60,.14); transition: background .2s ease, box-shadow .2s ease; }
+.dock-eject-indicator.is-active { background: #22a66f; box-shadow: 0 0 0 3px rgba(34,166,111,.18), 0 0 12px rgba(34,166,111,.55); }
 .dock-eject-control .dock-eject-action {
   display: inline-flex;
   align-items: center;
@@ -1755,3 +1761,4 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
     padding: 9px 11px;
   }
 }
+

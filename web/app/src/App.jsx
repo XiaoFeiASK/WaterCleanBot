@@ -45,6 +45,10 @@ import { wgs84ToGcj02 } from './coordinates';
 import { getRoleName } from './roles';
 import { DockEjectButton, TrackingSwitch } from './CommandControls';
 
+function confirmAction(message) {
+  try { return window.confirm(message) !== false; } catch { return true; }
+}
+
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = 'USV-001';
@@ -99,7 +103,7 @@ const REMOTE_THROTTLE_COMMANDS = Object.freeze([
 ]);
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
-  { cmd: 'HATCH_CYLINDER', label: '舱盖电缸', onText: '开启', offText: '关闭' },
+  { cmd: 'HATCH_CYLINDER', label: '翻盖开关', onText: '开启', offText: '关闭' },
   { cmd: 'DISC_CYLINDER', label: '推盘电缸', onText: '推', offText: '收回' },
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
@@ -1637,6 +1641,7 @@ function RemoteControlPanel({ position, onToast }) {
 
   async function toggleSwitch(command) {
     const nextValue = values[command.cmd] ? 0 : 1;
+    if (command.cmd === 'OPERATING_MODE' && !confirmAction(`确认切换运行模式为“${nextValue ? command.onText : command.offText}”吗？`)) return;
     const previousValues = values;
     const nextValues = { ...values, [command.cmd]: nextValue };
     setValues(nextValues);
@@ -1713,7 +1718,7 @@ function RemoteControlPanel({ position, onToast }) {
                 const enabled = values[command.cmd] === 1;
                 return (
                   <button
-                    className={`switch-control ${enabled ? 'switch-control-on' : ''}`}
+                    className={`switch-control ${command.cmd === 'OPERATING_MODE' ? 'switch-control-prominent' : ''} ${enabled ? 'switch-control-on' : ''}`}
                     type="button"
                     key={command.cmd}
                     onClick={() => toggleSwitch(command)}
