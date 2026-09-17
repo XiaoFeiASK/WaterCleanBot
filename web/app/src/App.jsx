@@ -18,6 +18,7 @@ import {
   Menu,
   PanelLeftClose,
   Plus,
+  Power,
   Trash2,
   X,
   Radio,
@@ -50,7 +51,7 @@ import {
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 import { getRoleName } from './roles';
-import { DockEjectButton, TrackingSwitch } from './CommandControls';
+import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingSwitch } from './CommandControls';
 import './fleet.css';
 
 function confirmAction(message) {
@@ -118,13 +119,16 @@ const REMOTE_THROTTLE_COMMANDS = Object.freeze([
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
   { cmd: 'HATCH_CYLINDER', label: '翻盖开关', onText: '开启', offText: '关闭' },
-  { cmd: 'DISC_CYLINDER', label: '推盘电缸', onText: '推', offText: '收回' },
+  { cmd: 'DISC_CYLINDER', label: '推出电缸', onText: '推出', offText: '收回' },
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_R', label: '右滚刷', onText: '开启', offText: '关闭' },
-  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '自主', offText: '手动' },
   { cmd: 'CLEANING', label: '垃圾清理', onText: '运行', offText: '停止' },
-  { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电' },
+]);
+
+const CRITICAL_SWITCH_COMMANDS = Object.freeze([
+  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '自主', offText: '手动', icon: ShipWheel, tone: 'mode' },
+  { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电', icon: Power, tone: 'power' },
 ]);
 
 const CAMERA_CHANNELS = Object.freeze([
@@ -1720,7 +1724,7 @@ function RemoteControlPanel({ position, onToast }) {
 
   async function toggleSwitch(command) {
     const nextValue = values[command.cmd] ? 0 : 1;
-    if (command.cmd === 'OPERATING_MODE' && !confirmAction(`确认切换运行模式为“${nextValue ? command.onText : command.offText}”吗？`)) return;
+    if (!requestRemoteSwitchConfirmation(command, nextValue)) return;
     const previousValues = values;
     const nextValues = { ...values, [command.cmd]: nextValue };
     setValues(nextValues);
@@ -1792,12 +1796,35 @@ function RemoteControlPanel({ position, onToast }) {
               <Settings2 size={18} />
               <div><strong>执行机构</strong><span>切换设备状态或下发动作</span></div>
             </div>
+            <div className="critical-controls" aria-label="关键控制">
+              {CRITICAL_SWITCH_COMMANDS.map((command) => {
+                const enabled = values[command.cmd] === 1;
+                const ControlIcon = command.icon;
+                return (
+                  <button
+                    className={`switch-control critical-control critical-control--${command.tone} ${enabled ? 'switch-control-on' : ''}`}
+                    type="button"
+                    key={command.cmd}
+                    onClick={() => toggleSwitch(command)}
+                    disabled={!hasRemoteTarget}
+                    aria-pressed={enabled}
+                  >
+                    <span className="critical-control-copy">
+                      <span className="critical-control-icon" aria-hidden="true"><ControlIcon size={22} /></span>
+                      <span><strong>{command.label}</strong><small>{command.cmd === 'OPERATING_MODE' ? '当前模式' : '电源状态'}</small></span>
+                    </span>
+                    <span className="switch-state">{enabled ? command.onText : command.offText}</span>
+                  </button>
+                );
+              })}
+              <DockEjectButton deviceId={remoteDeviceId} onToast={onToast} />
+            </div>
             <div className="switch-grid">
               {REMOTE_SWITCH_COMMANDS.map((command) => {
                 const enabled = values[command.cmd] === 1;
                 return (
                   <button
-                    className={`switch-control ${command.cmd === 'OPERATING_MODE' ? 'switch-control-prominent' : ''} ${enabled ? 'switch-control-on' : ''}`}
+                    className={`switch-control ${enabled ? 'switch-control-on' : ''}`}
                     type="button"
                     key={command.cmd}
                     onClick={() => toggleSwitch(command)}
@@ -1809,7 +1836,6 @@ function RemoteControlPanel({ position, onToast }) {
                   </button>
                 );
               })}
-              <DockEjectButton deviceId={remoteDeviceId} onToast={onToast} />
             </div>
           </section>
         </div>

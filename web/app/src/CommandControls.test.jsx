@@ -2,15 +2,21 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { DockEjectButton, TrackingSwitch } from './CommandControls';
+import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingSwitch } from './CommandControls';
 import { sendRobotCommand } from './api';
 
 vi.mock('./api', () => ({
   sendRobotCommand: vi.fn(),
   getRemoteCommandErrorMessage: () => '下发失败',
 }));
-afterEach(cleanup);
-beforeEach(() => vi.resetAllMocks());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+});
 
 const tracking = () => screen.getByRole('switch', { name: '循迹开关' });
 
@@ -71,11 +77,11 @@ describe('dock eject action', () => {
     const onToast = vi.fn();
     sendRobotCommand.mockResolvedValue({ protocol: [234, 1, 235], protocolHex: '[EA 01 EB]' });
     render(<DockEjectButton deviceId="USV-001" onToast={onToast} />);
-    const button = screen.getByRole('button', { name: /船坞弹出/ });
+    const button = screen.getByRole('button', { name: /船坞释放/ });
     fireEvent.click(button);
     await waitFor(() => expect(button.disabled).toBe(false));
     expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', { command: 'DOCK_EJECT' });
-    expect(onToast).toHaveBeenCalledWith('船坞弹出指令已发布 [EA 01 EB]', 'success');
+    expect(onToast).toHaveBeenCalledWith('船坞释放指令已发布 [EA 01 EB]', 'success');
     expect(button.hasAttribute('aria-pressed')).toBe(false);
     fireEvent.click(button);
     await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledTimes(2));
@@ -86,7 +92,7 @@ describe('dock eject action', () => {
     const onToast = vi.fn();
     sendRobotCommand.mockReturnValue(new Promise((_, fail) => { reject = fail; }));
     render(<DockEjectButton deviceId="USV-001" onToast={onToast} />);
-    const button = screen.getByRole('button', { name: /船坞弹出/ });
+    const button = screen.getByRole('button', { name: /船坞释放/ });
     fireEvent.click(button);
     fireEvent.click(button);
     expect(sendRobotCommand).toHaveBeenCalledTimes(1);
@@ -94,5 +100,25 @@ describe('dock eject action', () => {
     reject(new Error('offline'));
     await waitFor(() => expect(button.disabled).toBe(false));
     expect(onToast).toHaveBeenCalledWith('下发失败');
+  });
+
+  it('does not send when release confirmation is cancelled', () => {
+    window.confirm.mockReturnValue(false);
+    render(<DockEjectButton deviceId="USV-001" />);
+    fireEvent.click(screen.getByRole('button', { name: /船坞释放/ }));
+    expect(window.confirm).toHaveBeenCalledWith('确认执行船坞释放吗？');
+    expect(sendRobotCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('critical switch confirmation', () => {
+  it('requires confirmation before powering the paddle wheel', () => {
+    window.confirm.mockReturnValue(false);
+    const accepted = requestRemoteSwitchConfirmation(
+      { cmd: 'PADDLE_POWER', onText: '上电', offText: '断电' },
+      1,
+    );
+    expect(accepted).toBe(false);
+    expect(window.confirm).toHaveBeenCalledWith('确认将明轮电源“上电”吗？');
   });
 });

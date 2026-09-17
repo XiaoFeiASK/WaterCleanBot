@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Route } from 'lucide-react';
+import { Anchor, ArrowUpRight, Route } from 'lucide-react';
 import { getRemoteCommandErrorMessage, sendRobotCommand } from './api';
 
 function confirmAction(message) {
   try { return window.confirm(message) !== false; } catch { return true; }
+}
+
+export function requestRemoteSwitchConfirmation(command, nextValue) {
+  if (command.cmd === 'OPERATING_MODE') {
+    return confirmAction(`确认切换运行模式为“${nextValue ? command.onText : command.offText}”吗？`);
+  }
+  if (command.cmd === 'PADDLE_POWER') {
+    return confirmAction(`确认将明轮电源“${nextValue ? command.onText : command.offText}”吗？`);
+  }
+  return true;
 }
 
 // State describes published commands, not device ACKs. Keep each target independent.
@@ -77,13 +87,13 @@ export function DockEjectButton({ deviceId, onToast }) {
 
   async function ejectDock() {
     if (!deviceId || pending.current) return;
-    if (!confirmAction('确认执行船坞弹出吗？')) return;
+    if (!confirmAction('确认执行船坞释放吗？')) return;
     pending.current = true;
     setBusy(true);
     try {
       const result = await sendRobotCommand(deviceId, { command: 'DOCK_EJECT' });
       setIndicatorActive(true);
-      onToast?.(`船坞弹出指令已发布 ${result.protocolHex || '[EA 01 EB]'}`, 'success');
+      onToast?.(`船坞释放指令已发布 ${result.protocolHex || '[EA 01 EB]'}`, 'success');
     } catch (error) {
       onToast?.(getRemoteCommandErrorMessage(error));
     } finally {
@@ -94,16 +104,19 @@ export function DockEjectButton({ deviceId, onToast }) {
 
   return (
     <button
-      className="switch-control switch-control-prominent dock-eject-control"
+      className="switch-control critical-control critical-control--dock dock-eject-control"
       type="button"
       onClick={ejectDock}
       disabled={!deviceId || busy}
       aria-busy={busy}
-      title="下发船坞弹出指令 EA 01 EB（原始十六进制字节）"
+      title="下发船坞释放指令 EA 01 EB（原始十六进制字节）"
     >
-      <span><strong>船坞弹出</strong><small>{busy ? '指令下发中…' : '点击执行一次'}</small></span>
-      <span className={`dock-eject-indicator ${indicatorActive ? 'is-active' : ''}`} title={indicatorActive ? '指示灯已点亮，剩余 10 秒' : '待机'} aria-label={indicatorActive ? '船坞弹出指示灯已点亮' : '船坞弹出指示灯待机'} />
-      <span className="switch-state dock-eject-action">{busy ? '下发中' : '弹出'}<ArrowUpRight size={14} aria-hidden="true" /></span>
+      <span className="critical-control-copy">
+        <span className="critical-control-icon" aria-hidden="true"><Anchor size={22} /></span>
+        <span><strong>船坞释放</strong><small>{busy ? '指令下发中…' : '点击执行一次'}</small></span>
+      </span>
+      <span className={`dock-eject-indicator ${indicatorActive ? 'is-active' : ''}`} title={indicatorActive ? '指示灯已点亮，剩余 10 秒' : '待机'} aria-label={indicatorActive ? '船坞释放指示灯已点亮' : '船坞释放指示灯待机'} />
+      <span className="switch-state dock-eject-action">{busy ? '下发中' : '释放'}<ArrowUpRight size={16} aria-hidden="true" /></span>
     </button>
   );
 }

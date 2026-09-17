@@ -7,17 +7,41 @@
 .command-section { min-width: 0; padding: 18px; background: transparent; }
 .command-section + .command-section { border-top: 1px solid var(--line); }
 .command-section .remote-card-header { margin-bottom: 14px; }
+.actuator-card { container-type: inline-size; }
+.critical-controls { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 14px; }
+.actuator-card .critical-control { min-width: 0; min-height: 96px; padding: 15px; border-width: 2px; border-radius: 8px; background: #fff; box-shadow: 0 4px 12px rgba(19,38,41,.08); }
+.actuator-card .critical-control:hover:not(:disabled) { box-shadow: 0 6px 16px rgba(19,38,41,.12); }
+.critical-control--mode { border-color: rgba(28,79,116,.44); }
+.critical-control--power { border-color: rgba(17,128,119,.48); }
+.critical-control--dock { border-color: rgba(205,112,43,.52); }
+.critical-control-copy { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.critical-control-copy > span:last-child { min-width: 0; }
+.critical-control-icon { flex: 0 0 38px; width: 38px; height: 38px; display: inline-grid; place-items: center; border-radius: 8px; color: #fff; background: #1c4f74; }
+.critical-control--power .critical-control-icon { background: #117f77; }
+.critical-control--dock .critical-control-icon { color: #4f2b10; background: #f2c58c; }
+.actuator-card .critical-control strong { font-size: 15px; }
+.actuator-card .critical-control small { margin-top: 5px; font-size: 11px; letter-spacing: 0; }
+.actuator-card .critical-control .switch-state { min-width: 62px; min-height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 8px 11px; border-radius: 8px; font-size: 13px; }
+.actuator-card .critical-control--mode .switch-state { color: #fff; background: #1c4f74; }
+.actuator-card .critical-control--power .switch-state { color: #46585c; background: #e7edee; }
+.actuator-card .critical-control--power.switch-control-on .switch-state { color: #fff; background: #117f77; }
+.actuator-card .critical-control:focus-visible { outline: 3px solid rgba(28,79,116,.32); outline-offset: 2px; }
 .actuator-card .switch-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 0; }
-.actuator-card .switch-control { min-width: 0; min-height: 76px; padding: 12px; }
+.actuator-card .switch-grid .switch-control { min-width: 0; min-height: 76px; padding: 12px; }
+
+@container (min-width: 900px) {
+  .critical-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 @media (max-width: 760px) {
   .command-console { border-radius: 10px; }
   .command-target-bar { grid-template-columns: auto 1fr; gap: 6px 10px; padding: 12px 14px; }
   .command-target-bar small { grid-column: 1 / -1; }
   .command-section { padding: 14px; }
+  .critical-controls { grid-template-columns: 1fr; gap: 10px; }
+  .actuator-card .critical-control { min-height: 84px; }
   .actuator-card .switch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .actuator-card .switch-control { min-height: 80px; }
-  .actuator-card .switch-control:last-child { grid-column: 1 / -1; }
+  .actuator-card .switch-grid .switch-control { min-height: 80px; }
 }
 
 @media (max-width: 430px) {
