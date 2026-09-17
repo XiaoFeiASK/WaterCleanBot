@@ -10,10 +10,10 @@ func TestParseNavigationFeedback(t *testing.T) {
 	if !ok {
 		t.Fatal("ParseNavigationFeedback rejected valid payload")
 	}
-	if position.RobotName != "USV-001" || position.Lng != 106.3975 || position.Lat != 29.9087 || position.Heading != 135 {
+	if position.RobotName != "USV-001" || *position.Lng != 106.3975 || *position.Lat != 29.9087 || *position.Heading != 135 {
 		t.Fatalf("unexpected position: %+v", position)
 	}
-	if position.Speed != 4.2*knotsToMetersPerSecond || position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
+	if *position.Speed != 4.2*knotsToMetersPerSecond || position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
 		t.Fatalf("unexpected speed mapping: %+v", position)
 	}
 	if position.SatelliteCount == nil || *position.SatelliteCount != 18 || position.GNSSSolutionStatus == nil || *position.GNSSSolutionStatus != 4 {

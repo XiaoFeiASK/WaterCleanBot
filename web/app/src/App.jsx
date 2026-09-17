@@ -17,6 +17,9 @@ import {
   MapPinned,
   Menu,
   PanelLeftClose,
+  Plus,
+  Trash2,
+  X,
   Radio,
   Search,
   Settings2,
@@ -28,6 +31,10 @@ import {
 } from 'lucide-react';
 import {
   createRobotRoute,
+  createRobot,
+  deleteRobot,
+  hasCoordinates,
+  isRobotOnline,
   deleteRobotRoute,
   fetchRobotCameras,
   fetchRobotLocation,
@@ -44,6 +51,7 @@ import {
 import { wgs84ToGcj02 } from './coordinates';
 import { getRoleName } from './roles';
 import { DockEjectButton, TrackingSwitch } from './CommandControls';
+import './fleet.css';
 
 function confirmAction(message) {
   try { return window.confirm(message) !== false; } catch { return true; }
@@ -65,8 +73,13 @@ function readDeviceFeedbackCache(robotName) {
   }
 }
 
+function removeDeviceFeedbackCache(robotName) {
+  try { window.localStorage.removeItem(`${DEVICE_FEEDBACK_CACHE_PREFIX}${robotName}`); } catch { /* Storage may be disabled. */ }
+}
+
 function cacheDeviceFeedback(position) {
   if (!position?.robotName) return;
+  if (!position.sourceTimestampMs) { removeDeviceFeedbackCache(position.robotName); return; }
   const feedback = {
     controlMode: position.controlMode,
     commandResultCode: position.commandResultCode,
@@ -84,6 +97,7 @@ function cacheDeviceFeedback(position) {
 
 function applyDeviceFeedbackCache(position) {
   if (!position?.robotName) return position;
+  if (!position.sourceTimestampMs) return position;
   const cached = readDeviceFeedbackCache(position.robotName);
   if (!cached || typeof cached !== 'object') return position;
   return {
@@ -128,12 +142,6 @@ const DEVICE_DETAIL_TABS = Object.freeze([
   { id: 'cameras', label: '监控摄像头' },
   { id: 'cleaning-area', label: '清洁区域' },
   { id: 'patrol', label: '巡查情况' },
-]);
-
-const FLEET_FALLBACK_DEVICES = Object.freeze([
-  { robotName: 'USV-001', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
-  { robotName: '清澜二号', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
-  { robotName: '巡岸备用艇', lat: null, lng: null, speed: null, battery: null, heading: null, status: 0 },
 ]);
 
 const INITIAL_REMOTE_VALUES = Object.freeze({
@@ -435,6 +443,7 @@ function getAverage(values) {
 function StatusBadge({ position, loading }) {
   if (loading) return <span className="status-badge status-pending">读取中</span>;
   if (!position) return <span className="status-badge status-empty">未查询</span>;
+  if (!position.sourceTimestampMs) return <span className="status-badge status-pending">待接入</span>;
   if (position.heartbeatStatus === 'offline') {
     return <span className="status-badge status-warning"><span className="status-dot" />心跳异常</span>;
   }
@@ -483,7 +492,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
   }, []);
 
   useEffect(() => {
-    if (!position) {
+    if (!hasCoordinates(position)) {
       safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
       markerContentRef.current = null;
@@ -619,7 +628,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
     };
   }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, onMapPoint]);
 
-  if (!position) {
+  if (!hasCoordinates(position)) {
     return (
       <div className="map-empty">
         <MapPinned size={28} strokeWidth={1.5} />
@@ -795,7 +804,7 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
 
       {error && <p className="form-error" role="alert">{error}</p>}
 
-      <div className="map-frame fleet-map-frame"><FleetMap positions={positions} onOpenDeviceDetail={onOpenDeviceDetail} /></div>
+      <div className="map-frame fleet-map-frame"><FleetMap positions={positions.filter(hasCoordinates)} onOpenDeviceDetail={onOpenDeviceDetail} /></div>
 
       <div className="fleet-list" aria-label="全域设备位置列表">
         {positions.map((position) => (
@@ -821,23 +830,73 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
   );
 }
 
-function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, onToast }) {
-  const [searchText, setSearchText] = useState('');
-  const [removedDeviceNames, setRemovedDeviceNames] = useState([]);
-  const syncedDeviceNames = new Set(fleetPositions.map((position) => position.robotName));
-  const baseDevices = fleetPositions.length ? fleetPositions : FLEET_FALLBACK_DEVICES;
-  const devices = baseDevices
-    .filter((device) => !removedDeviceNames.includes(device.robotName))
-    .filter((device) => device.robotName.toLowerCase().includes(searchText.trim().toLowerCase()));
-  const onlineCount = devices.filter((device) => device.status === 1 || syncedDeviceNames.has(device.robotName)).length;
-  const averageBattery = getAverage(devices.map((device) => device.battery));
+function useCurrentTime() {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
 
-  function deleteDevice(deviceName) {
-    const confirmed = window.confirm(`确认从当前编队移除「${deviceName}」吗？`);
-    if (!confirmed) return;
-    // 后端删除接口接入后，把这里替换为真实 API 调用；当前只移除前端编队草稿。
-    setRemovedDeviceNames((currentNames) => [...new Set([...currentNames, deviceName])]);
-    onToast?.('设备已从当前前端编队移除', 'success');
+export function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, onToast }) {
+  const [searchText, setSearchText] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [robotName, setRobotName] = useState('');
+  const [busy, setBusy] = useState('');
+  const [mutationError, setMutationError] = useState('');
+  const [formError, setFormError] = useState('');
+  const pending = useRef(false);
+  const dialog = useRef(null);
+  const now = useCurrentTime();
+  useEffect(() => {
+    if (adding) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [adding]);
+  const devices = fleetPositions
+    .filter((device) => device.robotName.toLowerCase().includes(searchText.trim().toLowerCase()));
+  const onlineCount = fleetPositions.filter((device) => isRobotOnline(device, now)).length;
+  const averageBattery = getAverage(fleetPositions.map((device) => device.battery));
+
+  async function addDevice(event) {
+    event.preventDefault();
+    if (pending.current) return;
+    const name = robotName.trim();
+    if (!name || new TextEncoder().encode(name).length > 128 || /[/+#?\\\u0000-\u001f\u007f]/.test(name)) {
+      setFormError('请输入有效的船舶编号');
+      return;
+    }
+    if (fleetPositions.some((device) => device.robotName === name)) {
+      setFormError('该设备编号已存在');
+      return;
+    }
+    pending.current = true;
+    setBusy('create');
+    setFormError('');
+    setMutationError('');
+    try {
+      await createRobot(name);
+      setAdding(false);
+      setSearchText('');
+      onToast?.('设备已添加并保存', 'success');
+    } catch (requestError) {
+      if (requestError.cacheChanged) {
+        setAdding(false);
+        setMutationError(requestError.message);
+      } else setFormError(requestError.message);
+    } finally { pending.current = false; setBusy(''); }
+  }
+
+  async function deleteDevice(deviceName) {
+    if (pending.current || !window.confirm(`确认删除设备「${deviceName}」？`)) return;
+    pending.current = true;
+    setBusy(deviceName);
+    setMutationError('');
+    try {
+      await deleteRobot(deviceName);
+      onToast?.('设备记录已删除', 'success');
+    } catch (requestError) { setMutationError(requestError.message); }
+    finally { pending.current = false; setBusy(''); }
   }
 
   return (
@@ -847,12 +906,32 @@ function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, o
           <Search size={16} aria-hidden="true" />
           <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索设备名称" />
         </div>
+        <button className="button button-primary" type="button" disabled={Boolean(busy) || loading} onClick={() => { setRobotName(''); setFormError(''); setAdding(true); }}>
+          <Plus size={18} aria-hidden="true" />添加船
+        </button>
       </div>
 
       {error && <p className="form-error" role="alert">{error}</p>}
+      {mutationError && <p className="form-error" role="alert">{mutationError}</p>}
+
+      <dialog ref={dialog} className="fleet-add-dialog" aria-labelledby="fleet-add-title" onCancel={(event) => { if (busy) event.preventDefault(); else setAdding(false); }}>
+        <form onSubmit={addDevice}>
+          <div className="fleet-dialog-heading">
+            <h2 id="fleet-add-title">添加船</h2>
+            <button type="button" className="fleet-icon-button" title="关闭" aria-label="关闭" disabled={Boolean(busy)} onClick={() => setAdding(false)}><X size={20} /></button>
+          </div>
+          <label htmlFor="fleet-robot-name">船舶编号</label>
+          <input id="fleet-robot-name" value={robotName} onChange={(event) => setRobotName(event.target.value)} placeholder="USV-002" maxLength={128} required autoFocus disabled={Boolean(busy)} />
+          {formError && <p className="form-error" role="alert">{formError}</p>}
+          <div className="fleet-dialog-actions">
+            <button type="button" className="button" disabled={Boolean(busy)} onClick={() => setAdding(false)}>取消</button>
+            <button type="submit" className="button button-primary" disabled={Boolean(busy) || !robotName.trim()}>{busy === 'create' ? '保存中' : '添加'}</button>
+          </div>
+        </form>
+      </dialog>
 
       <div className="fleet-management-stats">
-        <StatCard icon={ShipWheel} label="编队设备" value={`${devices.length} 台`} />
+        <StatCard icon={ShipWheel} label="编队设备" value={`${fleetPositions.length} 台`} />
         <StatCard icon={Wifi} label="在线设备" value={`${onlineCount} 台`} />
         <StatCard icon={Gauge} label="平均电量" value={averageBattery === null ? '暂无数据' : `${Math.round(averageBattery)}%`} />
         <StatCard icon={Clock3} label="同步状态" value={loading ? '同步中' : '已就绪'} />
@@ -860,7 +939,7 @@ function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, o
 
       <div className="fleet-management-table-card">
         <div className="fleet-management-table-heading">
-          <div><h3>编队设备列表</h3><span>{fleetPositions.length ? '来自实时位置接口' : '前端占位设备'}</span></div>
+          <div><h3>编队设备列表</h3></div>
           <span className="status-badge status-empty">{devices.length} 条</span>
         </div>
 
@@ -878,24 +957,24 @@ function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, o
             </thead>
             <tbody>
               {devices.map((device) => {
-                const online = device.heartbeatStatus === 'online' || (device.heartbeatStatus !== 'offline' && (device.status === 1 || syncedDeviceNames.has(device.robotName)));
+                const online = isRobotOnline(device, now);
                 return (
                   <tr key={device.robotName}>
                     <td><strong>{device.robotName}</strong><span>{online ? '已纳入实时编队' : '待同步设备'}</span></td>
-                    <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{device.heartbeatStatus === 'offline' ? '心跳异常' : (online ? '在线' : '待接入')}</span></td>
-                    <td>{formatBattery(device.battery)}</td>
-                    <td>{typeof device.speed === 'number' ? `${device.speed} m/s` : '暂无数据'}</td>
-                    <td>{typeof device.lng === 'number' && typeof device.lat === 'number' ? `${formatNumber(device.lng, 2)}, ${formatNumber(device.lat, 2)}` : '暂无位置'}</td>
+                    <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{!device.sourceTimestampMs ? '待接入' : online ? '在线' : '离线'}</span></td>
+                    <td>{device.battery == null ? '--' : formatBattery(device.battery)}</td>
+                    <td>{typeof device.speed === 'number' ? `${device.speed} m/s` : '--'}</td>
+                    <td>{hasCoordinates(device) ? `${formatNumber(device.lng, 2)}, ${formatNumber(device.lat, 2)}` : '--'}</td>
                     <td>
                       <button type="button" onClick={() => onOpenDeviceDetail(device.robotName)}>详情</button>
-                      <button className="fleet-table-danger" type="button" onClick={() => deleteDevice(device.robotName)}>删除</button>
+                      <button className="fleet-table-danger fleet-delete-button" type="button" title={`删除 ${device.robotName}`} aria-label={`删除 ${device.robotName}`} disabled={Boolean(busy)} onClick={() => deleteDevice(device.robotName)}><Trash2 size={17} /></button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {!devices.length && <div className="fleet-management-empty">没有匹配的设备。</div>}
+          {!devices.length && <div className="fleet-management-empty">{loading ? '加载中' : searchText ? '没有匹配的设备' : '暂无设备'}</div>}
         </div>
       </div>
     </section>
@@ -1760,6 +1839,7 @@ function Toast({ toast }) {
 }
 
 function Dashboard({ fleetPositions, fleetLoading, fleetError, onOpenDeviceDetail }) {
+  const now = useCurrentTime();
   const averageSpeed = getAverage(fleetPositions.map((position) => position.speed));
   const averageBattery = getAverage(fleetPositions.map((position) => position.battery));
   const abnormalCount = fleetPositions.filter((position) => position.status !== 1).length;
@@ -1776,8 +1856,8 @@ function Dashboard({ fleetPositions, fleetLoading, fleetError, onOpenDeviceDetai
       </div>
 
       <div className="stat-grid">
-        <StatCard icon={ShipWheel} label="在线设备数" value={fleetPositions.length ? `${fleetPositions.length} 台` : '暂无数据'} />
-        <StatCard icon={MapPinned} label="实时位置点" value={fleetPositions.length ? `${fleetPositions.length} 个` : '暂无数据'} />
+        <StatCard icon={ShipWheel} label="在线设备数" value={`${fleetPositions.filter((device) => isRobotOnline(device, now)).length} 台`} />
+        <StatCard icon={MapPinned} label="实时位置点" value={`${fleetPositions.filter(hasCoordinates).length} 个`} />
         <StatCard icon={CircleAlert} label="异常设备数" value={fleetPositions.length ? `${abnormalCount} 台` : '暂无数据'} />
         <StatCard icon={Gauge} label="平均电量" value={averageBattery === null ? '暂无数据' : `${Math.round(averageBattery)}%`} />
       </div>
@@ -1923,6 +2003,17 @@ function App() {
   useEffect(() => {
     // SSE 会先发送原子全量快照，再持续推送增量；不并发发起 HTTP 全量查询，避免旧响应覆盖新位置。
     setFleetLoading(true);
+    function clearSelectedDevice(robotName) {
+      removeDeviceFeedbackCache(robotName);
+      if (activeDeviceIdRef.current !== robotName) return;
+      locationRequestSeqRef.current += 1;
+      activeDeviceIdRef.current = '';
+      setActiveDeviceId('');
+      setDeviceId('');
+      setPosition(null);
+      setLoading(false);
+      setError('');
+    }
     return subscribeRobotLocations({
       onOpen: () => setFleetError(''),
       onSnapshot: (nextPositions) => {
@@ -1930,11 +2021,21 @@ function App() {
         setFleetLoading(false);
         setFleetError('');
         const activePosition = nextPositions.find((item) => item.robotName === activeDeviceIdRef.current);
+        try {
+          const names = new Set(nextPositions.map((item) => item.robotName));
+          Object.keys(window.localStorage).filter((key) => key.startsWith(DEVICE_FEEDBACK_CACHE_PREFIX)).forEach((key) => {
+            if (!names.has(key.slice(DEVICE_FEEDBACK_CACHE_PREFIX.length))) window.localStorage.removeItem(key);
+          });
+        } catch { /* Storage may be disabled. */ }
         if (activePosition) {
           const feedbackPosition = applyDeviceFeedbackCache(activePosition);
           cacheDeviceFeedback(feedbackPosition);
           setPosition(feedbackPosition);
-        }
+        } else clearSelectedDevice(activeDeviceIdRef.current);
+      },
+      onDeleted: (robotName) => {
+        setFleetPositions((current) => current.filter((item) => item.robotName !== robotName));
+        clearSelectedDevice(robotName);
       },
       onPosition: (nextPosition) => {
         setFleetPositions((current) => {
@@ -1997,7 +2098,7 @@ function App() {
     />
   ) : activePage === 'fleet' ? (
     <>
-      <div className="page-intro"><div><p className="eyebrow">监控中心</p><h1>设备编队</h1><p className="page-description">维护当前前端编队草稿，查看设备状态并快速进入设备详情。</p></div></div>
+      <div className="page-intro"><div><p className="eyebrow">监控中心</p><h1>设备编队</h1></div></div>
       <FleetManagement
         fleetPositions={fleetPositions}
         loading={fleetLoading}

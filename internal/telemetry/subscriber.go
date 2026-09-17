@@ -33,7 +33,6 @@ type SubscriberConfig struct {
 type Subscriber struct {
 	config SubscriberConfig
 	store  *location.Store
-	writer *location.SnapshotWriter
 	log    *slog.Logger
 	client mqtt.Client
 }
@@ -41,11 +40,10 @@ type Subscriber struct {
 // NewSubscriber 创建 MQTT 遥测订阅器。
 // 调用方：cmd/watercleanbot/main.go。
 // 会调用：无，只组装依赖。
-func NewSubscriber(config SubscriberConfig, store *location.Store, writer *location.SnapshotWriter, log *slog.Logger) *Subscriber {
+func NewSubscriber(config SubscriberConfig, store *location.Store, log *slog.Logger) *Subscriber {
 	return &Subscriber{
 		config: config,
 		store:  store,
-		writer: writer,
 		log:    log,
 	}
 }
@@ -119,10 +117,7 @@ func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
 		position.ReceivedAtMS = receivedAt
 
 		// 实时路径只写内存并广播，不等待 PostgreSQL。
-		applied, updated := s.store.UpdateNavigation(position)
-		if updated && s.writer != nil {
-			s.writer.Submit(applied)
-		}
+		s.store.UpdateNavigation(position)
 		return
 	}
 	if robotName, feedback, ok := ParseStatusFeedback(message.Topic(), message.Payload()); ok {
@@ -151,13 +146,10 @@ func (s *Subscriber) handleMessage(_ mqtt.Client, message mqtt.Message) {
 	position.ReceivedAtMS = time.Now().UnixMilli()
 
 	// 先立即更新实时内存；数据库持久化由 SnapshotWriter 在后台合并执行。
-	applied, updated := s.store.Update(position)
+	_, updated := s.store.Update(position)
 	if !updated {
 		s.log.Debug("stale robot telemetry ignored", slog.String("robot_name", position.RobotName), slog.Int64("timestamp", data.Timestamp))
 		return
-	}
-	if s.writer != nil {
-		s.writer.Submit(applied)
 	}
 	s.log.Debug("robot telemetry applied", slog.String("robot_name", position.RobotName), slog.Int64("timestamp", data.Timestamp))
 }

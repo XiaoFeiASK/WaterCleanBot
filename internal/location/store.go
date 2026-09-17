@@ -3,12 +3,23 @@
 package location
 
 import (
+	"context"
+	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const subscriberBufferSize = 64
+
+var ErrRobotExists = errors.New("robot already exists")
+
+type Event struct {
+	Position
+	Type string
+}
 
 // Store 保存每台无人船的最新位置。它是运行期间实时状态的唯一数据源。
 type Store struct {
@@ -18,8 +29,9 @@ type Store struct {
 	telemetryVersions  map[string]int64
 	navigationVersions map[string]int64
 	latestReceivedAtMS map[string]int64
-	subscribers        map[uint64]chan Position
+	subscribers        map[uint64]chan Event
 	nextSubID          uint64
+	writer             *SnapshotWriter
 }
 
 // NewStore 创建实时位置存储。
@@ -30,7 +42,68 @@ func NewStore() *Store {
 		telemetryVersions:  make(map[string]int64),
 		navigationVersions: make(map[string]int64),
 		latestReceivedAtMS: make(map[string]int64),
-		subscribers:        make(map[uint64]chan Position),
+		subscribers:        make(map[uint64]chan Event),
+	}
+}
+
+func ValidRobotName(name string) bool {
+	if name == "" || len(name) > 128 || strings.TrimSpace(name) != name {
+		return false
+	}
+	for _, char := range name {
+		if unicode.IsControl(char) || strings.ContainsRune("/+#?\\", char) {
+			return false
+		}
+	}
+	return true
+}
+
+// SetWriter is configured once, before MQTT and HTTP start.
+func (s *Store) SetWriter(writer *SnapshotWriter) { s.writer = writer }
+
+func (s *Store) Create(ctx context.Context, robotName string) error {
+	if !ValidRobotName(robotName) {
+		return errors.New("invalid robot name")
+	}
+	s.mu.Lock()
+	if _, exists := s.positions[robotName]; exists {
+		s.mu.Unlock()
+		return ErrRobotExists
+	}
+	position := Position{RobotName: robotName}
+	s.positions[robotName] = position
+	if s.writer != nil {
+		s.writer.QueueChange(robotName, "create")
+	}
+	s.broadcastLocked(position)
+	s.mu.Unlock()
+	if s.writer != nil {
+		return s.writer.Persist(ctx, robotName)
+	}
+	return nil
+}
+
+func (s *Store) Delete(ctx context.Context, robotName string) error {
+	s.mu.Lock()
+	delete(s.positions, robotName)
+	delete(s.distances, robotName)
+	delete(s.telemetryVersions, robotName)
+	delete(s.navigationVersions, robotName)
+	delete(s.latestReceivedAtMS, robotName)
+	if s.writer != nil {
+		s.writer.QueueChange(robotName, "delete")
+	}
+	s.broadcastEventLocked(Event{Type: "deleted", Position: Position{RobotName: robotName}})
+	s.mu.Unlock()
+	if s.writer != nil {
+		return s.writer.Persist(ctx, robotName)
+	}
+	return nil
+}
+
+func (s *Store) queuePositionLocked(position Position) {
+	if s.writer != nil {
+		s.writer.Submit(position)
 	}
 }
 
@@ -65,6 +138,11 @@ func cloneActuators(values map[string]int) map[string]int {
 }
 
 func clonePosition(position Position) Position {
+	for _, field := range []**float64{&position.Lat, &position.Lng, &position.Heading, &position.Speed, &position.Battery} {
+		if *field != nil {
+			*field = Float(**field)
+		}
+	}
 	position.Actuators = cloneActuators(position.Actuators)
 	return position
 }
@@ -103,6 +181,7 @@ func (s *Store) Update(position Position) (Position, bool) {
 	}
 	s.latestReceivedAtMS[position.RobotName] = position.ReceivedAtMS
 	s.positions[position.RobotName] = clonePosition(position)
+	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	s.mu.Unlock()
 	return clonePosition(position), true
@@ -155,6 +234,7 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 		position.DistanceMeters = &distance
 	}
 	s.positions[position.RobotName] = clonePosition(position)
+	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	s.mu.Unlock()
 	return clonePosition(position), true
@@ -166,6 +246,9 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 	position := s.positions[robotName]
 	position.RobotName = robotName
 	position.ReceivedAtMS = time.Now().UnixMilli()
+	if position.SourceTimestampMS == 0 {
+		position.SourceTimestampMS = position.ReceivedAtMS
+	}
 	if feedback.ControlMode != nil {
 		position.ControlMode = feedback.ControlMode
 	}
@@ -178,7 +261,7 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 	if feedback.RightThrottle != nil {
 		position.RightThrottle = feedback.RightThrottle
 	}
-	if feedback.Battery != 0 {
+	if feedback.Battery != nil {
 		position.Battery = feedback.Battery
 	}
 	if feedback.Actuators != nil {
@@ -188,6 +271,7 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 		position.DeviceStatusOK = feedback.DeviceStatusOK
 	}
 	s.positions[robotName] = clonePosition(position)
+	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	s.mu.Unlock()
 }
@@ -244,11 +328,11 @@ func (s *Store) List() []Position {
 }
 
 // SubscribeWithSnapshot 在同一个锁内取得初始快照并注册更新流，避免首帧和增量之间出现竞态。
-func (s *Store) SubscribeWithSnapshot() ([]Position, <-chan Position, func()) {
+func (s *Store) SubscribeWithSnapshot() ([]Position, <-chan Event, func()) {
 	s.mu.Lock()
 	id := s.nextSubID
 	s.nextSubID++
-	updates := make(chan Position, subscriberBufferSize)
+	updates := make(chan Event, subscriberBufferSize)
 	s.subscribers[id] = updates
 	positions := make([]Position, 0, len(s.positions))
 	for _, position := range s.positions {
@@ -263,8 +347,10 @@ func (s *Store) SubscribeWithSnapshot() ([]Position, <-chan Position, func()) {
 	cancel := func() {
 		once.Do(func() {
 			s.mu.Lock()
-			delete(s.subscribers, id)
-			close(updates)
+			if _, open := s.subscribers[id]; open {
+				delete(s.subscribers, id)
+				close(updates)
+			}
 			s.mu.Unlock()
 		})
 	}
@@ -272,20 +358,17 @@ func (s *Store) SubscribeWithSnapshot() ([]Position, <-chan Position, func()) {
 }
 
 func (s *Store) broadcastLocked(position Position) {
-	position = clonePosition(position)
-	for _, subscriber := range s.subscribers {
+	s.broadcastEventLocked(Event{Position: clonePosition(position), Type: "position"})
+}
+
+func (s *Store) broadcastEventLocked(event Event) {
+	for id, subscriber := range s.subscribers {
 		select {
-		case subscriber <- position:
+		case subscriber <- event:
 		default:
-			// 慢客户端只需要最新状态；丢弃其队列中最旧的一条后重试。
-			select {
-			case <-subscriber:
-			default:
-			}
-			select {
-			case subscriber <- position:
-			default:
-			}
+			// Reconnect with a fresh snapshot rather than lose a deletion event.
+			delete(s.subscribers, id)
+			close(subscriber)
 		}
 	}
 }

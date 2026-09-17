@@ -3,11 +3,11 @@
 -- 一台机器人只保留一行当前位置；后续新位置使用 robot_name 覆盖更新。
 CREATE TABLE IF NOT EXISTS robot_current_locations (
   robot_name TEXT PRIMARY KEY,
-  lat DOUBLE PRECISION NOT NULL,
-  lng DOUBLE PRECISION NOT NULL,
-  heading DOUBLE PRECISION NOT NULL,
-  speed DOUBLE PRECISION NOT NULL,
-  battery DOUBLE PRECISION NOT NULL,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  heading DOUBLE PRECISION,
+  speed DOUBLE PRECISION,
+  battery DOUBLE PRECISION,
   status INTEGER NOT NULL,
   source_timestamp_ms BIGINT,
   geom GEOMETRY(Point, 4326) GENERATED ALWAYS AS (
@@ -23,6 +23,14 @@ CREATE TABLE IF NOT EXISTS robot_current_locations (
   CONSTRAINT robot_current_locations_status_check CHECK (status >= 0),
   CONSTRAINT robot_current_locations_source_timestamp_ms_check CHECK (source_timestamp_ms IS NULL OR source_timestamp_ms > 0)
 );
+
+-- Existing installations: allow registration before telemetry is received.
+ALTER TABLE robot_current_locations
+  ALTER COLUMN lat DROP NOT NULL,
+  ALTER COLUMN lng DROP NOT NULL,
+  ALTER COLUMN heading DROP NOT NULL,
+  ALTER COLUMN speed DROP NOT NULL,
+  ALTER COLUMN battery DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_robot_current_locations_geom
   ON robot_current_locations USING GIST (geom);

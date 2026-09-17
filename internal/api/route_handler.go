@@ -196,11 +196,11 @@ func routeStartPoint(store *location.Store, robotName string, coordinateSystem s
 		return nil
 	}
 	position, ok := store.Get(robotName)
-	if !ok {
+	if !ok || position.Lat == nil || position.Lng == nil {
 		return nil
 	}
 
-	lat, lng := position.Lat, position.Lng
+	lat, lng := *position.Lat, *position.Lng
 	if coordinateSystem == routes.CoordinateSystemGCJ02 {
 		lat, lng = routes.WGS84ToGCJ02(lat, lng)
 	}

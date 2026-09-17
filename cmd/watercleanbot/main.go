@@ -82,6 +82,7 @@ func main() {
 		log.Warn("load initial robot locations failed", slog.Any("error", err))
 	}
 	locationWriter := location.NewSnapshotWriter(locationRepository, cfg.LocationSnapshotInterval, log)
+	locationStore.SetWriter(locationWriter)
 	locationWriterDone := make(chan struct{})
 	go func() {
 		defer close(locationWriterDone)
@@ -95,7 +96,7 @@ func main() {
 		FeedbackTopic: cfg.MQTTFeedbackTopic,
 		Username:      cfg.MQTTUsername,
 		Password:      cfg.MQTTPassword,
-	}, locationStore, locationWriter, log)
+	}, locationStore, log)
 	if err := telemetrySubscriber.Start(appCtx); err != nil {
 		log.Error("start mqtt telemetry subscriber failed", slog.Any("error", err))
 	}

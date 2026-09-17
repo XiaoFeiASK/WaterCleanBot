@@ -71,7 +71,7 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 		INSERT INTO robot_current_locations (
 			robot_name, lat, lng, heading, speed, battery, status, source_timestamp_ms, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9 / 1000.0))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, 0), to_timestamp($9 / 1000.0))
 		ON CONFLICT (robot_name) DO UPDATE SET
 			lat = EXCLUDED.lat,
 			lng = EXCLUDED.lng,
@@ -101,4 +101,19 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *Repository) CreateCurrentPosition(ctx context.Context, robotName string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
+	defer cancel()
+	_, err := r.db.ExecContext(queryCtx, `INSERT INTO robot_current_locations (robot_name, status)
+		VALUES ($1, 0) ON CONFLICT (robot_name) DO NOTHING`, robotName)
+	return err
+}
+
+func (r *Repository) DeleteCurrentPosition(ctx context.Context, robotName string) error {
+	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
+	defer cancel()
+	_, err := r.db.ExecContext(queryCtx, `DELETE FROM robot_current_locations WHERE robot_name = $1`, robotName)
+	return err
 }

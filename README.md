@@ -31,6 +31,8 @@ WaterCleanBot 是水面垃圾清洁机器人项目。后端通过 MQTT 接收实
 当前位置接口：
 
 ```text
+POST /api/robots                 # 添加设备：{"robotName":"USV-002"}
+DELETE /api/robots/{robotName}    # 删除设备当前位置记录
 GET /api/robots/locations
 GET /api/robots/locations/stream  # SSE
 GET /api/robots/{robotName}/location
@@ -129,6 +131,14 @@ MQTT telemetry / [18,...] webfeedback（设备可按 5Hz 上报）
 ```
 
 数据库不再周期性覆盖实时内存；数据库故障也不会阻塞 MQTT 到内存/SSE 的实时链路。HTTP 单台和全量查询接口保留用于显式查询与调试。
+
+## 设备编队增删
+
+设备编队页面支持添加船和确认删除。添加的船舶编号必须与 MQTT Topic 中的设备名一致，不能重复。新增设备先进入后端内存并通过 SSE 通知页面，再保存到现有 `robot_current_locations` 表；尚未上报的经纬度、航向、速度和电量为 `NULL`，页面显示“待接入”，地图不生成虚假位置点。
+
+已有数据库须先手动执行 `database/create_robot_current_locations.sql` 中的 `ALTER TABLE` 段，允许上述五列为空；此步骤不删除现有数据，不会由应用自动执行。
+
+删除先清理后端设备缓存和待写入的旧快照、推送 `deleted` 事件，再硬删除当前位置行。前端同步移除列表、地图和该设备的反馈缓存。没有删除黑名单；设备再次上报 MQTT 遥测后会自动重新出现并保存。数据库写入失败时接口返回 `503` 和 `cacheChanged: true`，缓存变更保留，后台继续重试；重试队列仅在内存中，持久化成功前重启进程会丢失未保存的变更。
 
 ## 遥控下发链路
 

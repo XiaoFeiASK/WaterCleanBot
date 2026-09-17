@@ -10,6 +10,8 @@ import (
 
 func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, routeRepository RouteRepository, routePublisher RoutePublisher, cameraStreams []CameraStream, authService *auth.Service, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/robots", CreateRobotHandler(store, log))
+	mux.HandleFunc("DELETE /api/robots/{robotName}", DeleteRobotHandler(store, log))
 	mux.HandleFunc("GET /api/robots/locations", RobotLocationsHandler(store))
 	mux.HandleFunc("GET /api/robots/locations/stream", RobotLocationStreamHandler(store, log))
 	mux.HandleFunc("GET /api/robots/{robotName}/location", RobotLocationHandler(store, log))

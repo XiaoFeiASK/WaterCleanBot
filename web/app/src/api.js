@@ -79,12 +79,13 @@ function validateLocationPayload(payload, expectedRobotName) {
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
   if (
     (expectedRobotName && payload.robotName !== expectedRobotName) ||
-    !isNumber(payload.lat) || payload.lat < -90 || payload.lat > 90 ||
-    !isNumber(payload.lng) || payload.lng < -180 || payload.lng > 180 ||
-    !isNumber(payload.speed) || payload.speed < 0 ||
-    !isNumber(payload.battery) || payload.battery < 0 || payload.battery > 100 ||
+    typeof payload.robotName !== 'string' || !payload.robotName.trim() ||
+    (payload.lat !== null && (!isNumber(payload.lat) || payload.lat < -90 || payload.lat > 90)) ||
+    (payload.lng !== null && (!isNumber(payload.lng) || payload.lng < -180 || payload.lng > 180)) ||
+    (payload.speed !== null && (!isNumber(payload.speed) || payload.speed < 0)) ||
+    (payload.battery !== null && (!isNumber(payload.battery) || payload.battery < 0 || payload.battery > 100)) ||
     !Number.isInteger(payload.status) ||
-    !isNumber(payload.heading) || payload.heading < 0 || payload.heading > 360
+    (payload.heading !== null && (!isNumber(payload.heading) || payload.heading < 0 || payload.heading > 360))
   ) {
     throw createLocationError('REQUEST_FAILED');
   }
@@ -133,7 +134,7 @@ export async function fetchRobotLocation(deviceName, signal) {
 
 // subscribeRobotLocations 建立一条浏览器原生 SSE 连接。
 // 服务端会先发送 snapshot 全量事件，再持续发送 position 增量事件；EventSource 会自动重连。
-export function subscribeRobotLocations({ onSnapshot, onPosition, onOpen, onError } = {}) {
+export function subscribeRobotLocations({ onSnapshot, onPosition, onDeleted, onOpen, onError } = {}) {
   const stream = new EventSource(`${API_BASE_URL}/api/robots/locations/stream`);
 
   stream.addEventListener('snapshot', (event) => {
@@ -155,8 +156,60 @@ export function subscribeRobotLocations({ onSnapshot, onPosition, onOpen, onErro
   });
 
   stream.onopen = () => onOpen?.();
+  stream.addEventListener('deleted', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (typeof payload.robotName !== 'string' || !payload.robotName) throw new Error('invalid deletion');
+      onDeleted?.(payload.robotName);
+    } catch (error) {
+      onError?.(error);
+    }
+  });
   stream.onerror = (event) => onError?.(event);
   return () => stream.close();
+}
+
+async function mutateRobot(method, robotName) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/robots${method === 'DELETE' ? `/${encodeURIComponent(robotName)}` : ''}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'POST' ? JSON.stringify({ robotName }) : undefined,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const message = payload.cacheChanged
+        ? '缓存已更新，数据库保存失败，后台正在重试'
+        : response.status === 409 ? '该设备编号已存在'
+          : response.status === 400 ? '设备编号无效，请检查输入'
+            : '设备操作失败，请稍后重试';
+      const error = new Error(message);
+      error.cacheChanged = payload.cacheChanged === true;
+      throw error;
+    }
+  } catch (error) {
+    if (error instanceof TypeError || error.name === 'AbortError') {
+      throw new Error('连接中断，操作结果未确认，请等待列表同步后再检查');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export const createRobot = (robotName) => mutateRobot('POST', robotName.trim());
+export const deleteRobot = (robotName) => mutateRobot('DELETE', robotName);
+
+export function hasCoordinates(position) {
+  return Number.isFinite(position?.lat) && Number.isFinite(position?.lng);
+}
+
+export function isRobotOnline(position, now = Date.now()) {
+  if (!position || position.heartbeatStatus === 'offline' || !position.sourceTimestampMs) return false;
+  return position.receivedAtMs > 0 && now - position.receivedAtMs < 30000;
 }
 
 export async function fetchAllRobotLocations(signal) {

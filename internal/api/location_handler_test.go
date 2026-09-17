@@ -17,7 +17,7 @@ import (
 
 func TestRobotLocationStreamSendsSnapshotAndUpdates(t *testing.T) {
 	store := location.NewStore()
-	store.LoadInitial([]location.Position{{RobotName: "USV-001", Lat: 31, Lng: 120, Battery: 80, Status: 1}})
+	store.LoadInitial([]location.Position{{RobotName: "USV-001", Lat: location.Float(31), Lng: location.Float(120), Battery: location.Float(80), Status: 1}})
 	server := httptest.NewServer(RobotLocationStreamHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	defer server.Close()
 
@@ -46,14 +46,21 @@ func TestRobotLocationStreamSendsSnapshotAndUpdates(t *testing.T) {
 		t.Fatalf("snapshot = %s, err = %v", data, err)
 	}
 
-	store.Update(location.Position{RobotName: "USV-001", Lat: 32, Lng: 121, Battery: 80, Status: 1, SourceTimestampMS: 2})
+	store.Update(location.Position{RobotName: "USV-001", Lat: location.Float(32), Lng: location.Float(121), Battery: location.Float(80), Status: 1, SourceTimestampMS: 2})
 	event, data = readSSEEvent(t, reader)
 	if event != "position" {
 		t.Fatalf("event = %q, want position", event)
 	}
 	var update location.Position
-	if err := json.Unmarshal([]byte(data), &update); err != nil || update.Lat != 32 {
+	if err := json.Unmarshal([]byte(data), &update); err != nil || *update.Lat != 32 {
 		t.Fatalf("update = %s, err = %v", data, err)
+	}
+	if err := store.Delete(ctx, "USV-001"); err != nil {
+		t.Fatal(err)
+	}
+	event, data = readSSEEvent(t, reader)
+	if event != "deleted" || !strings.Contains(data, `"robotName":"USV-001"`) {
+		t.Fatalf("delete event=%s data=%s", event, data)
 	}
 }
 

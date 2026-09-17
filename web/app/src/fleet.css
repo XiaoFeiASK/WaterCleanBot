@@ -1,0 +1,23 @@
+.fleet-add-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid #c7d5d7;
+  border-radius: 8px;
+  color: #172b35;
+  background: #fbfcfc;
+  box-shadow: 0 16px 48px #11293633;
+  overflow: auto;
+}
+.fleet-add-dialog::backdrop { background: #122a3959; }
+.fleet-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.fleet-dialog-heading h2 { margin: 0; font-size: 20px; letter-spacing: 0; }
+.fleet-add-dialog label { display: block; margin-bottom: 8px; font-size: 14px; }
+.fleet-add-dialog input { width: 100%; min-width: 0; height: 42px; padding: 8px 12px; border: 1px solid #aebfc4; border-radius: 6px; background: white; color: inherit; }
+.fleet-add-dialog input:focus { outline: 2px solid #108a8a; outline-offset: 2px; }
+.fleet-dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.fleet-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
+.fleet-icon-button:hover { background: #e8eeee; }
+.fleet-management-table .fleet-delete-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; vertical-align: middle; }
+.fleet-management-table td strong { overflow-wrap: anywhere; max-width: 240px; }
+.fleet-add-dialog button:disabled, .fleet-management-section button:disabled { cursor: not-allowed; opacity: .55; }

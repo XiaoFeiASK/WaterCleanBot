@@ -45,10 +45,10 @@ func ParseNavigationFeedback(topic string, payload []byte) (location.Position, b
 	satelliteCount := int(values[12])
 	return location.Position{
 		RobotName:          robotName,
-		Lng:                lng,
-		Lat:                lat,
-		Heading:            heading,
-		Speed:              speedKnots * knotsToMetersPerSecond,
+		Lng:                location.Float(lng),
+		Lat:                location.Float(lat),
+		Heading:            location.Float(heading),
+		Speed:              location.Float(speedKnots * knotsToMetersPerSecond),
 		HeadingRate:        &headingRate,
 		Pitch:              &pitch,
 		PitchRate:          &pitchRate,
@@ -107,7 +107,7 @@ func ParseStatusFeedback(topic string, payload []byte) (string, location.Positio
 			return "", location.Position{}, false
 		}
 		battery, left, right := float64(v[1]), v[2], v[3]
-		p.Battery = battery
+		p.Battery = &battery
 		p.LeftThrottle = &left
 		p.RightThrottle = &right
 	default:

@@ -3,9 +3,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
@@ -62,7 +65,7 @@ func RobotLocationStreamHandler(store *location.Store, log *slog.Logger) http.Ha
 				if !open {
 					return
 				}
-				if err := writeSSE(w, "position", position); err != nil {
+				if err := writeSSE(w, position.Type, position.Position); err != nil {
 					log.Debug("location stream write failed", slog.Any("error", err))
 					return
 				}
@@ -74,6 +77,56 @@ func RobotLocationStreamHandler(store *location.Store, log *slog.Logger) http.Ha
 				flusher.Flush()
 			}
 		}
+	}
+}
+
+func CreateRobotHandler(store *location.Store, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			RobotName string `json:"robotName"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid robot name"})
+			return
+		}
+		if decoder.Decode(&struct{}{}) != io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+			return
+		}
+		request.RobotName = strings.TrimSpace(request.RobotName)
+		if !location.ValidRobotName(request.RobotName) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid robot name"})
+			return
+		}
+		err := store.Create(r.Context(), request.RobotName)
+		if errors.Is(err, location.ErrRobotExists) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "robot already exists"})
+			return
+		}
+		if err != nil {
+			log.Warn("persist robot creation failed", slog.Any("error", err))
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "persistence pending", "cacheChanged": true})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"robotName": request.RobotName})
+	}
+}
+
+func DeleteRobotHandler(store *location.Store, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		robotName := r.PathValue("robotName")
+		if !location.ValidRobotName(robotName) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid robot name"})
+			return
+		}
+		if err := store.Delete(r.Context(), robotName); err != nil {
+			log.Warn("persist robot deletion failed", slog.Any("error", err))
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "persistence pending", "cacheChanged": true})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

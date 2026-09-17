@@ -36,7 +36,13 @@ GET /api/robots/{robotName}/cameras
 }
 ```
 
-前端启动时建立一条 EventSource 连接，先接收 `snapshot` 全量快照，再接收 `position` 增量事件；断线时浏览器自动重连，不再按固定间隔轮询定位接口。
+前端启动时建立一条 EventSource 连接，先接收 `snapshot` 全量快照，再接收 `position` 增量事件和 `deleted` 删除事件；断线时浏览器自动重连，不再按固定间隔轮询定位接口。
+
+## 设备编队
+
+“添加船”提交 `POST /api/robots`，请求体为 `{"robotName":"USV-002"}`；删除确认后调用 `DELETE /api/robots/{robotName}`。列表由后端 SSE 同步，后端先更新缓存再保存数据库。新船的五个遥测字段允许为 `null`，显示“待接入”和 `--`，收到定位后才在地图显示。删除后再次收到设备 MQTT 上报时自动恢复，无需手动添加。
+
+部署前请手动执行 `../../database/create_robot_current_locations.sql` 中允许五个遥测列为空的 `ALTER TABLE` 段，并同时更新前后端。
 
 ## 航线规划
 

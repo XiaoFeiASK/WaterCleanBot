@@ -26,7 +26,9 @@ func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool)
 		return "", 0, false
 	}
 	distance, err := values[11].Float64()
-	if err != nil || !isFiniteNumber(distance) || distance < 0 { return "", 0, false }
+	if err != nil || !isFiniteNumber(distance) || distance < 0 {
+		return "", 0, false
+	}
 	return parts[1], distance, true
 }
 
@@ -114,11 +116,11 @@ func (d USVData) Validate(topicUSVID string) error {
 func (d USVData) Position() location.Position {
 	return location.Position{
 		RobotName: d.USVID,
-		Lat:       d.Lat,
-		Lng:       d.Lng,
-		Heading:   d.Heading,
-		Speed:     d.Speed,
-		Battery:   d.Battery,
+		Lat:       location.Float(d.Lat),
+		Lng:       location.Float(d.Lng),
+		Heading:   location.Float(d.Heading),
+		Speed:     location.Float(d.Speed),
+		Battery:   location.Float(d.Battery),
 		Status:    d.Status,
 	}
 }
