@@ -1680,8 +1680,7 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 
 .online-map-frame .route-planning-toolbar { bottom: 90px; }
 
-/* Compact map control: only the toggle uses the active teal accent. */
-.tracking-map-switch {
+.tracking-map-button {
   position: absolute;
   right: 18px;
   bottom: 18px;
@@ -1689,48 +1688,43 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 58px;
-  padding: 10px 13px;
-  border: 2px solid var(--teal-dark);
-  border-radius: 12px;
+  width: 260px;
+  max-width: calc(100% - 36px);
+  min-height: 72px;
+  padding: 12px;
+  border: 2px solid rgba(17,128,119,.48);
+  border-radius: 8px;
   color: var(--ink);
-  background: rgba(248, 250, 249, .97);
+  background: #fff;
   box-shadow: 0 4px 16px rgba(19, 40, 58, .14);
   text-align: left;
-  backdrop-filter: blur(8px);
 }
-.tracking-map-switch:hover { border-color: var(--teal-dark); }
-.tracking-map-switch:focus-visible,
+.tracking-map-button:hover:not(:disabled) { border-color: var(--teal-dark); background: #f4faf9; }
+.tracking-map-button:focus-visible,
 .dock-eject-control:focus-visible {
   outline: 2px solid var(--teal-dark);
   outline-offset: 3px;
 }
-.tracking-map-icon { flex-shrink: 0; color: var(--water); }
-.tracking-map-label { display: grid; gap: 3px; }
-.tracking-map-label strong { font-size: 13px; font-weight: 700; }
-.tracking-map-label small { color: var(--muted); font-size: 10px; font-weight: 400; }
-.tracking-map-toggle {
+.tracking-map-label { min-width: 0; flex: 1; display: grid; gap: 5px; }
+.tracking-map-label strong { font-size: 15px; font-weight: 700; }
+.tracking-map-label small { color: var(--muted); font-size: 11px; letter-spacing: 0; }
+.tracking-map-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   flex-shrink: 0;
-  width: 34px;
-  height: 20px;
-  margin-left: 4px;
-  padding: 3px;
-  border-radius: 999px;
-  background: #879799;
-  transition: background .16s ease;
+  width: 76px;
+  min-height: 38px;
+  padding: 8px;
+  border-radius: 8px;
+  color: #fff;
+  background: #117f77;
+  font-size: 13px;
+  font-weight: 700;
 }
-.tracking-map-toggle > span {
-  display: block;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(19, 40, 58, .18);
-  transition: transform .16s ease;
-}
-.tracking-map-switch[aria-checked="true"] .tracking-map-toggle { background: var(--teal-dark); }
-.tracking-map-switch[aria-checked="true"] .tracking-map-toggle > span { transform: translateX(14px); }
-.tracking-map-switch[aria-busy="true"] { cursor: wait; }
+.tracking-map-action.is-stop { color: #46585c; background: #e7edee; }
+.tracking-map-button[aria-busy="true"] { cursor: wait; }
 .dock-eject-control { position: relative; }
 .dock-eject-indicator { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; background: #c43c3c; box-shadow: 0 0 0 3px rgba(196,60,60,.14); transition: background .2s ease, box-shadow .2s ease; }
 .dock-eject-indicator.is-active { background: #22a66f; box-shadow: 0 0 0 3px rgba(34,166,111,.18), 0 0 12px rgba(34,166,111,.55); }
@@ -1740,9 +1734,6 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   gap: 4px;
   color: var(--teal-dark);
   background: rgba(24, 169, 153, .1);
-}
-@media (prefers-reduced-motion: reduce) {
-  .tracking-map-toggle, .tracking-map-toggle > span { transition: none; }
 }
 .button-danger-soft {
   color: var(--red);
@@ -1754,11 +1745,12 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 }
 
 @media (max-width: 760px) {
-  .tracking-map-switch {
+  .tracking-map-button {
     right: 10px;
     bottom: 10px;
     gap: 8px;
     padding: 9px 11px;
+    max-width: calc(100% - 20px);
   }
 }
 

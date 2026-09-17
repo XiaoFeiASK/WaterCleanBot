@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Anchor, ArrowUpRight, Route } from 'lucide-react';
+import { Anchor, ArrowUpRight, Play, Route, Square } from 'lucide-react';
 import { getRemoteCommandErrorMessage, sendRobotCommand } from './api';
 
 function confirmAction(message) {
@@ -17,7 +17,7 @@ export function requestRemoteSwitchConfirmation(command, nextValue) {
 }
 
 // State describes published commands, not device ACKs. Keep each target independent.
-export function TrackingSwitch({ deviceId, onToast }) {
+export function TrackingButton({ deviceId, onToast }) {
   const [enabledByDevice, setEnabledByDevice] = useState({});
   const [busyByDevice, setBusyByDevice] = useState({});
   const pendingTargets = useRef(new Set());
@@ -54,22 +54,23 @@ export function TrackingSwitch({ deviceId, onToast }) {
 
   return (
     <button
-      className="tracking-map-switch"
+      className="tracking-map-button critical-control--power"
       type="button"
-      role="switch"
-      aria-label="循迹开关"
-      aria-checked={enabled}
+      aria-label={enabled ? '停止循迹' : '开始循迹'}
       aria-busy={busy}
-      aria-disabled={busy}
+      disabled={busy}
       onClick={toggleTracking}
-      title={`${enabled ? '停止循迹 [24,0]' : '按航线开始循迹 [24,1]'}；开关显示本页已发布状态，不代表设备反馈`}
+      title={`${enabled ? '停止循迹 [24,0]' : '按航线开始循迹 [24,1]'}；已发布状态不代表设备反馈`}
     >
-      <Route className="tracking-map-icon" size={18} aria-hidden="true" />
+      <span className="critical-control-icon" aria-hidden="true"><Route size={22} /></span>
       <span className="tracking-map-label">
-        <strong>循迹开关</strong>
-        <small>{busy ? '指令下发中…' : enabled ? '已发开启 · 点击停止' : '按航线出发'}</small>
+        <strong>循迹控制</strong>
+        <small>{busy ? '指令下发中…' : enabled ? '已发开始' : '航线循迹'}</small>
       </span>
-      <span className="tracking-map-toggle" aria-hidden="true"><span /></span>
+      <span className={`tracking-map-action ${enabled ? 'is-stop' : ''}`}>
+        {enabled ? <Square size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+        {busy ? '下发中' : enabled ? '停止' : '开始'}
+      </span>
     </button>
   );
 }

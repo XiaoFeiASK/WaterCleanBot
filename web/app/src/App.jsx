@@ -51,7 +51,7 @@ import {
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 import { getRoleName } from './roles';
-import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingSwitch } from './CommandControls';
+import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import './fleet.css';
 
 function confirmAction(message) {
@@ -1342,7 +1342,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             previewRoutePoints={previewRoutePoints}
             onMapPoint={addDraftRoutePoint}
           />
-          <TrackingSwitch deviceId={routeDeviceId} onToast={onToast} />
+          <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
               <span>航程</span>
