@@ -34,7 +34,7 @@ describe('remote actuator interlock', () => {
     const onToast = vi.fn();
     render(<RemoteControlPanel position={{ robotName: 'USV-001' }} onToast={onToast} />);
 
-    expect(screen.getByText('翻盖电缸2')).toBeTruthy();
+    expect(screen.getByText('翻盖电缸')).toBeTruthy();
     fireEvent.click(control('推出电缸'));
 
     expect(onToast).toHaveBeenCalledWith('翻盖开关未开启');
@@ -44,7 +44,7 @@ describe('remote actuator interlock', () => {
   it('allows disc extension after the hatch actuator is opened', async () => {
     render(<RemoteControlPanel position={{ robotName: 'USV-001' }} />);
 
-    fireEvent.click(control('翻盖电缸2'));
+    fireEvent.click(control('翻盖电缸'));
     await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledWith('USV-001', expect.objectContaining({
       command: 'HATCH_CYLINDER',
       value: 1,

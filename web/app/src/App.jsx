@@ -118,7 +118,7 @@ const REMOTE_THROTTLE_COMMANDS = Object.freeze([
 ]);
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
-  { cmd: 'HATCH_CYLINDER', label: '翻盖电缸2', onText: '开启', offText: '关闭' },
+  { cmd: 'HATCH_CYLINDER', label: '翻盖电缸', onText: '开启', offText: '关闭' },
   { cmd: 'DISC_CYLINDER', label: '推出电缸', onText: '推出', offText: '收回' },
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
