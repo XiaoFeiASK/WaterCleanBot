@@ -118,7 +118,7 @@ const REMOTE_THROTTLE_COMMANDS = Object.freeze([
 ]);
 
 const REMOTE_SWITCH_COMMANDS = Object.freeze([
-  { cmd: 'HATCH_CYLINDER', label: '翻盖开关', onText: '开启', offText: '关闭' },
+  { cmd: 'HATCH_CYLINDER', label: '翻盖电缸2', onText: '开启', offText: '关闭' },
   { cmd: 'DISC_CYLINDER', label: '推出电缸', onText: '推出', offText: '收回' },
   { cmd: 'CONVEYOR', label: '传送带', onText: '开启', offText: '关闭' },
   { cmd: 'BRUSH_L', label: '左滚刷', onText: '开启', offText: '关闭' },
@@ -1670,7 +1670,7 @@ function CameraPanel({ position, onToast }) {
   );
 }
 
-function RemoteControlPanel({ position, onToast }) {
+export function RemoteControlPanel({ position, onToast }) {
   const [values, setValues] = useState(INITIAL_REMOTE_VALUES);
   const remoteDeviceId = getRobotNameForDevice(position?.robotName);
   const hasRemoteTarget = Boolean(remoteDeviceId);
@@ -1724,6 +1724,10 @@ function RemoteControlPanel({ position, onToast }) {
 
   async function toggleSwitch(command) {
     const nextValue = values[command.cmd] ? 0 : 1;
+    if (command.cmd === 'DISC_CYLINDER' && nextValue === 1 && values.HATCH_CYLINDER !== 1) {
+      onToast?.('翻盖开关未开启');
+      return;
+    }
     if (!requestRemoteSwitchConfirmation(command, nextValue)) return;
     const previousValues = values;
     const nextValues = { ...values, [command.cmd]: nextValue };
