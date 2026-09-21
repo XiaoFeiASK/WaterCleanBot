@@ -5,6 +5,7 @@ package location
 import (
 	"context"
 	"errors"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -21,11 +22,16 @@ type Event struct {
 	Type string
 }
 
+type distanceState struct {
+	last  float64
+	total float64
+}
+
 // Store 保存每台无人船的最新位置。它是运行期间实时状态的唯一数据源。
 type Store struct {
 	mu                 sync.RWMutex
 	positions          map[string]Position
-	distances          map[string]float64
+	distances          map[string]distanceState
 	telemetryVersions  map[string]int64
 	navigationVersions map[string]int64
 	latestReceivedAtMS map[string]int64
@@ -38,7 +44,7 @@ type Store struct {
 func NewStore() *Store {
 	return &Store{
 		positions:          make(map[string]Position),
-		distances:          make(map[string]float64),
+		distances:          make(map[string]distanceState),
 		telemetryVersions:  make(map[string]int64),
 		navigationVersions: make(map[string]int64),
 		latestReceivedAtMS: make(map[string]int64),
@@ -138,7 +144,10 @@ func cloneActuators(values map[string]int) map[string]int {
 }
 
 func clonePosition(position Position) Position {
-	for _, field := range []**float64{&position.Lat, &position.Lng, &position.Heading, &position.Speed, &position.Battery} {
+	for _, field := range []**float64{
+		&position.Lat, &position.Lng, &position.Heading, &position.Speed, &position.Battery,
+		&position.DistanceMeters, &position.TotalDistanceMeters, &position.LastDistanceMeters,
+	} {
 		if *field != nil {
 			*field = Float(**field)
 		}
@@ -158,7 +167,9 @@ func (s *Store) prepareRealtimePosition(position Position, previous Position, ex
 		mergeFeedback(&position, previous)
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
-		position.DistanceMeters = &distance
+		position.DistanceMeters = Float(distance.last)
+		position.LastDistanceMeters = Float(distance.last)
+		position.TotalDistanceMeters = Float(distance.total)
 	}
 	return position
 }
@@ -193,10 +204,17 @@ func (s *Store) LoadInitial(positions []Position) {
 	defer s.mu.Unlock()
 
 	next := make(map[string]Position, len(positions))
+	distances := make(map[string]distanceState)
 	for _, position := range positions {
+		if position.LastDistanceMeters != nil && position.TotalDistanceMeters != nil {
+			distance := distanceState{last: *position.LastDistanceMeters, total: *position.TotalDistanceMeters}
+			distances[position.RobotName] = distance
+			position.DistanceMeters = Float(distance.last)
+		}
 		next[position.RobotName] = clonePosition(position)
 	}
 	s.positions = next
+	s.distances = distances
 }
 
 // UpdateNavigation 合并设备通过 [18,...] webfeedback 上报的导航定位信息。
@@ -231,7 +249,9 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 		position.DeviceStatusOK = previous.DeviceStatusOK
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
-		position.DistanceMeters = &distance
+		position.DistanceMeters = Float(distance.last)
+		position.LastDistanceMeters = Float(distance.last)
+		position.TotalDistanceMeters = Float(distance.total)
 	}
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
@@ -270,22 +290,48 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 	if feedback.DeviceStatusOK != nil {
 		position.DeviceStatusOK = feedback.DeviceStatusOK
 	}
+	if distance, ok := s.distances[robotName]; ok {
+		position.DistanceMeters = Float(distance.last)
+		position.LastDistanceMeters = Float(distance.last)
+		position.TotalDistanceMeters = Float(distance.total)
+	}
 	s.positions[robotName] = clonePosition(position)
 	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	s.mu.Unlock()
 }
 
-// UpdateDistance 写入设备最新的本次行驶里程反馈。
+// UpdateDistance 根据设备当前开机累计值更新本次航程和历史总航程。
 func (s *Store) UpdateDistance(robotName string, distanceMeters float64) {
-	s.mu.Lock()
-	s.distances[robotName] = distanceMeters
-	if position, ok := s.positions[robotName]; ok {
-		position.DistanceMeters = &distanceMeters
-		position.ReceivedAtMS = time.Now().UnixMilli()
-		s.positions[robotName] = clonePosition(position)
-		s.broadcastLocked(position)
+	if distanceMeters < 0 || math.IsNaN(distanceMeters) || math.IsInf(distanceMeters, 0) {
+		return
 	}
+	s.mu.Lock()
+	distance, exists := s.distances[robotName]
+	if !exists {
+		distance = distanceState{last: distanceMeters, total: distanceMeters}
+	} else if distanceMeters >= distance.last {
+		distance.total += distanceMeters - distance.last
+		distance.last = distanceMeters
+	} else {
+		// 船端每次开机会从零重新累计；读数下降表示新一轮开机航程。
+		distance.last = distanceMeters
+		distance.total += distanceMeters
+	}
+	s.distances[robotName] = distance
+	position, ok := s.positions[robotName]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	position.RobotName = robotName
+	position.DistanceMeters = Float(distance.last)
+	position.LastDistanceMeters = Float(distance.last)
+	position.TotalDistanceMeters = Float(distance.total)
+	position.ReceivedAtMS = time.Now().UnixMilli()
+	s.positions[robotName] = clonePosition(position)
+	s.queuePositionLocked(position)
+	s.broadcastLocked(position)
 	s.mu.Unlock()
 }
 

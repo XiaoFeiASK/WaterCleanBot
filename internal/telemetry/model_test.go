@@ -69,6 +69,19 @@ func TestParseDistanceFeedbackReadsP11(t *testing.T) {
 	}
 }
 
+func TestParseDistanceFeedbackRejectsInvalidValues(t *testing.T) {
+	for _, payload := range []string{
+		`[19,1,2,3,4,5,6,7,8,9,10,-1]`,
+		`[19,1,2]`,
+		`[18,1,2,3,4,5,6,7,8,9,10,12]`,
+		`not-json`,
+	} {
+		if _, _, ok := ParseDistanceFeedback("usv/USV-001/webfeedback", []byte(payload)); ok {
+			t.Fatalf("ParseDistanceFeedback accepted %q", payload)
+		}
+	}
+}
+
 func TestParseStatusFeedbackMappings(t *testing.T) {
 	robot, p, ok := ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[17,2823,0,205755,1]`))
 	if !ok || robot != "USV-001" || p.ControlMode == nil || *p.ControlMode != 1 || p.CommandResultCode == nil || *p.CommandResultCode != 0 {

@@ -17,7 +17,10 @@ import (
 
 func TestRobotLocationStreamSendsSnapshotAndUpdates(t *testing.T) {
 	store := location.NewStore()
-	store.LoadInitial([]location.Position{{RobotName: "USV-001", Lat: location.Float(31), Lng: location.Float(120), Battery: location.Float(80), Status: 1}})
+	store.LoadInitial([]location.Position{{
+		RobotName: "USV-001", Lat: location.Float(31), Lng: location.Float(120), Battery: location.Float(80), Status: 1,
+		LastDistanceMeters: location.Float(10), TotalDistanceMeters: location.Float(500),
+	}})
 	server := httptest.NewServer(RobotLocationStreamHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	defer server.Close()
 
@@ -42,7 +45,7 @@ func TestRobotLocationStreamSendsSnapshotAndUpdates(t *testing.T) {
 		t.Fatalf("event = %q, want snapshot", event)
 	}
 	var snapshot []location.Position
-	if err := json.Unmarshal([]byte(data), &snapshot); err != nil || len(snapshot) != 1 || snapshot[0].RobotName != "USV-001" {
+	if err := json.Unmarshal([]byte(data), &snapshot); err != nil || len(snapshot) != 1 || snapshot[0].RobotName != "USV-001" || snapshot[0].TotalDistanceMeters == nil || *snapshot[0].TotalDistanceMeters != 500 {
 		t.Fatalf("snapshot = %s, err = %v", data, err)
 	}
 
@@ -55,12 +58,36 @@ func TestRobotLocationStreamSendsSnapshotAndUpdates(t *testing.T) {
 	if err := json.Unmarshal([]byte(data), &update); err != nil || *update.Lat != 32 {
 		t.Fatalf("update = %s, err = %v", data, err)
 	}
+
+	store.UpdateDistance("USV-001", 12)
+	event, data = readSSEEvent(t, reader)
+	if event != "position" {
+		t.Fatalf("event = %q, want distance position", event)
+	}
+	if err := json.Unmarshal([]byte(data), &update); err != nil || update.DistanceMeters == nil || *update.DistanceMeters != 12 || update.TotalDistanceMeters == nil || *update.TotalDistanceMeters != 502 {
+		t.Fatalf("distance update = %s, err = %v", data, err)
+	}
 	if err := store.Delete(ctx, "USV-001"); err != nil {
 		t.Fatal(err)
 	}
 	event, data = readSSEEvent(t, reader)
 	if event != "deleted" || !strings.Contains(data, `"robotName":"USV-001"`) {
 		t.Fatalf("delete event=%s data=%s", event, data)
+	}
+}
+
+func TestRobotLocationResponseIncludesTotalDistance(t *testing.T) {
+	store := location.NewStore()
+	store.LoadInitial([]location.Position{{
+		RobotName: "USV-001", LastDistanceMeters: location.Float(20), TotalDistanceMeters: location.Float(1200),
+	}})
+	request := httptest.NewRequest(http.MethodGet, "/api/robots/USV-001/location", nil)
+	request.SetPathValue("robotName", "USV-001")
+	response := httptest.NewRecorder()
+	RobotLocationHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil)))(response, request)
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"distanceMeters":20`) || !strings.Contains(response.Body.String(), `"totalDistanceMeters":1200`) {
+		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-//go:embed 00001_create_auth_tables.sql
+//go:embed 000*.sql
 var files embed.FS
 
 // Up applies database migrations that have not run yet.

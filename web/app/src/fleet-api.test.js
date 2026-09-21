@@ -14,6 +14,13 @@ describe('fleet API', () => {
     expect(isRobotOnline({ ...pending, sourceTimestampMs: 1, receivedAtMs: 1000 }, 32000)).toBe(false);
     expect(isRobotOnline({ ...pending, sourceTimestampMs: 1, receivedAtMs: 1000 }, 1001)).toBe(true);
   });
+  it('accepts non-negative total distance and rejects malformed totals', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, distanceMeters: 25, totalDistanceMeters: 1025 }] })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, totalDistanceMeters: -1 }] }));
+    await expect(fetchAllRobotLocations()).resolves.toEqual([{ ...pending, distanceMeters: 25, totalDistanceMeters: 1025 }]);
+    await expect(fetchAllRobotLocations()).rejects.toThrow();
+  });
   it('does not accept malformed telemetry in place of null', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{ ...pending, lat: 'unknown' }] }));
     await expect(fetchAllRobotLocations()).rejects.toThrow();

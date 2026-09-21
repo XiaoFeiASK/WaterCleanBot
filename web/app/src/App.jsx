@@ -255,6 +255,15 @@ function formatDistanceMeters(distanceMeters) {
   return distanceMeters >= 1000 ? `${(distanceMeters / 1000).toFixed(2)} km` : `${distanceMeters.toFixed(1)} m`;
 }
 
+export function TotalDistanceDisplay({ value }) {
+  return (
+    <div className="total-distance-display" aria-label="总航程">
+      <span>总航程</span>
+      <strong>{formatDistanceMeters(value)}</strong>
+    </div>
+  );
+}
+
 function formatHeading(heading) {
   return typeof heading === 'number' && Number.isFinite(heading) ? `${heading.toFixed(1)}°` : '暂无数据';
 }
@@ -1051,6 +1060,7 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
             <Search size={16} />
             查询位置
           </button>
+          <TotalDistanceDisplay value={position?.totalDistanceMeters} />
         </div>
         <p className="query-hint">支持手动输入，也可点击搜索框右侧展开已同步设备。</p>
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -1345,7 +1355,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
-              <span>航程</span>
+              <span>本次航程</span>
               <strong>{formatDistanceMeters(position?.distanceMeters)}</strong>
             </div>
             <div className="telemetry-primary">

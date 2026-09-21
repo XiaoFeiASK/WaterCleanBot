@@ -26,11 +26,14 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 	defer cancel()
 
 	rows, err := r.db.QueryContext(queryCtx, `
-		SELECT robot_name, lat, lng, heading, speed, battery, status,
-		       COALESCE(source_timestamp_ms, 0),
-		       (EXTRACT(EPOCH FROM updated_at) * 1000)::bigint
-		FROM robot_current_locations
-		ORDER BY robot_name
+		SELECT p.robot_name, p.lat, p.lng, p.heading, p.speed, p.battery, p.status,
+		       COALESCE(p.source_timestamp_ms, 0),
+		       (EXTRACT(EPOCH FROM p.updated_at) * 1000)::bigint,
+		       d.last_distance_meters,
+		       d.total_distance_meters
+		FROM robot_current_locations p
+		LEFT JOIN robot_distance_totals d ON d.robot_name = p.robot_name
+		ORDER BY p.robot_name
 	`)
 	if err != nil {
 		return nil, err
@@ -50,6 +53,8 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 			&position.Status,
 			&position.SourceTimestampMS,
 			&position.ReceivedAtMS,
+			&position.LastDistanceMeters,
+			&position.TotalDistanceMeters,
 		); err != nil {
 			return nil, err
 		}
@@ -66,8 +71,14 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
 	defer cancel()
 
+	tx, err := r.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
 	var robotName string
-	err := r.db.QueryRowContext(queryCtx, `
+	err = tx.QueryRowContext(queryCtx, `
 		INSERT INTO robot_current_locations (
 			robot_name, lat, lng, heading, speed, battery, status, source_timestamp_ms, updated_at
 		)
@@ -100,6 +111,23 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 	if err != nil {
 		return false, err
 	}
+	if position.LastDistanceMeters != nil && position.TotalDistanceMeters != nil {
+		if _, err := tx.ExecContext(queryCtx, `
+			INSERT INTO robot_distance_totals (
+				robot_name, last_distance_meters, total_distance_meters, updated_at
+			)
+			VALUES ($1, $2, $3, to_timestamp($4 / 1000.0))
+			ON CONFLICT (robot_name) DO UPDATE SET
+				last_distance_meters = EXCLUDED.last_distance_meters,
+				total_distance_meters = EXCLUDED.total_distance_meters,
+				updated_at = EXCLUDED.updated_at
+		`, position.RobotName, *position.LastDistanceMeters, *position.TotalDistanceMeters, receivedAtMS); err != nil {
+			return false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -114,6 +142,16 @@ func (r *Repository) CreateCurrentPosition(ctx context.Context, robotName string
 func (r *Repository) DeleteCurrentPosition(ctx context.Context, robotName string) error {
 	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
 	defer cancel()
-	_, err := r.db.ExecContext(queryCtx, `DELETE FROM robot_current_locations WHERE robot_name = $1`, robotName)
-	return err
+	tx, err := r.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(queryCtx, `DELETE FROM robot_distance_totals WHERE robot_name = $1`, robotName); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(queryCtx, `DELETE FROM robot_current_locations WHERE robot_name = $1`, robotName); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

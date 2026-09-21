@@ -94,6 +94,10 @@ function validateLocationPayload(payload, expectedRobotName) {
     throw createLocationError('REQUEST_FAILED');
   }
 
+  if ('totalDistanceMeters' in payload && (!isNumber(payload.totalDistanceMeters) || payload.totalDistanceMeters < 0)) {
+    throw createLocationError('REQUEST_FAILED');
+  }
+
   return payload;
 }
 
