@@ -1,6 +1,6 @@
 <!-- 文件作用：说明 WaterCleanBot 当前最小后端范围、文件架构和实时定位链路。 -->
 
-# WaterCleanBo
+# WaterCleanBot
 
 WaterCleanBot 是水面垃圾清洁机器人项目。后端通过 MQTT 接收实时定位，使用内存作为运行期状态源，通过 SSE 推送前端，并异步保存 PostgreSQL 最后位置快照。
 
