@@ -31,14 +31,14 @@ GET /api/robots/{robotName}/cameras
   "heading": 135.0,
   "speed": 2.3,
   "battery": 68.0,
-  "distanceMeters": 326.4,
-  "totalDistanceMeters": 18250.7,
+  "distanceKm": 326.4,
+  "totalDistanceKm": 18250.7,
   "status": 1,
   "robotName": "清澜一号"
 }
 ```
 
-`distanceMeters` 是设备当前开机周期的航程，`totalDistanceMeters` 是后端跨开机周期累计并持久化的总航程。两者在尚未收到航程反馈时可以省略。
+`distanceKm` 和 `totalDistanceKm` 的数值单位均为千米（km）：前者是设备当前开机周期的航程，后者是后端跨开机周期累计并持久化的总航程。两者在尚未收到航程反馈时可以省略。
 
 前端启动时建立一条 EventSource 连接，先接收 `snapshot` 全量快照，再接收 `position` 增量事件和 `deleted` 删除事件；断线时浏览器自动重连，不再按固定间隔轮询定位接口。
 

@@ -90,11 +90,11 @@ function validateLocationPayload(payload, expectedRobotName) {
     throw createLocationError('REQUEST_FAILED');
   }
 
-  if ('distanceMeters' in payload && (!isNumber(payload.distanceMeters) || payload.distanceMeters < 0)) {
+  if ('distanceKm' in payload && (!isNumber(payload.distanceKm) || payload.distanceKm < 0)) {
     throw createLocationError('REQUEST_FAILED');
   }
 
-  if ('totalDistanceMeters' in payload && (!isNumber(payload.totalDistanceMeters) || payload.totalDistanceMeters < 0)) {
+  if ('totalDistanceKm' in payload && (!isNumber(payload.totalDistanceKm) || payload.totalDistanceKm < 0)) {
     throw createLocationError('REQUEST_FAILED');
   }
 

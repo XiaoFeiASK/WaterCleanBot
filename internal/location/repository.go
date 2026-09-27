@@ -29,8 +29,8 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 		SELECT p.robot_name, p.lat, p.lng, p.heading, p.speed, p.battery, p.status,
 		       COALESCE(p.source_timestamp_ms, 0),
 		       (EXTRACT(EPOCH FROM p.updated_at) * 1000)::bigint,
-		       d.last_distance_meters,
-		       d.total_distance_meters
+		       d.last_distance_km,
+		       d.total_distance_km
 		FROM robot_current_locations p
 		LEFT JOIN robot_distance_totals d ON d.robot_name = p.robot_name
 		ORDER BY p.robot_name
@@ -53,8 +53,8 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 			&position.Status,
 			&position.SourceTimestampMS,
 			&position.ReceivedAtMS,
-			&position.LastDistanceMeters,
-			&position.TotalDistanceMeters,
+			&position.LastDistanceKm,
+			&position.TotalDistanceKm,
 		); err != nil {
 			return nil, err
 		}
@@ -111,17 +111,17 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 	if err != nil {
 		return false, err
 	}
-	if position.LastDistanceMeters != nil && position.TotalDistanceMeters != nil {
+	if position.LastDistanceKm != nil && position.TotalDistanceKm != nil {
 		if _, err := tx.ExecContext(queryCtx, `
 			INSERT INTO robot_distance_totals (
-				robot_name, last_distance_meters, total_distance_meters, updated_at
+				robot_name, last_distance_km, total_distance_km, updated_at
 			)
 			VALUES ($1, $2, $3, to_timestamp($4 / 1000.0))
 			ON CONFLICT (robot_name) DO UPDATE SET
-				last_distance_meters = EXCLUDED.last_distance_meters,
-				total_distance_meters = EXCLUDED.total_distance_meters,
+				last_distance_km = EXCLUDED.last_distance_km,
+				total_distance_km = EXCLUDED.total_distance_km,
 				updated_at = EXCLUDED.updated_at
-		`, position.RobotName, *position.LastDistanceMeters, *position.TotalDistanceMeters, receivedAtMS); err != nil {
+		`, position.RobotName, *position.LastDistanceKm, *position.TotalDistanceKm, receivedAtMS); err != nil {
 			return false, err
 		}
 	}

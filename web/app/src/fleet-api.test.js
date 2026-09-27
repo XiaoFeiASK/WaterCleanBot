@@ -16,9 +16,9 @@ describe('fleet API', () => {
   });
   it('accepts non-negative total distance and rejects malformed totals', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, distanceMeters: 25, totalDistanceMeters: 1025 }] })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, totalDistanceMeters: -1 }] }));
-    await expect(fetchAllRobotLocations()).resolves.toEqual([{ ...pending, distanceMeters: 25, totalDistanceMeters: 1025 }]);
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, distanceKm: 25, totalDistanceKm: 1025 }] })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...pending, totalDistanceKm: -1 }] }));
+    await expect(fetchAllRobotLocations()).resolves.toEqual([{ ...pending, distanceKm: 25, totalDistanceKm: 1025 }]);
     await expect(fetchAllRobotLocations()).rejects.toThrow();
   });
   it('does not accept malformed telemetry in place of null', async () => {

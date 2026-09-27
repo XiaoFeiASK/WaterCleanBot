@@ -16,6 +16,7 @@ import (
 
 var nonFiniteJSONNumberPattern = regexp.MustCompile(`(?i)(:\s*)(nan|inf|-inf|infinity|-infinity)(\s*[,}])`)
 
+// ParseDistanceFeedback returns the P11 power-cycle distance in kilometers.
 func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool) {
 	parts := strings.Split(topic, "/")
 	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || parts[2] != "webfeedback" {

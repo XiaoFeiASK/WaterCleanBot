@@ -120,7 +120,7 @@ func TestDeleteClearsPendingSnapshotAndAllCachesThenMQTTCanReappear(t *testing.T
 		t.Fatal("old snapshot recreated deleted boat")
 	}
 	p, accepted := s.Update(Position{RobotName: "boat", Lat: Float(32), SourceTimestampMS: 1, ReceivedAtMS: 1000})
-	if !accepted || p.DistanceMeters != nil {
+	if !accepted || p.DistanceKm != nil {
 		t.Fatalf("new telemetry=%+v accepted=%v", p, accepted)
 	}
 	w.flush(context.Background())

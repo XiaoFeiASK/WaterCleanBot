@@ -124,11 +124,11 @@ func (s *Subscriber) handleFeedback(_ mqtt.Client, message mqtt.Message) {
 		s.store.UpdateFeedback(robotName, feedback)
 		return
 	}
-	robotName, distanceMeters, ok := ParseDistanceFeedback(message.Topic(), message.Payload())
+	robotName, distanceKm, ok := ParseDistanceFeedback(message.Topic(), message.Payload())
 	if !ok {
 		return
 	}
-	s.store.UpdateDistance(robotName, distanceMeters)
+	s.store.UpdateDistance(robotName, distanceKm)
 }
 
 // handleMessage 是 MQTT 消息进入后端定位链路的核心入口。

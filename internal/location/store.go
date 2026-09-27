@@ -146,7 +146,7 @@ func cloneActuators(values map[string]int) map[string]int {
 func clonePosition(position Position) Position {
 	for _, field := range []**float64{
 		&position.Lat, &position.Lng, &position.Heading, &position.Speed, &position.Battery,
-		&position.DistanceMeters, &position.TotalDistanceMeters, &position.LastDistanceMeters,
+		&position.DistanceKm, &position.TotalDistanceKm, &position.LastDistanceKm,
 	} {
 		if *field != nil {
 			*field = Float(**field)
@@ -167,9 +167,9 @@ func (s *Store) prepareRealtimePosition(position Position, previous Position, ex
 		mergeFeedback(&position, previous)
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
-		position.DistanceMeters = Float(distance.last)
-		position.LastDistanceMeters = Float(distance.last)
-		position.TotalDistanceMeters = Float(distance.total)
+		position.DistanceKm = Float(distance.last)
+		position.LastDistanceKm = Float(distance.last)
+		position.TotalDistanceKm = Float(distance.total)
 	}
 	return position
 }
@@ -206,10 +206,10 @@ func (s *Store) LoadInitial(positions []Position) {
 	next := make(map[string]Position, len(positions))
 	distances := make(map[string]distanceState)
 	for _, position := range positions {
-		if position.LastDistanceMeters != nil && position.TotalDistanceMeters != nil {
-			distance := distanceState{last: *position.LastDistanceMeters, total: *position.TotalDistanceMeters}
+		if position.LastDistanceKm != nil && position.TotalDistanceKm != nil {
+			distance := distanceState{last: *position.LastDistanceKm, total: *position.TotalDistanceKm}
 			distances[position.RobotName] = distance
-			position.DistanceMeters = Float(distance.last)
+			position.DistanceKm = Float(distance.last)
 		}
 		next[position.RobotName] = clonePosition(position)
 	}
@@ -240,7 +240,7 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 		position.HeartbeatStatus = previous.HeartbeatStatus
 		position.HeartbeatLastAckAt = previous.HeartbeatLastAckAt
 		position.HeartbeatMisses = previous.HeartbeatMisses
-		position.DistanceMeters = previous.DistanceMeters
+		position.DistanceKm = previous.DistanceKm
 		position.ControlMode = previous.ControlMode
 		position.CommandResultCode = previous.CommandResultCode
 		position.LeftThrottle = previous.LeftThrottle
@@ -249,9 +249,9 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 		position.DeviceStatusOK = previous.DeviceStatusOK
 	}
 	if distance, ok := s.distances[position.RobotName]; ok {
-		position.DistanceMeters = Float(distance.last)
-		position.LastDistanceMeters = Float(distance.last)
-		position.TotalDistanceMeters = Float(distance.total)
+		position.DistanceKm = Float(distance.last)
+		position.LastDistanceKm = Float(distance.last)
+		position.TotalDistanceKm = Float(distance.total)
 	}
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
@@ -291,9 +291,9 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 		position.DeviceStatusOK = feedback.DeviceStatusOK
 	}
 	if distance, ok := s.distances[robotName]; ok {
-		position.DistanceMeters = Float(distance.last)
-		position.LastDistanceMeters = Float(distance.last)
-		position.TotalDistanceMeters = Float(distance.total)
+		position.DistanceKm = Float(distance.last)
+		position.LastDistanceKm = Float(distance.last)
+		position.TotalDistanceKm = Float(distance.total)
 	}
 	s.positions[robotName] = clonePosition(position)
 	s.queuePositionLocked(position)
@@ -302,21 +302,21 @@ func (s *Store) UpdateFeedback(robotName string, feedback Position) {
 }
 
 // UpdateDistance 根据设备当前开机累计值更新本次航程和历史总航程。
-func (s *Store) UpdateDistance(robotName string, distanceMeters float64) {
-	if distanceMeters < 0 || math.IsNaN(distanceMeters) || math.IsInf(distanceMeters, 0) {
+func (s *Store) UpdateDistance(robotName string, distanceKm float64) {
+	if distanceKm < 0 || math.IsNaN(distanceKm) || math.IsInf(distanceKm, 0) {
 		return
 	}
 	s.mu.Lock()
 	distance, exists := s.distances[robotName]
 	if !exists {
-		distance = distanceState{last: distanceMeters, total: distanceMeters}
-	} else if distanceMeters >= distance.last {
-		distance.total += distanceMeters - distance.last
-		distance.last = distanceMeters
+		distance = distanceState{last: distanceKm, total: distanceKm}
+	} else if distanceKm >= distance.last {
+		distance.total += distanceKm - distance.last
+		distance.last = distanceKm
 	} else {
 		// 船端每次开机会从零重新累计；读数下降表示新一轮开机航程。
-		distance.last = distanceMeters
-		distance.total += distanceMeters
+		distance.last = distanceKm
+		distance.total += distanceKm
 	}
 	s.distances[robotName] = distance
 	position, ok := s.positions[robotName]
@@ -325,9 +325,9 @@ func (s *Store) UpdateDistance(robotName string, distanceMeters float64) {
 		return
 	}
 	position.RobotName = robotName
-	position.DistanceMeters = Float(distance.last)
-	position.LastDistanceMeters = Float(distance.last)
-	position.TotalDistanceMeters = Float(distance.total)
+	position.DistanceKm = Float(distance.last)
+	position.LastDistanceKm = Float(distance.last)
+	position.TotalDistanceKm = Float(distance.total)
 	position.ReceivedAtMS = time.Now().UnixMilli()
 	s.positions[robotName] = clonePosition(position)
 	s.queuePositionLocked(position)

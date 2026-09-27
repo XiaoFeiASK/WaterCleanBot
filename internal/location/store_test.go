@@ -79,28 +79,28 @@ func TestUpdateDistanceAccumulatesAcrossPowerCyclesAndIgnoresDuplicates(t *testi
 	}
 
 	got, ok := store.Get("USV-001")
-	if !ok || got.DistanceMeters == nil || *got.DistanceMeters != 0.4 {
-		t.Fatalf("current distance = %+v, want 0.4", got.DistanceMeters)
+	if !ok || got.DistanceKm == nil || *got.DistanceKm != 0.4 {
+		t.Fatalf("current distance = %+v, want 0.4", got.DistanceKm)
 	}
-	if got.TotalDistanceMeters == nil || *got.TotalDistanceMeters != 330.4 {
-		t.Fatalf("total distance = %+v, want 330.4", got.TotalDistanceMeters)
+	if got.TotalDistanceKm == nil || *got.TotalDistanceKm != 330.4 {
+		t.Fatalf("total distance = %+v, want 330.4", got.TotalDistanceKm)
 	}
-	if got.LastDistanceMeters == nil || *got.LastDistanceMeters != 0.4 {
-		t.Fatalf("last distance = %+v, want 0.4", got.LastDistanceMeters)
+	if got.LastDistanceKm == nil || *got.LastDistanceKm != 0.4 {
+		t.Fatalf("last distance = %+v, want 0.4", got.LastDistanceKm)
 	}
 }
 
 func TestUpdateDistanceContinuesFromPersistedTotalsAfterRestart(t *testing.T) {
 	store := NewStore()
 	store.LoadInitial([]Position{{
-		RobotName:           "USV-001",
-		LastDistanceMeters:  Float(104),
-		TotalDistanceMeters: Float(504),
+		RobotName:       "USV-001",
+		LastDistanceKm:  Float(104),
+		TotalDistanceKm: Float(504),
 	}})
 
 	store.UpdateDistance("USV-001", 106)
 	got, _ := store.Get("USV-001")
-	if got.DistanceMeters == nil || *got.DistanceMeters != 106 || got.TotalDistanceMeters == nil || *got.TotalDistanceMeters != 506 {
+	if got.DistanceKm == nil || *got.DistanceKm != 106 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 506 {
 		t.Fatalf("restored distance state = %+v, want current 106 and total 506", got)
 	}
 }
@@ -117,7 +117,7 @@ func TestUpdateDistanceCachesUntilPositionExists(t *testing.T) {
 	}
 
 	got, updated := store.Update(Position{RobotName: "USV-001", Lat: Float(31), SourceTimestampMS: 1})
-	if !updated || got.DistanceMeters == nil || *got.DistanceMeters != 12 || got.TotalDistanceMeters == nil || *got.TotalDistanceMeters != 12 {
+	if !updated || got.DistanceKm == nil || *got.DistanceKm != 12 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 12 {
 		t.Fatalf("position after cached distance = %+v, updated=%v", got, updated)
 	}
 }
@@ -131,7 +131,7 @@ func TestUpdateDistanceIgnoresInvalidReadings(t *testing.T) {
 	}
 
 	got, _ := store.Get("USV-001")
-	if got.DistanceMeters == nil || *got.DistanceMeters != 10 || got.TotalDistanceMeters == nil || *got.TotalDistanceMeters != 10 {
+	if got.DistanceKm == nil || *got.DistanceKm != 10 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 10 {
 		t.Fatalf("invalid readings changed distance state = %+v", got)
 	}
 }
@@ -144,7 +144,7 @@ func TestUpdateFeedbackPreservesDistanceState(t *testing.T) {
 	store.UpdateFeedback("USV-001", Position{RobotName: "USV-001", DeviceStatusOK: &ok})
 
 	got, _ := store.Get("USV-001")
-	if got.DistanceMeters == nil || *got.DistanceMeters != 25 || got.TotalDistanceMeters == nil || *got.TotalDistanceMeters != 25 {
+	if got.DistanceKm == nil || *got.DistanceKm != 25 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 25 {
 		t.Fatalf("feedback cleared distance state = %+v", got)
 	}
 }
@@ -165,7 +165,7 @@ func TestDistanceUpdatesUseSnapshotWriterCoalescing(t *testing.T) {
 		t.Fatalf("writes = %d, want one coalesced write", len(repository.writes))
 	}
 	position := repository.writes[0].position
-	if position.LastDistanceMeters == nil || *position.LastDistanceMeters != 12 || position.TotalDistanceMeters == nil || *position.TotalDistanceMeters != 12 {
+	if position.LastDistanceKm == nil || *position.LastDistanceKm != 12 || position.TotalDistanceKm == nil || *position.TotalDistanceKm != 12 {
 		t.Fatalf("persisted distance state = %+v", position)
 	}
 }
