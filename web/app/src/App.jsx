@@ -133,7 +133,6 @@ const CRITICAL_SWITCH_COMMANDS = Object.freeze([
 
 const CAMERA_CHANNELS = Object.freeze([
   { id: 'front', name: '前视主摄', placement: '船艏广角', status: '待接入', tone: 'teal' },
-  { id: 'deck', name: '甲板监控', placement: '传送带上方', status: '待接入', tone: 'amber' },
   { id: 'rear', name: '后视泊靠', placement: '船尾低位', status: '待接入', tone: 'blue' },
 ]);
 

@@ -1758,3 +1758,20 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   }
 }
 
+
+/* 摄像头面板：仅保留前后两路，并让视频画面占据更大可视区域。 */
+.camera-live-frame { height: clamp(300px, 46vw, 560px); min-height: 0; }
+.camera-live-frame::after { inset: 8% 7% 16%; opacity: .5; }
+.camera-video { object-fit: contain; }
+.camera-channel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.camera-channel { align-items: center; padding: 9px 12px; }
+.camera-channel strong { font-size: 13px; }
+.camera-channel small { margin-top: 2px; }
+.camera-channel-preview { width: 34px; height: 34px; border-radius: 11px; }
+@media (max-width: 760px) {
+  .camera-live-frame { height: auto; min-height: 240px; aspect-ratio: 16 / 10; }
+}
+@media (max-width: 430px) {
+  .camera-channel-grid { grid-template-columns: 1fr; }
+  .camera-channel { padding: 10px; }
+}
