@@ -53,19 +53,38 @@ func TestParseUSVDataAcceptsNaNBatteryAndMissingTimestamp(t *testing.T) {
 	}
 }
 
-func TestParseUSVDataRejectsTopicPayloadMismatch(t *testing.T) {
-	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":88,"status":0,"usvId":"USV-002"}`)
+func TestParseUSVDataUsesTopicNameWhenPayloadOmitsUSVID(t *testing.T) {
+	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":88,"status":0}`)
 
-	if _, err := ParseUSVData("usv/USV-001/telemetry", payload); err == nil {
-		t.Fatal("ParseUSVData returned nil error for topic/payload mismatch")
+	data, err := ParseUSVData("usv/USV-001/telemetry", payload)
+	if err != nil {
+		t.Fatalf("ParseUSVData rejected payload without usvId: %v", err)
+	}
+	if data.USVID != "USV-001" {
+		t.Fatalf("USVID = %q, want topic name USV-001", data.USVID)
+	}
+	if position := data.Position(); position.RobotName != "USV-001" {
+		t.Fatalf("RobotName = %q, want topic name USV-001", position.RobotName)
 	}
 }
 
-func TestParseDistanceFeedbackReadsP11(t *testing.T) {
-	payload := []byte(`[19,1,2,3,4,5,6,7,8,9,10,123.45]`)
+func TestParseUSVDataPrefersTopicNameOverPayloadUSVID(t *testing.T) {
+	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":1.3,"battery":88,"status":0,"usvId":"USV-002"}`)
+
+	data, err := ParseUSVData("usv/USV-001/telemetry", payload)
+	if err != nil {
+		t.Fatalf("ParseUSVData rejected topic/payload mismatch: %v", err)
+	}
+	if data.USVID != "USV-001" {
+		t.Fatalf("USVID = %q, want topic name USV-001", data.USVID)
+	}
+}
+
+func TestParseDistanceFeedbackConvertsP11MetersToKilometers(t *testing.T) {
+	payload := []byte(`[19,1,2,3,4,5,6,7,8,9,10,1500]`)
 	robotName, distance, ok := ParseDistanceFeedback("usv/USV-001/webfeedback", payload)
-	if !ok || robotName != "USV-001" || distance != 123.45 {
-		t.Fatalf("feedback = (%q, %v, %v), want USV-001, 123.45, true", robotName, distance, ok)
+	if !ok || robotName != "USV-001" || distance != 1.5 {
+		t.Fatalf("feedback = (%q, %v, %v), want USV-001, 1.5, true", robotName, distance, ok)
 	}
 }
 

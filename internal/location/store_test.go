@@ -105,20 +105,21 @@ func TestUpdateDistanceContinuesFromPersistedTotalsAfterRestart(t *testing.T) {
 	}
 }
 
-func TestUpdateDistanceCachesUntilPositionExists(t *testing.T) {
+func TestUpdateDistanceAppliesWithoutPriorPosition(t *testing.T) {
 	store := NewStore()
 	store.UpdateDistance("USV-001", 12)
 
-	if _, exists := store.Get("USV-001"); exists {
-		t.Fatal("distance feedback must not create a position")
+	got, exists := store.Get("USV-001")
+	if !exists {
+		t.Fatal("distance feedback did not create a in-memory position")
 	}
-	if _, exists := store.distances["USV-001"]; !exists {
-		t.Fatal("distance feedback was not cached")
+	if got.DistanceKm == nil || *got.DistanceKm != 12 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 12 {
+		t.Fatalf("distance-only position = %+v, want distance 12 and total 12", got)
 	}
 
-	got, updated := store.Update(Position{RobotName: "USV-001", Lat: Float(31), SourceTimestampMS: 1})
-	if !updated || got.DistanceKm == nil || *got.DistanceKm != 12 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 12 {
-		t.Fatalf("position after cached distance = %+v, updated=%v", got, updated)
+	updated, ok := store.Update(Position{RobotName: "USV-001", Lat: Float(31), SourceTimestampMS: 1})
+	if !ok || updated.DistanceKm == nil || *updated.DistanceKm != 12 || updated.TotalDistanceKm == nil || *updated.TotalDistanceKm != 12 {
+		t.Fatalf("position after distance-first update = %+v, ok=%v", updated, ok)
 	}
 }
 
@@ -146,6 +147,25 @@ func TestUpdateFeedbackPreservesDistanceState(t *testing.T) {
 	got, _ := store.Get("USV-001")
 	if got.DistanceKm == nil || *got.DistanceKm != 25 || got.TotalDistanceKm == nil || *got.TotalDistanceKm != 25 {
 		t.Fatalf("feedback cleared distance state = %+v", got)
+	}
+}
+
+func TestUpdateDistancePersistsWithoutPriorPosition(t *testing.T) {
+	repository := &fakeSnapshotRepository{}
+	writer := NewSnapshotWriter(repository, time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	store := NewStore()
+	store.SetWriter(writer)
+
+	store.UpdateDistance("USV-001", 12)
+	writer.flush(context.Background())
+
+	if len(repository.writes) != 1 {
+		t.Fatalf("writes = %d, want one write from distance-only feedback", len(repository.writes))
+	}
+	position := repository.writes[0].position
+	if position.RobotName != "USV-001" || position.LastDistanceKm == nil || *position.LastDistanceKm != 12 ||
+		position.TotalDistanceKm == nil || *position.TotalDistanceKm != 12 {
+		t.Fatalf("persisted distance-only snapshot = %+v", position)
 	}
 }
 

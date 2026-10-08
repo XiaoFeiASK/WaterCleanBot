@@ -4,7 +4,6 @@ package telemetry
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -16,7 +15,10 @@ import (
 
 var nonFiniteJSONNumberPattern = regexp.MustCompile(`(?i)(:\s*)(nan|inf|-inf|infinity|-infinity)(\s*[,}])`)
 
+const metersPerKilometer = 1000
+
 // ParseDistanceFeedback returns the P11 power-cycle distance in kilometers.
+// 船端 P11 上报单位为米，后端统一转换为千米后使用。
 func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool) {
 	parts := strings.Split(topic, "/")
 	if len(parts) != 3 || parts[0] != "usv" || parts[1] == "" || parts[2] != "webfeedback" {
@@ -26,11 +28,11 @@ func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool)
 	if err := json.Unmarshal(payload, &values); err != nil || len(values) <= 11 || values[0].String() != "19" {
 		return "", 0, false
 	}
-	distance, err := values[11].Float64()
-	if err != nil || !isFiniteNumber(distance) || distance < 0 {
+	distanceMeters, err := values[11].Float64()
+	if err != nil || !isFiniteNumber(distanceMeters) || distanceMeters < 0 {
 		return "", 0, false
 	}
-	return parts[1], distance, true
+	return parts[1], distanceMeters / metersPerKilometer, true
 }
 
 // USVData 对应无人艇发布到 usv/{usvId}/telemetry 的 JSON 报文。
@@ -60,12 +62,14 @@ func ParseUSVData(topic string, payload []byte) (USVData, error) {
 	if err := json.Unmarshal(sanitizeTelemetryPayload(payload), &data); err != nil {
 		return USVData{}, fmt.Errorf("decode usv telemetry payload: %w", err)
 	}
-	data.USVID = strings.TrimSpace(data.USVID)
+	// 设备名一律以 MQTT topic 解析结果为准，payload 里的 usvId 不参与判定，
+	// 避免艇端不传名字或名字不一致时整条遥测被丢弃。
+	data.USVID = topicID
 	if data.Timestamp <= 0 {
 		// 兼容艇端未上报 timestamp 的旧报文，使用后端接收时间参与新旧数据比较。
 		data.Timestamp = time.Now().UnixMilli()
 	}
-	if err := data.Validate(topicID); err != nil {
+	if err := data.Validate(); err != nil {
 		return USVData{}, err
 	}
 	return data, nil
@@ -78,15 +82,10 @@ func sanitizeTelemetryPayload(payload []byte) []byte {
 }
 
 // Validate 校验字段范围，避免非法遥测数据进入数据库和内存缓存。
+// 设备名以 MQTT topic 为准，不再要求 payload 携带 usvId，也不校验两者是否一致。
 // 调用方：ParseUSVData。
 // 会调用：isFiniteNumber。
-func (d USVData) Validate(topicUSVID string) error {
-	if d.USVID == "" {
-		return errors.New("usvId is required")
-	}
-	if topicUSVID != d.USVID {
-		return fmt.Errorf("topic usvId %q does not match payload usvId %q", topicUSVID, d.USVID)
-	}
+func (d USVData) Validate() error {
 	if !isFiniteNumber(d.Lat) || d.Lat < -90 || d.Lat > 90 {
 		return fmt.Errorf("lat out of range: %v", d.Lat)
 	}
@@ -113,7 +112,7 @@ func (d USVData) Validate(topicUSVID string) error {
 
 // Position 把 MQTT 遥测报文转换成当前 HTTP 接口使用的位置模型。
 // 调用方：Subscriber.handleMessage。
-// 会调用：无，只做字段映射；当前直接用 usvId 作为 RobotName。
+// 会调用：无，只做字段映射；RobotName 使用 topic 解析出的设备名。
 func (d USVData) Position() location.Position {
 	return location.Position{
 		RobotName: d.USVID,

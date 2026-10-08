@@ -321,8 +321,9 @@ func (s *Store) UpdateDistance(robotName string, distanceKm float64) {
 	s.distances[robotName] = distance
 	position, ok := s.positions[robotName]
 	if !ok {
-		s.mu.Unlock()
-		return
+		// 内存里还没有该设备的遥测位置时，也要把航程单独排队落库；
+		// 这份快照缺少经纬度等字段，后续遥测到达后会自然补齐。
+		position = Position{RobotName: robotName}
 	}
 	position.RobotName = robotName
 	position.DistanceKm = Float(distance.last)
