@@ -352,6 +352,10 @@ function updateFleetMarkerBubbleScales(markerGroups, zoom) {
   });
 }
 
+function resetFleetHeadingAngles() {
+  fleetHeadingAngles.clear();
+}
+
 function safelyDestroyMap(map) {
   if (map && typeof map.destroy === 'function') {
     try {
@@ -389,6 +393,102 @@ function createRoutePointContent(index, isDraft) {
   return point;
 }
 
+const FLEET_MARKER_BOAT_SVG = [
+  '<svg viewBox="0 0 44 44" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">',
+  // 尖船艏朝上（地图正北），船尾平直，便于一眼分辨朝向。
+  '<path class="fleet-boat-hull" d="M22 2.4 L31.6 15.2 C34.4 19.2 35.2 23.6 34.4 30.2 L33.2 38.4 L10.8 38.4 L9.6 30.2 C8.8 23.6 9.6 19.2 12.4 15.2 Z" />',
+  '<path class="fleet-boat-deck" d="M22 10.6 L27.6 18.6 C29.2 21.2 29.6 24 29.2 28 L28.4 33.4 L15.6 33.4 L14.8 28 C14.4 24 14.8 21.2 16.4 18.6 Z" />',
+  '<path class="fleet-boat-bow" d="M22 5.2 L26.6 14.4 L17.4 14.4 Z" />',
+  '</svg>',
+].join('');
+
+const fleetHeadingAngles = new Map();
+
+function normalizeFleetHeading(heading) {
+  if (typeof heading !== 'number' || !Number.isFinite(heading)) return null;
+  return ((heading % 360) + 360) % 360;
+}
+
+// 把 0/360 边界换算成连续角度，避免 359° 转到 1° 时图标反向转一整圈。
+function getFleetDisplayHeading(name, heading) {
+  const normalized = normalizeFleetHeading(heading);
+  if (normalized === null) return null;
+
+  const key = name || '';
+  const previous = fleetHeadingAngles.get(key);
+  if (previous === undefined) {
+    fleetHeadingAngles.set(key, normalized);
+    return normalized;
+  }
+
+  const previousNormalized = ((previous % 360) + 360) % 360;
+  let delta = normalized - previousNormalized;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+
+  const next = previous + delta;
+  fleetHeadingAngles.set(key, next);
+  return next;
+}
+
+function getFleetBoatStructure(name, heading) {
+  return [
+    `<div class="fleet-map-marker-boat" role="img" style="--fleet-heading:${getFleetDisplayHeading(name, heading)}deg" aria-label="船艏朝向 ${formatHeading(heading)}">`,
+    FLEET_MARKER_BOAT_SVG,
+    '</div>',
+  ].join('');
+}
+
+// 更新已有标记的文本和船体旋转，不重建 DOM，让转向动画可以真正播放。
+function updateFleetMarkerContent(content, position, zoom) {
+  if (!content) return content;
+  applyFleetBubbleStyle(content, zoom);
+
+  const nameNode = content.querySelector('.fleet-map-marker-name');
+  if (nameNode) nameNode.textContent = position.robotName;
+
+  const batteryNode = content.querySelector('.fleet-map-marker-battery');
+  if (batteryNode) batteryNode.textContent = `电量 ${formatBattery(position.battery)}`;
+
+  const details = content.querySelector('.fleet-map-marker-details');
+  if (details) {
+    const rows = details.querySelectorAll('.fleet-map-marker-detail');
+    const values = [
+      formatNumber(position.lat, 2),
+      formatNumber(position.lng, 2),
+      formatHeading(position.heading),
+      typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无数据',
+    ];
+    rows.forEach((row, index) => {
+      const rowValue = row.querySelector('strong');
+      if (rowValue && values[index] !== undefined) rowValue.textContent = values[index];
+    });
+  }
+
+  const heading = normalizeFleetHeading(position.heading);
+  const icon = content.querySelector('.fleet-map-marker-icon');
+  if (!icon) return content;
+
+  if (heading === null) {
+    if (!icon.classList.contains('fleet-map-marker-icon-unknown')) {
+      icon.classList.add('fleet-map-marker-icon-unknown');
+      icon.innerHTML = '<span class="fleet-map-marker-icon-fallback">艇</span>';
+    }
+    return content;
+  }
+
+  icon.classList.remove('fleet-map-marker-icon-unknown');
+  const boat = icon.querySelector('.fleet-map-marker-boat');
+  if (!boat) {
+    icon.innerHTML = getFleetBoatStructure(position.robotName, heading);
+    return content;
+  }
+
+  boat.style.setProperty('--fleet-heading', `${getFleetDisplayHeading(position.robotName, heading)}deg`);
+  boat.setAttribute('aria-label', `船艏朝向 ${formatHeading(heading)}`);
+  return content;
+}
+
 function createFleetMarkerContent(position, zoom, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
@@ -405,9 +505,11 @@ function createFleetMarkerContent(position, zoom, onClick) {
   bubble.className = 'fleet-map-marker-bubble';
 
   const name = document.createElement('strong');
+  name.className = 'fleet-map-marker-name';
   name.textContent = position.robotName;
 
   const battery = document.createElement('span');
+  battery.className = 'fleet-map-marker-battery';
   battery.textContent = `电量 ${formatBattery(position.battery)}`;
 
   const hoverDetails = document.createElement('div');
@@ -415,12 +517,14 @@ function createFleetMarkerContent(position, zoom, onClick) {
   [
     ['纬度', formatNumber(position.lat, 2)],
     ['经度', formatNumber(position.lng, 2)],
+    ['航向', formatHeading(position.heading)],
     ['速度', typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无数据'],
   ].forEach(([label, value]) => {
     const row = document.createElement('div');
+    row.className = 'fleet-map-marker-detail';
     const rowLabel = document.createElement('span');
-    const rowValue = document.createElement('strong');
     rowLabel.textContent = label;
+    const rowValue = document.createElement('strong');
     rowValue.textContent = value;
     row.append(rowLabel, rowValue);
     hoverDetails.append(row);
@@ -428,9 +532,6 @@ function createFleetMarkerContent(position, zoom, onClick) {
 
   const icon = document.createElement('div');
   icon.className = 'fleet-map-marker-icon';
-
-  const iconText = document.createElement('span');
-  iconText.textContent = '艇';
 
   const pulse = document.createElement('div');
   pulse.className = 'fleet-map-marker-pulse';
@@ -441,8 +542,8 @@ function createFleetMarkerContent(position, zoom, onClick) {
   });
 
   bubble.append(name, battery, hoverDetails);
-  icon.append(iconText);
   marker.append(bubble, pulse, icon);
+  updateFleetMarkerContent(marker, position, zoom);
   return marker;
 }
 
@@ -486,6 +587,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
     safelyRemoveMarker(markerRef.current);
     markerRef.current = null;
     markerContentRef.current = null;
+    resetFleetHeadingAngles();
     safelyRemoveOverlay(routePolylineRef.current);
     routePolylineRef.current = null;
     routePointMarkersRef.current.forEach(safelyRemoveOverlay);
@@ -508,6 +610,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
       markerContentRef.current = null;
+      resetFleetHeadingAngles();
       safelyRemoveOverlay(routePolylineRef.current);
       routePolylineRef.current = null;
       routePointMarkersRef.current.forEach(safelyRemoveOverlay);
@@ -567,21 +670,19 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           centeredSeqRef.current = centerSeq;
         }
 
-        const markerContent = createFleetMarkerContent(position, getMapZoom(mapRef.current));
+        const currentZoom = getMapZoom(mapRef.current);
         if (!markerRef.current) {
+          markerContentRef.current = createFleetMarkerContent(position, currentZoom);
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
-            content: markerContent,
+            content: markerContentRef.current,
             offset: new AMap.Pixel(-64, -88),
           });
         } else {
           markerRef.current.setPosition(nextPosition);
-          if (typeof markerRef.current.setContent === 'function') {
-            markerRef.current.setContent(markerContent);
-          }
+          markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position, currentZoom);
         }
-        markerContentRef.current = markerContent;
 
         if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
           mapRef.current.off('click', mapClickHandlerRef.current);
@@ -672,6 +773,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
   useEffect(() => () => {
     markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
     markersRef.current.clear();
+    resetFleetHeadingAngles();
     if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
       mapRef.current.off('zoomchange', zoomHandlerRef.current);
       mapRef.current.off('zoomend', zoomHandlerRef.current);
@@ -685,6 +787,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
     if (!positions.length) {
       markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
       markersRef.current.clear();
+      resetFleetHeadingAngles();
       if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
         mapRef.current.off('zoomchange', zoomHandlerRef.current);
         mapRef.current.off('zoomend', zoomHandlerRef.current);
@@ -734,16 +837,16 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
           const markerKey = position.robotName;
           const mapPosition = wgs84ToGcj02(position);
           const nextPosition = [mapPosition.lng, mapPosition.lat];
-          const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
           activeNames.add(markerKey);
 
           const existingMarkerGroup = markersRef.current.get(markerKey);
           if (existingMarkerGroup) {
             existingMarkerGroup.marker.setPosition(nextPosition);
-            if (typeof existingMarkerGroup.marker.setContent === 'function') existingMarkerGroup.marker.setContent(markerContent);
-            existingMarkerGroup.content = markerContent;
+            existingMarkerGroup.content = updateFleetMarkerContent(existingMarkerGroup.content, position, currentZoom);
             return;
           }
+
+          const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
 
           const marker = new AMap.Marker({
             map: mapRef.current,
@@ -758,6 +861,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
           if (activeNames.has(markerKey)) return;
           safelyRemoveMarker(markerGroup.marker);
           markersRef.current.delete(markerKey);
+          fleetHeadingAngles.delete(markerKey);
         });
       })
       .catch(() => {
