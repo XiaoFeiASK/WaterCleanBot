@@ -1502,6 +1502,10 @@ function HlsVideoPlayer({ camera, onPlaybackStatusChange }) {
 
     let hls;
     let disposed = false;
+    let retryTimer;
+    let retryDelay = 1000;
+    let retryCount = 0;
+    const maxRetryDelay = 16000;
     const setStatus = (status) => {
       if (!disposed) onPlaybackStatusChange?.(status);
     };
@@ -1511,51 +1515,107 @@ function HlsVideoPlayer({ camera, onPlaybackStatusChange }) {
       setStatus('播放失败');
     };
 
-    setStatus('连接中');
-
     const tryPlay = () => {
       video.play().catch(() => {
         setStatus('点击播放');
       });
     };
 
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = camera.playUrl;
-      video.load();
-    } else if (Hls.isSupported()) {
-      hls = new Hls({ lowLatencyMode: true });
+    // HLS 冷启动或网络抖动会让 MediaMTX 临时返回错误，这里按指数退避自动重连，
+    // 避免一次失败就永久停在"播放失败"。连续多次失败后保留提示文案，但仍在后台重试。
+    const scheduleRetry = (status = '重连中') => {
+      if (disposed) return;
+      retryCount += 1;
+      // 前两次静默重试（冷启动很常见）；之后保留提示，让用户知道仍在尝试。
+      setPlayerError(retryCount > 2 ? '视频加载失败，正在自动重试…' : '');
+      setStatus(status);
+      window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => {
+        if (disposed) return;
+        retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+        startPlayer();
+      }, retryDelay);
+    };
+
+    function startPlayer() {
+      if (disposed) return;
+
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari / iOS 原生 HLS：直接交给浏览器播放。
+        video.src = camera.playUrl;
+        video.load();
+        tryPlay();
+        return;
+      }
+
+      if (!Hls.isSupported()) {
+        fail('当前浏览器不支持 HLS 播放');
+        return;
+      }
+
+      if (hls) {
+        hls.destroy();
+        hls = undefined;
+      }
+
+      // 关闭 lowLatencyMode：LL-HLS 在冷启动时会放大首帧延迟，普通延迟模式更快出画。
+      hls = new Hls({
+        lowLatencyMode: false,
+        liveSyncDurationCount: 3,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 2,
+      });
       hls.loadSource(camera.playUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        retryDelay = 1000;
+        retryCount = 0;
+        setPlayerError('');
         setStatus('在线');
         tryPlay();
       });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data?.fatal) fail('视频播放失败，请检查摄像头网络或视频服务');
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
+        retryDelay = 1000;
+        retryCount = 0;
       });
-    } else {
-      fail('当前浏览器不支持 HLS 播放');
-      return undefined;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data?.fatal) return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          // 解码类错误优先走 hls.js 内部恢复，不重置整个播放器。
+          if (hls && !disposed) {
+            hls.recoverMediaError();
+            setStatus('缓冲中');
+          }
+          return;
+        }
+        scheduleRetry('重连中');
+      });
     }
 
-    const handleCanPlay = () => {
-      setStatus('在线');
-      tryPlay();
-    };
-    const handlePlaying = () => setStatus('在线');
-    const handleWaiting = () => setStatus('缓冲中');
-    const handleError = () => fail('视频播放失败，请检查摄像头网络或视频服务');
+    setStatus('连接中');
+    startPlayer();
 
-    video.addEventListener('canplay', handleCanPlay);
+    const handlePlaying = () => {
+      retryDelay = 1000;
+      retryCount = 0;
+      setPlayerError('');
+      setStatus('在线');
+    };
+    const handleWaiting = () => setStatus('缓冲中');
+    const handleStalled = () => scheduleRetry('视频流中断，正在重连');
+    const handleError = () => scheduleRetry('视频流中断，正在重连');
+
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('stalled', handleStalled);
     video.addEventListener('error', handleError);
 
     return () => {
       disposed = true;
-      video.removeEventListener('canplay', handleCanPlay);
+      window.clearTimeout(retryTimer);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('stalled', handleStalled);
       video.removeEventListener('error', handleError);
       if (hls) hls.destroy();
       video.pause();

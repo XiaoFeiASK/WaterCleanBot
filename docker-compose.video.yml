@@ -9,9 +9,12 @@ services:
       MTX_HLSADDRESS: :8888
       MTX_WEBRTCADDRESS: :8889
       MTX_PATHS_FRONT_SOURCE: ${CAMERA_FRONT_RTSP:?set CAMERA_FRONT_RTSP in .env}
-      MTX_PATHS_FRONT_SOURCEONDEMAND: "yes"
+      # 常驻拉流：关闭 sourceOnDemand，让 MediaMTX 一直保持 RTSP 连接。
+      # 开启按需拉流时，无客户端会断开 RTSP 源，下一次请求需重新拨号+等关键帧，
+      # 冷启动耗时 10 秒以上（默认 runOnDemandStartTimeout=10s）并频繁超时失败。
+      MTX_PATHS_FRONT_SOURCEONDEMAND: "no"
       MTX_PATHS_REAR_SOURCE: ${CAMERA_REAR_RTSP:?set CAMERA_REAR_RTSP in .env}
-      MTX_PATHS_REAR_SOURCEONDEMAND: "yes"
+      MTX_PATHS_REAR_SOURCEONDEMAND: "no"
     ports:
       - "8554:8554"
       - "8888:8888"

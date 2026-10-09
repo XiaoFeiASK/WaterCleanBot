@@ -1769,7 +1769,20 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 .camera-channel small { margin-top: 2px; }
 .camera-channel-preview { width: 34px; height: 34px; border-radius: 11px; }
 @media (max-width: 760px) {
-  .camera-live-frame { height: auto; min-height: 240px; aspect-ratio: 16 / 10; }
+  .camera-panel { min-width: 0; overflow: hidden; }
+  .camera-panel .route-panel-header { align-items: center; }
+  .camera-panel .panel-title-with-icon { min-width: 0; }
+  .camera-panel .panel-title-with-icon > div { min-width: 0; }
+  .camera-panel .panel-title-with-icon strong,
+  .camera-panel .panel-title-with-icon span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .camera-status { flex-shrink: 0; }
+  .camera-live-frame { width: 100%; height: auto; min-height: 0; aspect-ratio: 16 / 10; }
+  .camera-live-topbar { top: 10px; right: 10px; left: 10px; align-items: flex-start; }
+  .camera-live-topbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .camera-live-topbar strong { flex-shrink: 0; }
+  .camera-reticle svg { width: 34px; height: 34px; }
+  .camera-hud { right: 10px; bottom: 10px; left: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+  .camera-hud span { min-width: 0; gap: 4px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (max-width: 430px) {
   .camera-channel-grid { grid-template-columns: 1fr; }
