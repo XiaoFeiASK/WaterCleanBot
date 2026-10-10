@@ -50,6 +50,7 @@ import {
   subscribeRobotLocations,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
+import { DEMO_PERCEPTION_ROUTE, DEMO_SHORELINE_SECTIONS } from './demoData';
 import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import './fleet.css';
@@ -315,6 +316,15 @@ function getRouteMapPoints(route) {
   return route.points;
 }
 
+const SHORELINE_MAP_SECTIONS = DEMO_SHORELINE_SECTIONS.map((section) => ({
+  ...section,
+  path: section.points.map(([lng, lat]) => {
+    const mapPoint = wgs84ToGcj02({ lng, lat });
+    return [mapPoint.lng, mapPoint.lat];
+  }),
+}));
+const PERCEPTION_ROUTE_MAP_POINTS = getRouteMapPoints(DEMO_PERCEPTION_ROUTE);
+
 function getMapClickPoint(lngLat) {
   if (!lngLat) return null;
   const lng = typeof lngLat.getLng === 'function' ? lngLat.getLng() : lngLat.lng;
@@ -386,9 +396,10 @@ function safelyRemoveOverlay(overlay) {
   }
 }
 
-function createRoutePointContent(index, isDraft) {
+function createRoutePointContent(index, isDraft, variant = 'standard', isBridge = false) {
   const point = document.createElement('div');
-  point.className = `route-planner-point ${isDraft ? 'route-planner-point-draft' : ''}`;
+  point.className = `route-planner-point ${isDraft ? 'route-planner-point-draft' : ''} ${variant === 'perception' ? 'route-planner-point-perception' : ''}`;
+  if (isBridge) point.classList.add('route-planner-point-bridge');
   point.textContent = String(index + 1);
   return point;
 }
@@ -571,13 +582,16 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], onMapPoint }) {
+function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const markerContentRef = useRef(null);
   const routePolylineRef = useRef(null);
   const routePointMarkersRef = useRef([]);
+  const shorelinePolylineRefs = useRef([]);
+  const perceptionPolylineRefs = useRef([]);
+  const perceptionPointMarkersRef = useRef([]);
   const mapClickHandlerRef = useRef(null);
   const zoomHandlerRef = useRef(null);
   const centeredSeqRef = useRef(centerSeq);
@@ -592,6 +606,12 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
     routePolylineRef.current = null;
     routePointMarkersRef.current.forEach(safelyRemoveOverlay);
     routePointMarkersRef.current = [];
+    shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
+    shorelinePolylineRefs.current = [];
+    perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
+    perceptionPolylineRefs.current = [];
+    perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
+    perceptionPointMarkersRef.current = [];
     if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
       mapRef.current.off('click', mapClickHandlerRef.current);
     }
@@ -615,6 +635,12 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       routePolylineRef.current = null;
       routePointMarkersRef.current.forEach(safelyRemoveOverlay);
       routePointMarkersRef.current = [];
+      shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
+      shorelinePolylineRefs.current = [];
+      perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
+      perceptionPolylineRefs.current = [];
+      perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
+      perceptionPointMarkersRef.current = [];
       if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
         mapRef.current.off('click', mapClickHandlerRef.current);
       }
@@ -647,11 +673,12 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         if (!mapRef.current) {
           mapRef.current = new AMap.Map(mapNode.current, {
             center: nextPosition,
-            zoom: 14,
+            zoom: 16,
+            zooms: [3, 18],
+            viewMode: '2D',
             resizeEnable: true,
             layers: [
-              new AMap.TileLayer.Satellite(),
-              new AMap.TileLayer.RoadNet(),
+              new AMap.TileLayer.Satellite({ zIndex: 1, zooms: [3, 18], detectRetina: true }),
             ],
           });
           centeredSeqRef.current = centerSeq;
@@ -701,6 +728,30 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         routePolylineRef.current = null;
         routePointMarkersRef.current.forEach(safelyRemoveOverlay);
         routePointMarkersRef.current = [];
+        shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
+        shorelinePolylineRefs.current = [];
+        perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
+        perceptionPolylineRefs.current = [];
+        perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
+        perceptionPointMarkersRef.current = [];
+
+        if (showShoreline) {
+          SHORELINE_MAP_SECTIONS.forEach((section) => {
+            const isBridge = section.kind === 3;
+            const shorelinePolyline = new AMap.Polyline({
+              map: mapRef.current,
+              path: section.path,
+              strokeColor: isBridge ? '#d06dff' : section.side === 0 ? '#00d4ff' : '#38ef9a',
+              strokeOpacity: isBridge ? 1 : 0.95,
+              strokeWeight: isBridge ? 6 : 4,
+              strokeStyle: isBridge ? 'dashed' : 'solid',
+              lineJoin: 'round',
+              lineCap: 'round',
+              zIndex: isBridge ? 70 : 60,
+            });
+            shorelinePolylineRefs.current.push(shorelinePolyline);
+          });
+        }
 
         const routeLinePoints = planningMode && draftRoutePoints.length
           ? [mapPosition, ...draftRoutePoints]
@@ -717,6 +768,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             strokeStyle: planningMode ? 'dashed' : 'solid',
             lineJoin: 'round',
             lineCap: 'round',
+            zIndex: 80,
           });
         }
         const routeMarkerPoints = planningMode ? draftRoutePoints : previewRoutePoints;
@@ -730,6 +782,36 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           });
           routePointMarkersRef.current.push(pointMarker);
         });
+
+        // 感知航线是本地演示数据，不写入数据库，也不参与下发和删除。
+        if (perceptionRoutePoints.length >= 2) {
+          const perceptionPath = perceptionRoutePoints.map((point) => [point.lng, point.lat]);
+          [
+            { strokeColor: '#5b4300', strokeOpacity: 0.8, strokeWeight: 10, zIndex: 90 },
+            { strokeColor: '#ffc928', strokeOpacity: 1, strokeWeight: 5, zIndex: 91 },
+          ].forEach((lineStyle) => {
+            const perceptionPolyline = new AMap.Polyline({
+              map: mapRef.current,
+              path: perceptionPath,
+              strokeStyle: 'solid',
+              lineJoin: 'round',
+              lineCap: 'round',
+              ...lineStyle,
+            });
+            perceptionPolylineRefs.current.push(perceptionPolyline);
+          });
+
+          perceptionRoutePoints.forEach((point, index) => {
+            const pointMarker = new AMap.Marker({
+              map: mapRef.current,
+              position: [point.lng, point.lat],
+              content: createRoutePointContent(index, false, 'perception', point.bridgeId > 0),
+              offset: new AMap.Pixel(-12, -12),
+              zIndex: 130,
+            });
+            perceptionPointMarkersRef.current.push(pointMarker);
+          });
+        }
       })
       .catch(() => {
         if (!cancelled) setMapError('高德地图加载失败，请检查 Key 和 Web 端域名白名单。');
@@ -739,7 +821,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, onMapPoint]);
+  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, perceptionRoutePoints, showShoreline, onMapPoint]);
 
   if (!hasCoordinates(position)) {
     return (
@@ -817,8 +899,8 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
             zoom: 13,
             resizeEnable: true,
             layers: [
-              new AMap.TileLayer.Satellite(),
-              new AMap.TileLayer.RoadNet(),
+              new AMap.TileLayer.Satellite({ zIndex: 1, zooms: [3, 18], detectRetina: true }),
+              new AMap.TileLayer.RoadNet({ zIndex: 2, detectRetina: true })
             ],
           });
           if (typeof mapRef.current.on === 'function') {
@@ -1250,6 +1332,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
   const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
+  const [showShoreline, setShowShoreline] = useState(false);
   const previewRoute = routes.find((route) => route.id === previewRouteId);
   const previewRoutePoints = getRouteMapPoints(previewRoute);
   const startMapPoint = position ? wgs84ToGcj02(position) : null;
@@ -1440,6 +1523,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <h3>在线地图 - {deviceName}</h3>
           </div>
           <div className="online-map-actions" aria-label="航线任务操作">
+            <button
+              className={`button ${showShoreline ? 'button-boundary-active' : 'button-secondary'}`}
+              type="button"
+              aria-pressed={showShoreline}
+              onClick={() => setShowShoreline((isVisible) => !isVisible)}
+            >
+              河道边界
+            </button>
             <button className="button button-secondary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
             <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
@@ -1453,9 +1544,17 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             planningMode={planningMode}
             draftRoutePoints={draftRoutePoints}
             previewRoutePoints={previewRoutePoints}
+            perceptionRoutePoints={PERCEPTION_ROUTE_MAP_POINTS}
+            showShoreline={showShoreline}
             onMapPoint={addDraftRoutePoint}
           />
           <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
+          <div className="map-layer-legend" aria-label="地图图层图例">
+            <span><i className="legend-dot legend-dot-perception" />感知航线</span>
+            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
+          </div>
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
               <span>本次航程</span>
@@ -1528,9 +1627,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         <div className="route-table-heading">
           <div>
             <h3>航线规划</h3>
-            <span>{routesError || '数据库已保存航线'}</span>
+            <span>{routesError || '数据库已保存航线，另含 1 条本地感知航线演示数据'}</span>
           </div>
-          <span className="status-badge status-pending">{routesLoading ? '读取中' : `${routes.length} 条`}</span>
+          <span className="status-badge status-pending">{routesLoading ? '读取中' : `${routes.length + 1} 条`}</span>
         </div>
 
         <div className="route-table-wrap">
@@ -1552,12 +1651,21 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <tr><td className="route-table-empty route-table-error" colSpan="5">{routesError}</td></tr>
               )}
               {!routesLoading && !routesError && !routes.length && (
-                <tr><td className="route-table-empty" colSpan="5">暂无已保存航线，请点击“规划航线”创建。</td></tr>
+                <tr><td className="route-table-empty" colSpan="5">数据库暂无已保存航线，下方仍展示本地感知航线演示数据。</td></tr>
+              )}
+              {!routesLoading && !routesError && (
+                <tr className="route-table-row-perception">
+                  <td>{DEMO_PERCEPTION_ROUTE.id}</td>
+                  <td><span className="route-type-badge route-type-perception">{DEMO_PERCEPTION_ROUTE.type}</span></td>
+                  <td>{formatRouteLength(DEMO_PERCEPTION_ROUTE.lengthMeters)}</td>
+                  <td>{formatRouteDurationSeconds(DEMO_PERCEPTION_ROUTE.durationSeconds)}</td>
+                  <td><span className="route-table-local-note">本地演示</span></td>
+                </tr>
               )}
               {!routesLoading && !routesError && routes.map((route) => (
                 <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''} key={route.id}>
                   <td>{route.id}</td>
-                  <td>{route.type}</td>
+                  <td><span className="route-type-badge route-type-standard">{route.type || '普通航线'}</span></td>
                   <td>{formatRouteLength(route.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
