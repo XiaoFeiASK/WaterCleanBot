@@ -285,7 +285,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .route-type-perception { color: #624500; background: #fff0b8; border-color: #f0cf68; }
 .route-table-row-perception { background: rgba(255,201,40,.1); }
 .route-table-row-perception:hover { background: rgba(255,201,40,.17) !important; }
-.route-table-local-note { color: #7a5b00; font-size: 12px; font-weight: 900; }
+.route-table-local-note { margin-left: 2px; color: #7a5b00; font-size: 12px; font-weight: 900; }
 .route-table-empty { padding: 24px !important; color: var(--muted); text-align: center; }
 .route-table-error { color: var(--red); }
 .location-grid { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(280px, .82fr); gap: 18px; }

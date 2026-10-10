@@ -1320,6 +1320,10 @@ function DeviceDetailTabContent({ activeTab, position, mapCenterSeq, onToast }) 
   return <OnlineMapTab position={position} mapCenterSeq={mapCenterSeq} onToast={onToast} />;
 }
 
+export function getNextPerceptionPreview(showPerceptionRoute) {
+  return !showPerceptionRoute;
+}
+
 function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const deviceName = position?.robotName || '暂无设备';
   const routeDeviceId = getRobotNameForDevice(position?.robotName);
@@ -1332,9 +1336,11 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
   const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
+  const [showPerceptionRoute, setShowPerceptionRoute] = useState(false);
   const [showShoreline, setShowShoreline] = useState(false);
   const previewRoute = routes.find((route) => route.id === previewRouteId);
   const previewRoutePoints = getRouteMapPoints(previewRoute);
+  const activePreviewRoute = showPerceptionRoute ? DEMO_PERCEPTION_ROUTE : previewRoute;
   const startMapPoint = position ? wgs84ToGcj02(position) : null;
   const draftRouteLinePoints = startMapPoint && draftRoutePoints.length
     ? [startMapPoint, ...draftRoutePoints]
@@ -1348,6 +1354,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       setRoutes([]);
       setRoutesError('');
       setPreviewRouteId('');
+      setShowPerceptionRoute(false);
       return undefined;
     }
 
@@ -1387,6 +1394,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
     setPlanningMode((isPlanning) => !isPlanning);
     setPreviewRouteId('');
+    setShowPerceptionRoute(false);
     setDraftRoutePoints([]);
     setPendingRoutePoint(null);
   }
@@ -1448,6 +1456,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       });
       setRoutes((currentRoutes) => [...currentRoutes, route]);
       setPreviewRouteId(route.id);
+      setShowPerceptionRoute(false);
       setPlanningMode(false);
       setDraftRoutePoints([]);
       onToast?.('航线已保存到数据库', 'success');
@@ -1458,16 +1467,32 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
-  function viewRoute(route) {
+  function toggleRoutePreview(route) {
     if (!route.points?.length) {
       onToast?.('该航线暂无地图点位，请新建航线');
       return;
     }
+    const shouldHide = previewRouteId === route.id;
     setPlanningMode(false);
     setDraftRoutePoints([]);
     setPendingRoutePoint(null);
-    setPreviewRouteId(route.id);
-    document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setShowPerceptionRoute(false);
+    setPreviewRouteId(shouldHide ? '' : route.id);
+    if (!shouldHide) {
+      document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function togglePerceptionRoutePreview() {
+    const shouldHide = showPerceptionRoute;
+    setPlanningMode(false);
+    setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
+    setPreviewRouteId('');
+    setShowPerceptionRoute(getNextPerceptionPreview(shouldHide));
+    if (!shouldHide) {
+      document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   async function deleteRoute(route) {
@@ -1544,13 +1569,13 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             planningMode={planningMode}
             draftRoutePoints={draftRoutePoints}
             previewRoutePoints={previewRoutePoints}
-            perceptionRoutePoints={PERCEPTION_ROUTE_MAP_POINTS}
+            perceptionRoutePoints={showPerceptionRoute ? PERCEPTION_ROUTE_MAP_POINTS : []}
             showShoreline={showShoreline}
             onMapPoint={addDraftRoutePoint}
           />
           <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
           <div className="map-layer-legend" aria-label="地图图层图例">
-            <span><i className="legend-dot legend-dot-perception" />感知航线</span>
+            {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
@@ -1611,8 +1636,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               </div>
             </div>
           )}
-          {!planningMode && previewRoute && (
-            <div className="route-preview-badge">正在查看 {previewRoute.id} · {formatRouteLength(previewRoute.lengthMeters)} · {previewRoute.points.length} 点</div>
+          {!planningMode && activePreviewRoute && (
+            <div className="route-preview-badge">正在查看 {activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点</div>
           )}
         </div>
       </section>
@@ -1654,12 +1679,15 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <tr><td className="route-table-empty" colSpan="5">数据库暂无已保存航线，下方仍展示本地感知航线演示数据。</td></tr>
               )}
               {!routesLoading && !routesError && (
-                <tr className="route-table-row-perception">
+                <tr className={`route-table-row-perception ${showPerceptionRoute ? 'route-table-row-active' : ''}`}>
                   <td>{DEMO_PERCEPTION_ROUTE.id}</td>
                   <td><span className="route-type-badge route-type-perception">{DEMO_PERCEPTION_ROUTE.type}</span></td>
                   <td>{formatRouteLength(DEMO_PERCEPTION_ROUTE.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(DEMO_PERCEPTION_ROUTE.durationSeconds)}</td>
-                  <td><span className="route-table-local-note">本地演示</span></td>
+                  <td>
+                    <button type="button" onClick={togglePerceptionRoutePreview}>{showPerceptionRoute ? '取消查看' : '查看'}</button>
+                    <span className="route-table-local-note">本地演示</span>
+                  </td>
                 </tr>
               )}
               {!routesLoading && !routesError && routes.map((route) => (
@@ -1669,7 +1697,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteLength(route.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
-                    <button type="button" onClick={() => viewRoute(route)}>查看</button>
+                    <button type="button" onClick={() => toggleRoutePreview(route)}>{previewRouteId === route.id ? '取消查看' : '查看'}</button>
                     <button type="button" onClick={() => sendRoute(route)} disabled={isRouteBusy}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
                     <button className="route-table-danger" type="button" onClick={() => deleteRoute(route)} disabled={isRouteBusy}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>
