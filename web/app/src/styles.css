@@ -221,11 +221,11 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .online-map-card,
 .route-table-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-radius: 18px; background: rgba(255,253,246,.9); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
 .online-map-toolbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid rgba(19,38,41,.1); background: rgba(255,253,246,.94); }
-.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; width: min(300px, calc(100% - 32px)); padding: 15px 16px; border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; }
-.telemetry-primary { display: grid; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid rgba(19,38,41,.1); }
+.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 12px; width: min(328px, calc(100% - 32px)); padding: 15px 16px; border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; }
+.telemetry-primary { grid-column: span 3; display: grid; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid rgba(19,38,41,.1); }
 .telemetry-primary span, .telemetry-item span { color: var(--muted); font-size: 11px; }
 .telemetry-primary strong { color: var(--teal-dark); font-size: 19px; line-height: 1.1; }
-.telemetry-item { display: grid; gap: 3px; min-width: 0; }
+.telemetry-item { grid-column: span 2; display: grid; gap: 3px; min-width: 0; }
 .telemetry-item-wide { grid-column: 1 / -1; }
 .telemetry-item strong { overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .online-map-toolbar h3,
@@ -295,7 +295,8 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .fleet-map { height: 500px; }
 
 .fleet-map-marker { --fleet-bubble-scale: .84; --fleet-bubble-opacity: .82; position: relative; width: 128px; height: 88px; pointer-events: none; }
-.fleet-map-marker-bubble { position: absolute; left: 50%; bottom: 42px; min-width: 116px; padding: 8px 11px; color: var(--ink); opacity: var(--fleet-bubble-opacity); background: rgba(255,253,246,.96); border: 1px solid rgba(24,169,153,.32); border-radius: 12px; box-shadow: 0 12px 25px rgba(11,36,41,.18); line-height: 1.25; transform: translateX(-50%) scale(var(--fleet-bubble-scale)); transform-origin: bottom center; transition: transform .08s linear, opacity .08s linear; pointer-events: auto; }
+.fleet-map-marker-bubble { position: absolute; left: 50%; bottom: 42px; min-width: 116px; padding: 8px 11px; color: var(--ink); opacity: 0; visibility: hidden; background: rgba(255,253,246,.96); border: 1px solid rgba(24,169,153,.32); border-radius: 12px; box-shadow: 0 12px 25px rgba(11,36,41,.18); line-height: 1.25; transform: translateX(-50%) scale(var(--fleet-bubble-scale)); transform-origin: bottom center; transition: visibility 0s linear .12s, transform .08s linear, opacity .08s linear; pointer-events: none; }
+.fleet-map-marker-hover .fleet-map-marker-bubble { opacity: var(--fleet-bubble-opacity); visibility: visible; transition-delay: 0s; pointer-events: auto; }
 .fleet-map-marker-bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; background: rgba(255,253,246,.96); border-right: 1px solid rgba(24,169,153,.32); border-bottom: 1px solid rgba(24,169,153,.32); transform: translateX(-50%) rotate(45deg); }
 .fleet-map-marker-bubble strong { position: relative; z-index: 1; display: block; margin-bottom: 3px; font-size: 12px; }
 .fleet-map-marker-bubble span { position: relative; z-index: 1; color: var(--teal-dark); font-size: 11px; font-weight: 900; }

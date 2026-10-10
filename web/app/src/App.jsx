@@ -555,6 +555,24 @@ function createFleetMarkerContent(position, zoom, onClick) {
   bubble.append(name, battery, hoverDetails);
   marker.append(bubble, pulse, icon);
   updateFleetMarkerContent(marker, position, zoom);
+
+  // 默认只显示船形图标，鼠标移到船上后再显示名称、电量和实时详情。
+  let hoverTimer;
+  const showMarkerDetails = () => {
+    window.clearTimeout(hoverTimer);
+    marker.classList.add('fleet-map-marker-hover');
+  };
+  const hideMarkerDetails = () => {
+    window.clearTimeout(hoverTimer);
+    hoverTimer = window.setTimeout(() => {
+      marker.classList.remove('fleet-map-marker-hover');
+    }, 120);
+  };
+  [bubble, icon].forEach((node) => {
+    node.addEventListener('mouseenter', showMarkerDetails);
+    node.addEventListener('mouseleave', hideMarkerDetails);
+  });
+
   return marker;
 }
 
@@ -1600,6 +1618,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <div className="telemetry-item">
               <span>航速</span>
               <strong>{formatSpeed(position?.speed)}</strong>
+            </div>
+            <div className="telemetry-item">
+              <span>电池电量</span>
+              <strong>{formatBattery(position?.battery)}</strong>
             </div>
           </div>
           {planningMode && (
