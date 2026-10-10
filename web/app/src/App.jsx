@@ -1673,7 +1673,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       <section className="route-table-card">
         <div className="route-table-heading">
           <div>
-            <h3>航线规划</h3>
+            <h3>规划航线</h3>
             <span>{routesError || '数据库已保存航线，另含 1 条本地感知航线演示数据'}</span>
           </div>
           <span className="status-badge status-pending">{routesLoading ? '读取中' : `${routes.length + 1} 条`}</span>
