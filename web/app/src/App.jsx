@@ -56,7 +56,14 @@ import {
   subscribeRobotLocations,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
-import { DEMO_PERCEPTION_ROUTE, DEMO_SHORELINE_SECTIONS } from './demoData';
+import {
+  DEMO_PERCEPTION_ROUTE,
+  DEMO_SHORELINE_SECTIONS,
+  DEMO_TEST_DEVICE_NAME,
+  DEMO_TEST_POSITION,
+  DEMO_TEST_TRACK,
+  DEMO_TEST_TRACK_POINTS,
+} from './demoData';
 import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
@@ -69,6 +76,8 @@ function confirmAction(message) {
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = 'USV-001';
+const DEMO_TEST_TRACKS = Object.freeze([DEMO_TEST_TRACK]);
+const DEMO_TEST_POINTS_BY_ID = Object.freeze({ [DEMO_TEST_TRACK.id]: DEMO_TEST_TRACK_POINTS });
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
 const CONTROL_MODE_LABELS = Object.freeze({ 0: '界面手动', 1: '界面自主', 2: '遥控器手动' });
 const DEVICE_FEEDBACK_CACHE_PREFIX = 'watercleanbot.deviceFeedback.';
@@ -1382,6 +1391,7 @@ export function getNextPerceptionPreview(showPerceptionRoute) {
 function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const deviceName = position?.robotName || '暂无设备';
   const routeDeviceId = getRobotNameForDevice(position?.robotName);
+  const isDemoTestDevice = routeDeviceId === DEMO_TEST_DEVICE_NAME;
   const [routes, setRoutes] = useState([]);
   const [tracks, setTracks] = useState([]);
   const [trackPointsByID, setTrackPointsByID] = useState({});
@@ -1491,6 +1501,13 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setSelectedTrackIds([]);
     setTracksError('');
     if (!routeDeviceId) return undefined;
+    if (isDemoTestDevice) {
+      setTracks(DEMO_TEST_TRACKS);
+      setTrackPointsByID(DEMO_TEST_POINTS_BY_ID);
+      setLoadedTrackIds({ [DEMO_TEST_TRACK.id]: true });
+      setSelectedTrackIds([DEMO_TEST_TRACK.id]);
+      return undefined;
+    }
 
     const controller = new AbortController();
     let cancelled = false;
@@ -1518,7 +1535,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       cancelled = true;
       controller.abort();
     };
-  }, [routeDeviceId]);
+  }, [routeDeviceId, isDemoTestDevice]);
 
   function toggleTrackSelection(trackID) {
     setSelectedTrackIds((current) => (
@@ -1581,6 +1598,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
 
   async function deleteTrack(track) {
     if (!routeDeviceId || track.status === 'recording' || isTrackBusy) return;
+    if (isDemoTestDevice) {
+      onToast?.('Test-001 当前展示的是本地演示轨迹，不支持删除');
+      return;
+    }
     if (!confirmAction(`确认删除「${track.name}」吗？`)) return;
     setTrackAction(`delete:${track.id}`);
     try {
@@ -1608,6 +1629,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   useEffect(() => {
     if (!routeDeviceId) {
       setRoutes([]);
+      setRoutesError('');
+      setPreviewRouteId('');
+      setShowPerceptionRoute(false);
+      return undefined;
+    }
+    if (isDemoTestDevice) {
+      setRoutes([]);
+      setRoutesLoading(false);
       setRoutesError('');
       setPreviewRouteId('');
       setShowPerceptionRoute(false);
@@ -1641,7 +1670,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       cancelled = true;
       controller.abort();
     };
-  }, [routeDeviceId]);
+  }, [routeDeviceId, isDemoTestDevice]);
 
   function startRoutePlanning() {
     if (!position) {
@@ -1808,9 +1837,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               className="button button-secondary"
               type="button"
               onClick={recordingTrack ? endTrack : startTrack}
-              disabled={!routeDeviceId || tracksLoading || isTrackBusy}
+              disabled={!routeDeviceId || tracksLoading || isTrackBusy || isDemoTestDevice}
             >
-              {trackAction === 'start' ? '开始中' : recordingTrack && trackAction === `end:${recordingTrack.id}` ? '结束中' : recordingTrack ? '结束记录' : '开始记录'}
+              {isDemoTestDevice ? '演示轨迹' : trackAction === 'start' ? '开始中' : recordingTrack && trackAction === `end:${recordingTrack.id}` ? '结束中' : recordingTrack ? '结束记录' : '开始记录'}
             </button>
             <button
               className={`button ${showShoreline ? 'button-boundary-active' : 'button-secondary'}`}
@@ -1827,6 +1856,11 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         </div>
 
         <div className="map-frame online-map-frame">
+          {isDemoTestDevice && (
+            <div className="track-demo-badge">
+              本地演示轨迹 · {DEMO_TEST_TRACK_POINTS.length} 个固定坐标
+            </div>
+          )}
           <LocationMap
             position={position}
             centerSeq={mapCenterSeq}
@@ -1937,8 +1971,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <small>{formatTrackTime(track.startedAt)} 开始 · {track.status === 'recording' ? '记录中' : `${formatTrackTime(track.endedAt)} 结束`} · {track.pointCount} 点</small>
                 </span>
               </button>
-              <button className="track-list-delete" type="button" disabled={track.status === 'recording' || isTrackBusy} onClick={() => deleteTrack(track)}>
-                {trackAction === `delete:${track.id}` ? '删除中' : '删除'}
+              <button className="track-list-delete" type="button" disabled={isDemoTestDevice || track.status === 'recording' || isTrackBusy} onClick={() => deleteTrack(track)}>
+                {isDemoTestDevice ? '演示' : trackAction === `delete:${track.id}` ? '删除中' : '删除'}
               </button>
             </div>
           ))}
@@ -2586,6 +2620,15 @@ function App() {
       setLoading(true);
       setError('');
     }
+    if (normalizedCode === DEMO_TEST_DEVICE_NAME) {
+      locationRequestSeqRef.current += 1;
+      setPosition(DEMO_TEST_POSITION);
+      setError('');
+      setLoading(false);
+      if (options.centerMap) setMapCenterSeq((currentSeq) => currentSeq + 1);
+      if (!options.silent) showToast('已加载 Test-001 本地演示轨迹', 'success');
+      return;
+    }
 
     try {
       const nextPosition = await fetchRobotLocation(normalizedCode);
@@ -2648,6 +2691,7 @@ function App() {
     function clearSelectedDevice(robotName) {
       removeDeviceFeedbackCache(robotName);
       if (activeDeviceIdRef.current !== robotName) return;
+      if (robotName === DEMO_TEST_DEVICE_NAME) return;
       locationRequestSeqRef.current += 1;
       activeDeviceIdRef.current = '';
       setActiveDeviceId('');
@@ -2669,7 +2713,9 @@ function App() {
             if (!names.has(key.slice(DEVICE_FEEDBACK_CACHE_PREFIX.length))) window.localStorage.removeItem(key);
           });
         } catch { /* Storage may be disabled. */ }
-        if (activePosition) {
+        if (activeDeviceIdRef.current === DEMO_TEST_DEVICE_NAME) {
+          setPosition(DEMO_TEST_POSITION);
+        } else if (activePosition) {
           const feedbackPosition = applyDeviceFeedbackCache(activePosition);
           cacheDeviceFeedback(feedbackPosition);
           setPosition(feedbackPosition);
@@ -2688,7 +2734,10 @@ function App() {
           return next;
         });
         setFleetError('');
-        if (nextPosition.robotName === activeDeviceIdRef.current) {
+        if (nextPosition.robotName === DEMO_TEST_DEVICE_NAME && activeDeviceIdRef.current === DEMO_TEST_DEVICE_NAME) {
+          setPosition(DEMO_TEST_POSITION);
+          setError('');
+        } else if (nextPosition.robotName === activeDeviceIdRef.current) {
           const feedbackPosition = applyDeviceFeedbackCache(nextPosition);
           cacheDeviceFeedback(feedbackPosition);
           setPosition(feedbackPosition);
