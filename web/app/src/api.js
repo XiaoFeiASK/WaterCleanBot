@@ -6,6 +6,7 @@ const LOCATION_REQUEST_TIMEOUT_MS = 8000;
 const COMMAND_REQUEST_TIMEOUT_MS = 3000;
 const ROUTE_REQUEST_TIMEOUT_MS = 8000;
 const CAMERA_REQUEST_TIMEOUT_MS = 6000;
+const TRACK_REQUEST_TIMEOUT_MS = 8000;
 
 export const LOCATION_ERROR_MESSAGES = Object.freeze({
   INVALID_ROBOT_CODE: '设备名称无效',
@@ -38,6 +39,17 @@ export const CAMERA_ERROR_MESSAGES = Object.freeze({
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
 
+export const TRACK_ERROR_MESSAGES = Object.freeze({
+  INVALID_ROBOT_CODE: '设备名称无效',
+  INVALID_TRACK: '轨迹参数无效',
+  NOT_FOUND: '未找到该轨迹',
+  ACTIVE_TRACK_EXISTS: '请先结束当前轨迹',
+  TRACK_ALREADY_ENDED: '该轨迹已结束',
+  RECORDING_TRACK_CANNOT_DELETE: '进行中的轨迹不能删除，请先结束当前轨迹',
+  REQUEST_FAILED: '轨迹请求失败，请检查服务是否正常',
+  SERVER_ERROR: '服务器异常，请稍后重试',
+});
+
 function createLocationError(code) {
   const error = new Error(LOCATION_ERROR_MESSAGES[code] || LOCATION_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
@@ -58,6 +70,12 @@ function createRouteError(code) {
 
 function createCameraError(code) {
   const error = new Error(CAMERA_ERROR_MESSAGES[code] || CAMERA_ERROR_MESSAGES.REQUEST_FAILED);
+  error.code = code;
+  return error;
+}
+
+function createTrackError(code) {
+  const error = new Error(TRACK_ERROR_MESSAGES[code] || TRACK_ERROR_MESSAGES.REQUEST_FAILED);
   error.code = code;
   return error;
 }
@@ -352,6 +370,41 @@ function validateCameraPayload(payload) {
   return payload;
 }
 
+function validateTrackSummaryPayload(payload, expectedRobotName) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createTrackError('REQUEST_FAILED');
+  }
+  const validStatus = payload.status === 'recording' || payload.status === 'ended';
+  const validDate = (value) => typeof value === 'string' && !Number.isNaN(Date.parse(value));
+  if (
+    !Number.isInteger(payload.id) || payload.id <= 0 ||
+    !Number.isInteger(payload.trackNo) || payload.trackNo <= 0 ||
+    (expectedRobotName && payload.robotName !== expectedRobotName) ||
+    typeof payload.name !== 'string' || !payload.name.trim() ||
+    !validStatus || !validDate(payload.startedAt) ||
+    (payload.endedAt !== null && !validDate(payload.endedAt)) ||
+    !Number.isInteger(payload.pointCount) || payload.pointCount < 0
+  ) {
+    throw createTrackError('REQUEST_FAILED');
+  }
+  return payload;
+}
+
+function validateTrackPointPayload(point) {
+  if (!point || typeof point !== 'object' || Array.isArray(point)) {
+    throw createTrackError('REQUEST_FAILED');
+  }
+  if (
+    !Number.isInteger(point.seq) || point.seq <= 0 ||
+    !isNumber(point.lng) || point.lng < -180 || point.lng > 180 ||
+    !isNumber(point.lat) || point.lat < -90 || point.lat > 90 ||
+    typeof point.receivedAt !== 'string' || Number.isNaN(Date.parse(point.receivedAt))
+  ) {
+    throw createTrackError('REQUEST_FAILED');
+  }
+  return point;
+}
+
 async function parseJSONResponse(response, createError) {
   let payload;
   try {
@@ -556,6 +609,154 @@ export async function sendRobotRoute(deviceName, routeId, signal) {
   }
 }
 
+function trackConflictCode(response, action) {
+  if (response.status !== 409) return null;
+  if (action === 'create') return 'ACTIVE_TRACK_EXISTS';
+  if (action === 'delete') return 'RECORDING_TRACK_CANNOT_DELETE';
+  return 'TRACK_ALREADY_ENDED';
+}
+
+export async function fetchRobotTracks(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createTrackError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TRACK_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/tracks`,
+      { signal: requestSignal, cache: 'no-store' },
+    );
+    if (response.status === 400) throw createTrackError('INVALID_ROBOT_CODE');
+    if (response.status >= 500) throw createTrackError('SERVER_ERROR');
+    if (!response.ok) throw createTrackError('REQUEST_FAILED');
+    const payload = await parseJSONResponse(response, createTrackError);
+    if (!Array.isArray(payload)) throw createTrackError('REQUEST_FAILED');
+    return payload.map((track) => validateTrackSummaryPayload(track, robotName));
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createTrackError('REQUEST_FAILED');
+    throw createTrackError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function createRobotTrack(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createTrackError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TRACK_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/tracks`,
+      { method: 'POST', signal: requestSignal, cache: 'no-store' },
+    );
+    if (response.status === 400) throw createTrackError('INVALID_ROBOT_CODE');
+    if (response.status === 409) throw createTrackError(trackConflictCode(response, 'create'));
+    if (response.status >= 500) throw createTrackError('SERVER_ERROR');
+    if (!response.ok) throw createTrackError('REQUEST_FAILED');
+    const payload = await parseJSONResponse(response, createTrackError);
+    return validateTrackSummaryPayload(payload, robotName);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createTrackError('REQUEST_FAILED');
+    throw createTrackError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function endRobotTrack(deviceName, trackId, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !Number.isInteger(trackId) || trackId <= 0) throw createTrackError('INVALID_TRACK');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TRACK_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/tracks/${trackId}/end`,
+      { method: 'POST', signal: requestSignal, cache: 'no-store' },
+    );
+    if (response.status === 400) throw createTrackError('INVALID_TRACK');
+    if (response.status === 404) throw createTrackError('NOT_FOUND');
+    if (response.status === 409) throw createTrackError(trackConflictCode(response, 'end'));
+    if (response.status >= 500) throw createTrackError('SERVER_ERROR');
+    if (!response.ok) throw createTrackError('REQUEST_FAILED');
+    const payload = await parseJSONResponse(response, createTrackError);
+    return validateTrackSummaryPayload(payload, robotName);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createTrackError('REQUEST_FAILED');
+    throw createTrackError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function fetchRobotTrackPoints(deviceName, trackId, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !Number.isInteger(trackId) || trackId <= 0) throw createTrackError('INVALID_TRACK');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TRACK_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/tracks/${trackId}/points`,
+      { signal: requestSignal, cache: 'no-store' },
+    );
+    if (response.status === 400) throw createTrackError('INVALID_TRACK');
+    if (response.status === 404) throw createTrackError('NOT_FOUND');
+    if (response.status >= 500) throw createTrackError('SERVER_ERROR');
+    if (!response.ok) throw createTrackError('REQUEST_FAILED');
+    const payload = await parseJSONResponse(response, createTrackError);
+    if (!Array.isArray(payload)) throw createTrackError('REQUEST_FAILED');
+    return payload.map(validateTrackPointPayload);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createTrackError('REQUEST_FAILED');
+    throw createTrackError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function deleteRobotTrack(deviceName, trackId, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !Number.isInteger(trackId) || trackId <= 0) throw createTrackError('INVALID_TRACK');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TRACK_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/tracks/${trackId}`,
+      { method: 'DELETE', signal: requestSignal, cache: 'no-store' },
+    );
+    if (response.status === 400) throw createTrackError('INVALID_TRACK');
+    if (response.status === 404) throw createTrackError('NOT_FOUND');
+    if (response.status === 409) throw createTrackError(trackConflictCode(response, 'delete'));
+    if (response.status >= 500) throw createTrackError('SERVER_ERROR');
+    if (!response.ok && response.status !== 204) throw createTrackError('REQUEST_FAILED');
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createTrackError('REQUEST_FAILED');
+    throw createTrackError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export function getLocationErrorMessage(error) {
   return LOCATION_ERROR_MESSAGES[error?.code] || LOCATION_ERROR_MESSAGES.REQUEST_FAILED;
 }
@@ -570,4 +771,8 @@ export function getRouteErrorMessage(error) {
 
 export function getCameraErrorMessage(error) {
   return CAMERA_ERROR_MESSAGES[error?.code] || CAMERA_ERROR_MESSAGES.REQUEST_FAILED;
+}
+
+export function getTrackErrorMessage(error) {
+  return TRACK_ERROR_MESSAGES[error?.code] || TRACK_ERROR_MESSAGES.REQUEST_FAILED;
 }

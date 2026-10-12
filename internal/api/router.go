@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, routeRepository RouteRepository, routePublisher RoutePublisher, cameraStreams []CameraStream, authService *auth.Service, log *slog.Logger) http.Handler {
+func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, routeRepository RouteRepository, routePublisher RoutePublisher, trackRepository TrackRepository, trackService TrackStarter, cameraStreams []CameraStream, authService *auth.Service, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/robots", CreateRobotHandler(store, log))
 	mux.HandleFunc("DELETE /api/robots/{robotName}", DeleteRobotHandler(store, log))
@@ -21,6 +21,11 @@ func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, r
 	mux.HandleFunc("POST /api/robots/{robotName}/routes", CreateRobotRouteHandler(store, routeRepository, log))
 	mux.HandleFunc("DELETE /api/robots/{robotName}/routes/{routeId}", DeleteRobotRouteHandler(routeRepository, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/routes/{routeId}/send", SendRobotRouteHandler(store, routeRepository, routePublisher, log))
+	mux.HandleFunc("GET /api/robots/{robotName}/tracks", RobotTracksHandler(trackRepository, log))
+	mux.HandleFunc("POST /api/robots/{robotName}/tracks", CreateRobotTrackHandler(store, trackRepository, trackService, log))
+	mux.HandleFunc("POST /api/robots/{robotName}/tracks/{trackId}/end", EndRobotTrackHandler(trackRepository, trackService, log))
+	mux.HandleFunc("GET /api/robots/{robotName}/tracks/{trackId}/points", RobotTrackPointsHandler(trackRepository, trackService, log))
+	mux.HandleFunc("DELETE /api/robots/{robotName}/tracks/{trackId}", DeleteRobotTrackHandler(trackRepository, trackService, log))
 	if authService != nil {
 		h := NewAuthHandler(authService, log)
 		mux.HandleFunc("GET /api/auth/config", h.Config)

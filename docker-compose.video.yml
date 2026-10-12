@@ -1,4 +1,15 @@
-# 文件作用：启动本地视频中转服务，把摄像头 RTSP 转成浏览器可播放的 HLS/WebRTC。
+# 文件作用：启动视频中转服务，把摄像头 RTSP(H.265) 转码成浏览器可播放的 H.264 HLS。
+#
+# 链路：摄像头 RTSP -> MediaMTX frontraw/rearraw -> ffmpeg 转码(H.265->H.264)
+#       -> MediaMTX front/rear -> HLS -> 浏览器
+#
+# 为什么需要转码：摄像头输出 H.265/HEVC，Chrome/Edge 在 MSE 上无法解码 HEVC，
+# 只有 Safari 能放，所以桌面浏览器会看到“播放失败”。转成 H.264 后所有现代浏览器都能解码。
+#
+# 为什么 HLS 用共享密钥：MediaMTX 默认用 Secure+Partitioned cookie 传递 HLS 会话，
+# 纯 HTTP 站点上该 cookie 会被浏览器丢弃，只能退化成 URL 里的 ?session= 查询参数；
+# 一旦 cookie 与 URL 不同步就会返回 HTML 错误页导致播放失败。开启 hlsCDNSecret 后
+# nginx 在每个 /video/ 请求上注入 Authorization: Bearer，会话固定且不再依赖 cookie。
 
 services:
   mediamtx:
@@ -8,14 +19,41 @@ services:
     environment:
       MTX_HLSADDRESS: :8888
       MTX_WEBRTCADDRESS: :8889
-      MTX_PATHS_FRONT_SOURCE: ${CAMERA_FRONT_RTSP:?set CAMERA_FRONT_RTSP in .env}
-      # 常驻拉流：关闭 sourceOnDemand，让 MediaMTX 一直保持 RTSP 连接。
+      # 必须与 deploy/nginx/watercleanbot-video.conf 中注入的 Bearer 值一致。
+      MTX_HLSCDNSECRET: ${CAMERA_HLS_CDN_SECRET:?set CAMERA_HLS_CDN_SECRET in .env}
+      # 常驻生成 HLS 分片，客户端首次请求即可立即拿到播放列表，降低首帧延迟。
+      MTX_HLSALWAYSREMUX: "yes"
+      # 常驻拉流：关闭 sourceOnDemand，让 MediaMTX 一直保持摄像头 RTSP 连接。
       # 开启按需拉流时，无客户端会断开 RTSP 源，下一次请求需重新拨号+等关键帧，
       # 冷启动耗时 10 秒以上（默认 runOnDemandStartTimeout=10s）并频繁超时失败。
-      MTX_PATHS_FRONT_SOURCEONDEMAND: "no"
-      MTX_PATHS_REAR_SOURCE: ${CAMERA_REAR_RTSP:?set CAMERA_REAR_RTSP in .env}
-      MTX_PATHS_REAR_SOURCEONDEMAND: "no"
+      # 原始 H.265 流进入 *raw 路径，由 MediaMTX 负责摄像头断线重连。
+      MTX_PATHS_FRONTRAW_SOURCE: ${CAMERA_FRONT_RTSP:?set CAMERA_FRONT_RTSP in .env}
+      MTX_PATHS_FRONTRAW_SOURCEONDEMAND: "no"
+      MTX_PATHS_REARRAW_SOURCE: ${CAMERA_REAR_RTSP:?set CAMERA_REAR_RTSP in .env}
+      MTX_PATHS_REARRAW_SOURCEONDEMAND: "no"
+      # front / rear 由下面的转码容器以 publisher 身份推入 H.264，浏览器播放这两个路径。
     ports:
       - "8554:8554"
       - "8888:8888"
       - "8889:8889"
+
+  transcode-front:
+    image: linuxserver/ffmpeg:latest
+    container_name: watercleanbot-transcode-front
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    entrypoint: ["/bin/sh", "-c"]
+    # 断线后 2 秒自动重连；关键帧每 1 秒一个，保证 HLS 分片边界可独立解码。
+    command:
+      - "while true; do ffmpeg -hide_banner -loglevel warning -nostdin -rtsp_transport tcp -i rtsp://mediamtx:8554/frontraw -c:v libx264 -preset ultrafast -tune zerolatency -profile:v main -level 4.0 -pix_fmt yuv420p -force_key_frames 'expr:gte(t,n_forced*1)' -sc_threshold 0 -an -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/front; sleep 2; done"
+
+  transcode-rear:
+    image: linuxserver/ffmpeg:latest
+    container_name: watercleanbot-transcode-rear
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "while true; do ffmpeg -hide_banner -loglevel warning -nostdin -rtsp_transport tcp -i rtsp://mediamtx:8554/rearraw -c:v libx264 -preset ultrafast -tune zerolatency -profile:v main -level 4.0 -pix_fmt yuv420p -force_key_frames 'expr:gte(t,n_forced*1)' -sc_threshold 0 -an -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/rear; sleep 2; done"

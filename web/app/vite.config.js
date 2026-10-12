@@ -4,6 +4,9 @@ import { configureVideoProxy } from './video-proxy.js';
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    setupFiles: ['./src/test-setup.js'],
+  },
   server: {
     port: 5175,
     strictPort: true,

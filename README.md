@@ -42,6 +42,11 @@ GET /api/robots/{robotName}/routes
 POST /api/robots/{robotName}/routes
 DELETE /api/robots/{robotName}/routes/{routeId}
 POST /api/robots/{robotName}/routes/{routeId}/send
+GET /api/robots/{robotName}/tracks
+POST /api/robots/{robotName}/tracks
+POST /api/robots/{robotName}/tracks/{trackId}/end
+GET /api/robots/{robotName}/tracks/{trackId}/points
+DELETE /api/robots/{robotName}/tracks/{trackId}
 ```
 
 示例：
@@ -206,6 +211,27 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
 
 前端高德地图点击点按 `GCJ-02` 保存；下发艇端时后端默认转换为 `WGS-84` 并将经纬度格式化为 8 位小数。
 
+## 历史轨迹链路
+
+```text
+前端点击“开始记录”
+  -> POST /api/robots/{robotName}/tracks 创建一条 recording 轨迹
+
+MQTT telemetry / [18,...] webfeedback（有效 WGS-84 定位）
+  -> location.Store 校验坐标后交给 tracks.Service
+  -> 内存采样（与上一点相距 ≥1 米，或距上次入库 ≥2 秒）
+  -> 有限队列异步写入 robot_tracks / robot_track_points，不阻塞 MQTT 与 SSE
+
+前端“结束记录”
+  -> POST /api/robots/{robotName}/tracks/{trackId}/end 等待已入队点落库后置为 ended
+  -> GET /api/robots/{robotName}/tracks/{trackId}/points 按需加载完整点集
+  -> LocationMap 用独立 polyline 图层回看，单条红色、多条调色板
+```
+
+每台设备同一时刻最多一条 recording 轨迹；轨迹号按设备递增且删除后不回收，轨迹永久保留。删除设备时在同一事务内级联删除该设备全部轨迹和轨迹点。关闭或刷新页面不会结束记录，也不结束轨迹。
+
+轨迹点始终以 WGS-84 存储和传输，前端仅在高德地图渲染前转换为 GCJ-02，不做平滑或曲线拟合。
+
 ## 本地运行
 
 一键启动本地 PostgreSQL/PostGIS 数据库：
@@ -247,7 +273,24 @@ http://localhost:8080/api/robots/清澜一号/location
 .\start-video.bat
 ```
 
-需要先在 `.env` 中配置全局共用的 `CAMERA_FRONT_RTSP` 和 `CAMERA_REAR_RTSP`。MediaMTX 默认常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）：容器会一直保持摄像头 RTSP 连接，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.bat` 会使用 `--force-recreate` 重建 MediaMTX 容器，确保 `.env` 中修改后的 RTSP 地址生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时可把 `CAMERA_HLS_BASE_URL` 改成服务器公网或反向代理地址。
+需要在 `.env` 中配置 `CAMERA_FRONT_RTSP`、`CAMERA_REAR_RTSP` 和 `CAMERA_HLS_CDN_SECRET`：
+
+- `CAMERA_FRONT_RTSP` / `CAMERA_REAR_RTSP`：摄像头 RTSP 地址，只给 MediaMTX 使用，不写入前端代码。
+- `CAMERA_HLS_CDN_SECRET`：MediaMTX HLS 会话密钥（`hlsCDNSecret`），用 `openssl rand -hex 24` 生成；必须与 nginx `/video/` 注入的 `Authorization: Bearer` 完全一致。
+
+视频链路（`docker-compose.video.yml`）：
+
+```text
+摄像头 RTSP(H.265) -> MediaMTX frontraw/rearraw -> ffmpeg 转码(H.265->H.264)
+  -> MediaMTX front/rear -> HLS -> 浏览器
+```
+
+两个关键取舍：
+
+1. **必须转码 H.265 -> H.264**：摄像头输出 H.265/HEVC，Chrome/Edge 在 MSE 上无法解码 HEVC（只有 Safari 能放），因此浏览器会“播放失败”。`transcode-front` / `transcode-rear` 用 ffmpeg 把画面转成 H.264（`main` profile、每 1 秒一个关键帧），播放路径 `/front`、`/rear` 是转码后的输出；原始流在 `/frontraw`、`/rearraw`。
+2. **HLS 会话改用 CDN 密钥而非 cookie**：MediaMTX 默认用 `Secure+Partitioned` cookie 传递 HLS 会话，纯 HTTP 站点上该 cookie 会被浏览器丢弃，只能退化成 URL 里的 `?session=` 查询参数，一旦 cookie 与 URL 不同步就会返回 HTML 错误页导致播放失败。开启 `hlsCDNSecret` 后，站点 nginx 在每个 `/video/` 请求上注入 `Authorization: Bearer <CAMERA_HLS_CDN_SECRET>`，会话固定为按路径共享，不再依赖 cookie，也不再在播放列表里出现 `session=`。
+
+MediaMTX 常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）并开启 `hlsAlwaysRemux`：容器会一直保持摄像头 RTSP 连接并预生成 HLS 分片，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.bat` 会用 `--force-recreate` 重建 MediaMTX 与转码容器，确保 `.env` 修改后生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时把 `CAMERA_HLS_BASE_URL` 改成 `/video`，并在 nginx 加入 `deploy/nginx/watercleanbot-video.conf`（记得替换其中的 `__CAMERA_HLS_CDN_SECRET__`），让 `/video/` 反代到 `http://127.0.0.1:8888/` 并注入 Bearer 头。
 
 ## 当前刻意不做
 
