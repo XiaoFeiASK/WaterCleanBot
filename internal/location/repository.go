@@ -147,6 +147,13 @@ func (r *Repository) DeleteCurrentPosition(ctx context.Context, robotName string
 		return err
 	}
 	defer tx.Rollback()
+	// 轨迹点通过 robot_track_points.track_id 的外键级联删除。
+	if _, err := tx.ExecContext(queryCtx, `DELETE FROM robot_tracks WHERE robot_name = $1`, robotName); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(queryCtx, `DELETE FROM robot_track_counters WHERE robot_name = $1`, robotName); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(queryCtx, `DELETE FROM robot_distance_totals WHERE robot_name = $1`, robotName); err != nil {
 		return err
 	}

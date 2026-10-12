@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:coordinates": "node --test src/coordinates.test.js",
+    "test:coordinates": "node --test src/coordinates.test.js src/tracks.test.js",
     "test:video-proxy": "node --test video-proxy.test.js",
-    "test": "npm run test:video-proxy && vitest run src/auth-api.test.js src/roles.test.js src/CommandControls.test.jsx src/App.remote-controls.test.jsx src/TotalDistanceDisplay.test.jsx src/fleet-api.test.js src/FleetManagement.test.jsx",
+    "test": "npm run test:video-proxy && vitest run src/auth-api.test.js src/roles.test.js src/CommandControls.test.jsx src/App.remote-controls.test.jsx src/TotalDistanceDisplay.test.jsx src/fleet-api.test.js src/FleetManagement.test.jsx src/TrackManagement.test.jsx",
     "test:all": "npm run test:coordinates && npm run test"
   },
   "dependencies": {
