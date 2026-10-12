@@ -273,7 +273,24 @@ http://localhost:8080/api/robots/清澜一号/location
 .\start-video.bat
 ```
 
-需要先在 `.env` 中配置全局共用的 `CAMERA_FRONT_RTSP` 和 `CAMERA_REAR_RTSP`。MediaMTX 默认常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）：容器会一直保持摄像头 RTSP 连接，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.bat` 会使用 `--force-recreate` 重建 MediaMTX 容器，确保 `.env` 中修改后的 RTSP 地址生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时可把 `CAMERA_HLS_BASE_URL` 改成服务器公网或反向代理地址。
+需要在 `.env` 中配置 `CAMERA_FRONT_RTSP`、`CAMERA_REAR_RTSP` 和 `CAMERA_HLS_CDN_SECRET`：
+
+- `CAMERA_FRONT_RTSP` / `CAMERA_REAR_RTSP`：摄像头 RTSP 地址，只给 MediaMTX 使用，不写入前端代码。
+- `CAMERA_HLS_CDN_SECRET`：MediaMTX HLS 会话密钥（`hlsCDNSecret`），用 `openssl rand -hex 24` 生成；必须与 nginx `/video/` 注入的 `Authorization: Bearer` 完全一致。
+
+视频链路（`docker-compose.video.yml`）：
+
+```text
+摄像头 RTSP(H.265) -> MediaMTX frontraw/rearraw -> ffmpeg 转码(H.265->H.264)
+  -> MediaMTX front/rear -> HLS -> 浏览器
+```
+
+两个关键取舍：
+
+1. **必须转码 H.265 -> H.264**：摄像头输出 H.265/HEVC，Chrome/Edge 在 MSE 上无法解码 HEVC（只有 Safari 能放），因此浏览器会“播放失败”。`transcode-front` / `transcode-rear` 用 ffmpeg 把画面转成 H.264（`main` profile、每 1 秒一个关键帧），播放路径 `/front`、`/rear` 是转码后的输出；原始流在 `/frontraw`、`/rearraw`。
+2. **HLS 会话改用 CDN 密钥而非 cookie**：MediaMTX 默认用 `Secure+Partitioned` cookie 传递 HLS 会话，纯 HTTP 站点上该 cookie 会被浏览器丢弃，只能退化成 URL 里的 `?session=` 查询参数，一旦 cookie 与 URL 不同步就会返回 HTML 错误页导致播放失败。开启 `hlsCDNSecret` 后，站点 nginx 在每个 `/video/` 请求上注入 `Authorization: Bearer <CAMERA_HLS_CDN_SECRET>`，会话固定为按路径共享，不再依赖 cookie，也不再在播放列表里出现 `session=`。
+
+MediaMTX 常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）并开启 `hlsAlwaysRemux`：容器会一直保持摄像头 RTSP 连接并预生成 HLS 分片，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.bat` 会用 `--force-recreate` 重建 MediaMTX 与转码容器，确保 `.env` 修改后生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时把 `CAMERA_HLS_BASE_URL` 改成 `/video`，并在 nginx 加入 `deploy/nginx/watercleanbot-video.conf`（记得替换其中的 `__CAMERA_HLS_CDN_SECRET__`），让 `/video/` 反代到 `http://127.0.0.1:8888/` 并注入 Bearer 头。
 
 ## 当前刻意不做
 

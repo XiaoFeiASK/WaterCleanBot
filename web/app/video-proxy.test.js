@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { rewriteVideoLocation, configureVideoProxy } from './video-proxy.js';
+import { rewriteVideoLocation, configureVideoProxy, videoAuthorizationHeader } from './video-proxy.js';
 
 test('rewrites HLS redirects without losing query parameters', () => {
   assert.equal(
@@ -39,6 +39,19 @@ test('proxy response hook updates Location and preserves other headers', () => {
   assert.equal(response.headers.location, '/video/front/index.m3u8?cookieCheck=1');
   assert.deepEqual(response.headers['set-cookie'], ['cookieCheck=1']);
   assert.doesNotThrow(() => proxy.emit('proxyRes', { headers: {} }));
+});
+
+test('injects the MediaMTX CDN bearer header when the secret is configured', () => {
+  assert.deepEqual(videoAuthorizationHeader(''), {});
+  assert.deepEqual(videoAuthorizationHeader('   '), {});
+  assert.deepEqual(videoAuthorizationHeader('abc123'), { authorization: 'Bearer abc123' });
+  assert.deepEqual(videoAuthorizationHeader('  abc123  '), { authorization: 'Bearer abc123' });
+
+  const proxy = new EventEmitter();
+  configureVideoProxy(proxy, 'abc123');
+  const headers = {};
+  proxy.emit('proxyReq', { setHeader: (name, value) => { headers[name] = value; } });
+  assert.equal(headers.Authorization, 'Bearer abc123');
 });
 
 // Exercise the real Vite configuration against a fake MediaMTX listener.
