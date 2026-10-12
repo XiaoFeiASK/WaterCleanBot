@@ -17,6 +17,12 @@ const subscriberBufferSize = 64
 
 var ErrRobotExists = errors.New("robot already exists")
 
+// TrackRecorder 接收经过实时定位校验的 WGS-84 采样点，实现必须非阻塞。
+type TrackRecorder interface {
+	RecordPosition(robotName string, lat, lng float64, receivedAtMS int64)
+	RobotDeleted(robotName string)
+}
+
 type Event struct {
 	Position
 	Type string
@@ -38,6 +44,7 @@ type Store struct {
 	subscribers        map[uint64]chan Event
 	nextSubID          uint64
 	writer             *SnapshotWriter
+	trackRecorder      TrackRecorder
 }
 
 // NewStore 创建实时位置存储。
@@ -66,6 +73,9 @@ func ValidRobotName(name string) bool {
 
 // SetWriter is configured once, before MQTT and HTTP start.
 func (s *Store) SetWriter(writer *SnapshotWriter) { s.writer = writer }
+
+// SetTrackRecorder is configured once, before MQTT and HTTP start.
+func (s *Store) SetTrackRecorder(recorder TrackRecorder) { s.trackRecorder = recorder }
 
 func (s *Store) Create(ctx context.Context, robotName string) error {
 	if !ValidRobotName(robotName) {
@@ -96,11 +106,15 @@ func (s *Store) Delete(ctx context.Context, robotName string) error {
 	delete(s.telemetryVersions, robotName)
 	delete(s.navigationVersions, robotName)
 	delete(s.latestReceivedAtMS, robotName)
+	recorder := s.trackRecorder
 	if s.writer != nil {
 		s.writer.QueueChange(robotName, "delete")
 	}
 	s.broadcastEventLocked(Event{Type: "deleted", Position: Position{RobotName: robotName}})
 	s.mu.Unlock()
+	if recorder != nil {
+		recorder.RobotDeleted(robotName)
+	}
 	if s.writer != nil {
 		return s.writer.Persist(ctx, robotName)
 	}
@@ -194,7 +208,11 @@ func (s *Store) Update(position Position) (Position, bool) {
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
+	recorder := s.trackRecorder
 	s.mu.Unlock()
+	if recorder != nil && validTrackCoordinate(position.Lat, position.Lng) {
+		recorder.RecordPosition(position.RobotName, *position.Lat, *position.Lng, position.ReceivedAtMS)
+	}
 	return clonePosition(position), true
 }
 
@@ -256,8 +274,18 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
+	recorder := s.trackRecorder
 	s.mu.Unlock()
+	if recorder != nil && validTrackCoordinate(position.Lat, position.Lng) {
+		recorder.RecordPosition(position.RobotName, *position.Lat, *position.Lng, position.ReceivedAtMS)
+	}
 	return clonePosition(position), true
+}
+
+// validTrackCoordinate 判断实时位置是否具备可用于轨迹采样的有效 WGS-84 坐标。
+func validTrackCoordinate(lat, lng *float64) bool {
+	return lat != nil && lng != nil && !math.IsNaN(*lat) && !math.IsInf(*lat, 0) && *lat >= -90 && *lat <= 90 &&
+		!math.IsNaN(*lng) && !math.IsInf(*lng, 0) && *lng >= -180 && *lng <= 180
 }
 
 // UpdateFeedback 合并设备通过 webfeedback 上报的最新状态。

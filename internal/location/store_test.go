@@ -271,3 +271,62 @@ func TestSnapshotWriterRequeuesFailedWriteWithoutOverwritingNewerPending(t *test
 		t.Fatalf("writes = %+v", repository.writes)
 	}
 }
+
+type recordingTrackRecorder struct {
+	positions []recordedTrackPosition
+	deleted   []string
+}
+
+type recordedTrackPosition struct {
+	robotName string
+	lat       float64
+	lng       float64
+	received  int64
+}
+
+func (r *recordingTrackRecorder) RecordPosition(robotName string, lat, lng float64, receivedAtMS int64) {
+	r.positions = append(r.positions, recordedTrackPosition{robotName: robotName, lat: lat, lng: lng, received: receivedAtMS})
+}
+
+func (r *recordingTrackRecorder) RobotDeleted(robotName string) {
+	r.deleted = append(r.deleted, robotName)
+}
+
+func TestTrackRecorderReceivesTelemetryAndNavigationPositions(t *testing.T) {
+	store := NewStore()
+	recorder := &recordingTrackRecorder{}
+	store.SetTrackRecorder(recorder)
+
+	store.Update(Position{RobotName: "USV-001", Lat: Float(31.2), Lng: Float(121.4), ReceivedAtMS: 1000})
+	store.UpdateNavigation(Position{RobotName: "USV-001", Lat: Float(31.3), Lng: Float(121.5), ReceivedAtMS: 2000})
+	store.Update(Position{RobotName: "USV-001", Lat: Float(31.4), ReceivedAtMS: 3000})
+	store.UpdateNavigation(Position{RobotName: "USV-001", ReceivedAtMS: 4000})
+	store.Delete(context.Background(), "USV-001")
+
+	if len(recorder.positions) != 2 {
+		t.Fatalf("recorded positions = %+v, want telemetry and navigation coordinates only", recorder.positions)
+	}
+	if recorder.positions[0] != (recordedTrackPosition{"USV-001", 31.2, 121.4, 1000}) {
+		t.Fatalf("telemetry recording = %+v", recorder.positions[0])
+	}
+	if recorder.positions[1] != (recordedTrackPosition{"USV-001", 31.3, 121.5, 2000}) {
+		t.Fatalf("navigation recording = %+v", recorder.positions[1])
+	}
+	if len(recorder.deleted) != 1 || recorder.deleted[0] != "USV-001" {
+		t.Fatalf("deleted notifications = %+v", recorder.deleted)
+	}
+}
+
+func TestTrackRecorderIgnoresInvalidCoordinates(t *testing.T) {
+	store := NewStore()
+	recorder := &recordingTrackRecorder{}
+	store.SetTrackRecorder(recorder)
+
+	store.Update(Position{RobotName: "USV-001", Lat: Float(91), Lng: Float(121.4), ReceivedAtMS: 1000})
+	store.UpdateNavigation(Position{RobotName: "USV-001", Lat: Float(31.2), Lng: Float(181), ReceivedAtMS: 2000})
+	store.Update(Position{RobotName: "USV-001", Lat: Float(31.2), Lng: Float(121.4), ReceivedAtMS: 3000})
+
+	if len(recorder.positions) != 1 {
+		t.Fatalf("recorded positions = %+v, want one valid coordinate sample", recorder.positions)
+	}
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Hls from 'hls.js';
@@ -32,18 +32,24 @@ import {
 } from 'lucide-react';
 import {
   createRobotRoute,
+  createRobotTrack,
   createRobot,
+  deleteRobotTrack,
   deleteRobot,
   hasCoordinates,
   isRobotOnline,
   deleteRobotRoute,
+  endRobotTrack,
   fetchRobotCameras,
   fetchRobotLocation,
+  fetchRobotTracks,
+  fetchRobotTrackPoints,
   getLocationErrorMessage,
   getCameraErrorMessage,
   getRemoteCommandErrorMessage,
   getRobotNameForDevice,
   getRouteErrorMessage,
+  getTrackErrorMessage,
   fetchRobotRoutes,
   sendRobotRoute,
   sendRobotCommand,
@@ -53,6 +59,7 @@ import { wgs84ToGcj02 } from './coordinates';
 import { DEMO_PERCEPTION_ROUTE, DEMO_SHORELINE_SECTIONS } from './demoData';
 import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
+import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import './fleet.css';
 
 function confirmAction(message) {
@@ -248,6 +255,12 @@ function formatRouteDurationSeconds(durationSeconds) {
   if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds)) return '暂无数据';
   const minutes = Math.max(1, Math.ceil(durationSeconds / 60));
   return `${minutes}分钟`;
+}
+
+function formatTrackTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '时间未知';
+  return date.toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDistanceKm(distanceKm) {
@@ -600,7 +613,7 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
+function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], trackLines = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -609,6 +622,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
   const routePointMarkersRef = useRef([]);
   const shorelinePolylineRefs = useRef([]);
   const perceptionPolylineRefs = useRef([]);
+  const trackPolylineRefs = useRef([]);
   const perceptionPointMarkersRef = useRef([]);
   const mapClickHandlerRef = useRef(null);
   const zoomHandlerRef = useRef(null);
@@ -628,6 +642,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
     shorelinePolylineRefs.current = [];
     perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
     perceptionPolylineRefs.current = [];
+    trackPolylineRefs.current.forEach(safelyRemoveOverlay);
+    trackPolylineRefs.current = [];
     perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
     perceptionPointMarkersRef.current = [];
     if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -657,6 +673,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       shorelinePolylineRefs.current = [];
       perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
       perceptionPolylineRefs.current = [];
+      trackPolylineRefs.current.forEach(safelyRemoveOverlay);
+      trackPolylineRefs.current = [];
       perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
       perceptionPointMarkersRef.current = [];
       if (mapRef.current && mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -750,8 +768,27 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         shorelinePolylineRefs.current = [];
         perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
         perceptionPolylineRefs.current = [];
+        trackPolylineRefs.current.forEach(safelyRemoveOverlay);
+        trackPolylineRefs.current = [];
         perceptionPointMarkersRef.current.forEach(safelyRemoveOverlay);
         perceptionPointMarkersRef.current = [];
+
+        // 轨迹图层置于航线和边界下方，但保留在底图之上。
+        trackLines.forEach((trackLine) => {
+          if (!trackLine?.path?.length) return;
+          const trackPolyline = new AMap.Polyline({
+            map: mapRef.current,
+            path: trackLine.path,
+            strokeColor: trackLine.color || '#e5484d',
+            strokeOpacity: 1,
+            strokeWeight: 2.6,
+            strokeStyle: 'solid',
+            lineJoin: 'round',
+            lineCap: 'round',
+            zIndex: 45,
+          });
+          trackPolylineRefs.current.push(trackPolyline);
+        });
 
         if (showShoreline) {
           SHORELINE_MAP_SECTIONS.forEach((section) => {
@@ -839,7 +876,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, perceptionRoutePoints, showShoreline, onMapPoint]);
+  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, trackLines, perceptionRoutePoints, showShoreline, onMapPoint]);
 
   if (!hasCoordinates(position)) {
     return (
@@ -1346,6 +1383,13 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const deviceName = position?.robotName || '暂无设备';
   const routeDeviceId = getRobotNameForDevice(position?.robotName);
   const [routes, setRoutes] = useState([]);
+  const [tracks, setTracks] = useState([]);
+  const [trackPointsByID, setTrackPointsByID] = useState({});
+  const [loadedTrackIds, setLoadedTrackIds] = useState({});
+  const [selectedTrackIds, setSelectedTrackIds] = useState([]);
+  const [tracksLoading, setTracksLoading] = useState(false);
+  const [tracksError, setTracksError] = useState('');
+  const [trackAction, setTrackAction] = useState('');
   const [routesLoading, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState('');
   const [routeAction, setRouteAction] = useState('');
@@ -1366,6 +1410,200 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const draftRouteLength = getRouteLengthMeters(draftRouteLinePoints);
   const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints, startMapPoint);
   const isRouteBusy = Boolean(routeAction);
+  const isTrackBusy = Boolean(trackAction);
+  const recordingTrack = tracks.find((track) => track.status === 'recording');
+  const selectedTrackSet = new Set(selectedTrackIds);
+  const trackLines = useMemo(() => {
+    return tracks
+      .filter((track) => selectedTrackSet.has(track.id))
+      .map((track) => ({
+        id: track.id,
+        name: track.name,
+        color: getTrackColor(track, selectedTrackIds),
+        path: toTrackMapPoints(trackPointsByID[track.id] || [], wgs84ToGcj02),
+      }))
+      .filter((trackLine) => trackLine.path.length >= 2);
+  }, [tracks, trackPointsByID, selectedTrackIds]);
+
+  useEffect(() => {
+    if (!routeDeviceId || selectedTrackIds.length === 0) return undefined;
+    const missingIDs = selectedTrackIds.filter((trackID) => !loadedTrackIds[trackID]);
+    if (missingIDs.length === 0) return undefined;
+
+    const controller = new AbortController();
+    let cancelled = false;
+    Promise.all(missingIDs.map(async (trackID) => [trackID, await fetchRobotTrackPoints(routeDeviceId, trackID, controller.signal)]))
+      .then((entries) => {
+        if (cancelled) return;
+        setTrackPointsByID((current) => {
+          const next = { ...current };
+          entries.forEach(([trackID, points]) => {
+            next[trackID] = mergeTrackPoints(points, current[trackID]);
+          });
+          return next;
+        });
+        setLoadedTrackIds((current) => {
+          const next = { ...current };
+          entries.forEach(([trackID]) => { next[trackID] = true; });
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = getTrackErrorMessage(error);
+        setTracksError(message);
+        onToast?.(message);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [routeDeviceId, selectedTrackIds, loadedTrackIds]);
+
+  useEffect(() => {
+    if (!routeDeviceId || !recordingTrack || !selectedTrackSet.has(recordingTrack.id)) return;
+    if (!Number.isFinite(position?.lat) || !Number.isFinite(position?.lng)) return;
+    const nextPoint = {
+      seq: 0,
+      lng: position.lng,
+      lat: position.lat,
+      receivedAt: new Date(position.receivedAtMs || Date.now()).toISOString(),
+    };
+    setTrackPointsByID((current) => {
+      const points = current[recordingTrack.id] || [];
+      const lastPoint = points[points.length - 1];
+      if (!shouldAppendLivePoint(lastPoint, nextPoint)) return current;
+      return {
+        ...current,
+        [recordingTrack.id]: [
+          ...points,
+          { ...nextPoint, seq: (lastPoint?.seq || 0) + 1 },
+        ],
+      };
+    });
+  }, [position, recordingTrack?.id, selectedTrackIds]);
+
+  useEffect(() => {
+    setTracks([]);
+    setTrackPointsByID({});
+    setLoadedTrackIds({});
+    setSelectedTrackIds([]);
+    setTracksError('');
+    if (!routeDeviceId) return undefined;
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setTracksLoading(true);
+    setTracksError('');
+    fetchRobotTracks(routeDeviceId, controller.signal)
+      .then((nextTracks) => {
+        if (cancelled) return;
+        setTracks(nextTracks);
+        setTrackPointsByID({});
+        setLoadedTrackIds({});
+        setSelectedTrackIds((current) => current.filter((id) => nextTracks.some((track) => track.id === id)));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = getTrackErrorMessage(error);
+        setTracksError(message);
+        onToast?.(message);
+      })
+      .finally(() => {
+        if (!cancelled) setTracksLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [routeDeviceId]);
+
+  function toggleTrackSelection(trackID) {
+    setSelectedTrackIds((current) => (
+      current.includes(trackID)
+        ? current.filter((id) => id !== trackID)
+        : [...current, trackID]
+    ));
+  }
+
+  function toggleSelectAllTracks() {
+    setSelectedTrackIds((current) => (
+      tracks.length > 0 && current.length === tracks.length ? [] : selectAllTrackIds(tracks)
+    ));
+  }
+
+  async function startTrack() {
+    if (!routeDeviceId || isTrackBusy) return;
+    if (recordingTrack) {
+      onToast?.('请先结束当前轨迹');
+      return;
+    }
+    setTrackAction('start');
+    try {
+      const track = await createRobotTrack(routeDeviceId);
+      setTracks((current) => [...current, track]);
+      setSelectedTrackIds([track.id]);
+      setTrackPointsByID((current) => ({ ...current, [track.id]: [] }));
+      setLoadedTrackIds((current) => ({ ...current, [track.id]: true }));
+      onToast?.(`正在记录 ${track.name}`, 'success');
+    } catch (error) {
+      onToast?.(getTrackErrorMessage(error));
+    } finally {
+      setTrackAction('');
+    }
+  }
+
+  async function endTrack() {
+    if (!routeDeviceId || !recordingTrack || isTrackBusy) return;
+    setTrackAction(`end:${recordingTrack.id}`);
+    try {
+      const endedTrack = await endRobotTrack(routeDeviceId, recordingTrack.id);
+      setTracks((current) => current.map((track) => (track.id === endedTrack.id ? endedTrack : track)));
+      onToast?.(`${endedTrack.name} 已结束`, 'success');
+      try {
+        const points = await fetchRobotTrackPoints(routeDeviceId, endedTrack.id);
+        setTrackPointsByID((current) => ({
+          ...current,
+          [endedTrack.id]: mergeTrackPoints(points, current[endedTrack.id]),
+        }));
+        setLoadedTrackIds((current) => ({ ...current, [endedTrack.id]: true }));
+      } catch (error) {
+        onToast?.(`${endedTrack.name} 已结束，但轨迹点加载失败：${getTrackErrorMessage(error)}`);
+      }
+    } catch (error) {
+      onToast?.(getTrackErrorMessage(error));
+    } finally {
+      setTrackAction('');
+    }
+  }
+
+  async function deleteTrack(track) {
+    if (!routeDeviceId || track.status === 'recording' || isTrackBusy) return;
+    if (!confirmAction(`确认删除「${track.name}」吗？`)) return;
+    setTrackAction(`delete:${track.id}`);
+    try {
+      await deleteRobotTrack(routeDeviceId, track.id);
+      setTracks((current) => current.filter((item) => item.id !== track.id));
+      setTrackPointsByID((current) => {
+        const next = { ...current };
+        delete next[track.id];
+        return next;
+      });
+      setLoadedTrackIds((current) => {
+        const next = { ...current };
+        delete next[track.id];
+        return next;
+      });
+      setSelectedTrackIds((current) => current.filter((id) => id !== track.id));
+      onToast?.('轨迹已删除', 'success');
+    } catch (error) {
+      onToast?.(getTrackErrorMessage(error));
+    } finally {
+      setTrackAction('');
+    }
+  }
 
   useEffect(() => {
     if (!routeDeviceId) {
@@ -1567,6 +1805,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           </div>
           <div className="online-map-actions" aria-label="航线任务操作">
             <button
+              className="button button-secondary"
+              type="button"
+              onClick={recordingTrack ? endTrack : startTrack}
+              disabled={!routeDeviceId || tracksLoading || isTrackBusy}
+            >
+              {trackAction === 'start' ? '开始中' : recordingTrack && trackAction === `end:${recordingTrack.id}` ? '结束中' : recordingTrack ? '结束记录' : '开始记录'}
+            </button>
+            <button
               className={`button ${showShoreline ? 'button-boundary-active' : 'button-secondary'}`}
               type="button"
               aria-pressed={showShoreline}
@@ -1587,12 +1833,16 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             planningMode={planningMode}
             draftRoutePoints={draftRoutePoints}
             previewRoutePoints={previewRoutePoints}
+            trackLines={trackLines}
             perceptionRoutePoints={showPerceptionRoute ? PERCEPTION_ROUTE_MAP_POINTS : []}
             showShoreline={showShoreline}
             onMapPoint={addDraftRoutePoint}
           />
           <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
           <div className="map-layer-legend" aria-label="地图图层图例">
+            {trackLines.map((trackLine) => (
+              <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
+            ))}
             {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
@@ -1662,6 +1912,37 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <div className="route-preview-badge">正在查看 {activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点</div>
           )}
         </div>
+
+        <section className="track-list-card" aria-label="历史轨迹">
+          <div className="track-list-heading">
+            <div>
+              <strong>历史轨迹</strong>
+              <span>
+                {recordingTrack ? `正在记录 ${recordingTrack.name}` : '轨迹记录已停止'}
+                {tracksError ? ` · ${tracksError}` : ` · ${tracks.length} 条`}
+              </span>
+            </div>
+            <button type="button" onClick={toggleSelectAllTracks} disabled={!tracks.length}>
+              {tracks.length > 0 && selectedTrackIds.length === tracks.length ? '取消全选' : '全选'}
+            </button>
+          </div>
+          {!tracksLoading && !tracks.length && <div className="track-list-empty">暂无历史轨迹</div>}
+          {tracksLoading && <div className="track-list-empty">正在读取轨迹...</div>}
+          {!tracksLoading && tracks.map((track) => (
+            <div className={`track-list-row ${selectedTrackSet.has(track.id) ? 'track-list-row-active' : ''}`} key={track.id}>
+              <button type="button" className="track-list-select" onClick={() => toggleTrackSelection(track.id)}>
+                <i style={{ backgroundColor: selectedTrackSet.has(track.id) ? getTrackColor(track, selectedTrackIds) : 'transparent' }} />
+                <span>
+                  <strong>{track.name}</strong>
+                  <small>{formatTrackTime(track.startedAt)} 开始 · {track.status === 'recording' ? '记录中' : `${formatTrackTime(track.endedAt)} 结束`} · {track.pointCount} 点</small>
+                </span>
+              </button>
+              <button className="track-list-delete" type="button" disabled={track.status === 'recording' || isTrackBusy} onClick={() => deleteTrack(track)}>
+                {trackAction === `delete:${track.id}` ? '删除中' : '删除'}
+              </button>
+            </div>
+          ))}
+        </section>
       </section>
 
       <section className="online-map-ops-grid" aria-label="指令下发">

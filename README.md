@@ -42,6 +42,11 @@ GET /api/robots/{robotName}/routes
 POST /api/robots/{robotName}/routes
 DELETE /api/robots/{robotName}/routes/{routeId}
 POST /api/robots/{robotName}/routes/{routeId}/send
+GET /api/robots/{robotName}/tracks
+POST /api/robots/{robotName}/tracks
+POST /api/robots/{robotName}/tracks/{trackId}/end
+GET /api/robots/{robotName}/tracks/{trackId}/points
+DELETE /api/robots/{robotName}/tracks/{trackId}
 ```
 
 示例：
@@ -205,6 +210,27 @@ HTTP 接口保留语义化的 `command`、`value` 和 `values`，用于前端校
 ```
 
 前端高德地图点击点按 `GCJ-02` 保存；下发艇端时后端默认转换为 `WGS-84` 并将经纬度格式化为 8 位小数。
+
+## 历史轨迹链路
+
+```text
+前端点击“开始记录”
+  -> POST /api/robots/{robotName}/tracks 创建一条 recording 轨迹
+
+MQTT telemetry / [18,...] webfeedback（有效 WGS-84 定位）
+  -> location.Store 校验坐标后交给 tracks.Service
+  -> 内存采样（与上一点相距 ≥1 米，或距上次入库 ≥2 秒）
+  -> 有限队列异步写入 robot_tracks / robot_track_points，不阻塞 MQTT 与 SSE
+
+前端“结束记录”
+  -> POST /api/robots/{robotName}/tracks/{trackId}/end 等待已入队点落库后置为 ended
+  -> GET /api/robots/{robotName}/tracks/{trackId}/points 按需加载完整点集
+  -> LocationMap 用独立 polyline 图层回看，单条红色、多条调色板
+```
+
+每台设备同一时刻最多一条 recording 轨迹；轨迹号按设备递增且删除后不回收，轨迹永久保留。删除设备时在同一事务内级联删除该设备全部轨迹和轨迹点。关闭或刷新页面不会结束记录，也不结束轨迹。
+
+轨迹点始终以 WGS-84 存储和传输，前端仅在高德地图渲染前转换为 GCJ-02，不做平滑或曲线拟合。
 
 ## 本地运行
 

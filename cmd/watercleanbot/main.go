@@ -24,6 +24,7 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/routes"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/telemetry"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/tracks"
 )
 
 func main() {
@@ -83,6 +84,13 @@ func main() {
 	}
 	locationWriter := location.NewSnapshotWriter(locationRepository, cfg.LocationSnapshotInterval, log)
 	locationStore.SetWriter(locationWriter)
+	trackRepository := tracks.NewRepository(db)
+	trackService := tracks.NewService(trackRepository, log)
+	if err := trackService.Start(appCtx); err != nil {
+		log.Error("start track service failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	locationStore.SetTrackRecorder(trackService)
 	locationWriterDone := make(chan struct{})
 	go func() {
 		defer close(locationWriterDone)
@@ -116,7 +124,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), authService, log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, trackRepository, trackService, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), authService, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
