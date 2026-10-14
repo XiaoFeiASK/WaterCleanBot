@@ -318,7 +318,6 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 
 .fleet-map-marker { position: relative; width: 128px; height: 88px; pointer-events: none; }
 .fleet-map-marker-compact { width: 36px; height: 44px; }
-.fleet-map-marker-compact .fleet-map-marker-icon { bottom: 0; }
 .fleet-map-marker-icon { position: absolute; left: 50%; bottom: 8px; z-index: 2; width: 36px; height: 36px; display: grid; place-items: center; color: #fff; background: radial-gradient(circle at 50% 34%, rgba(255,255,255,.9), rgba(255,253,246,.72) 46%, rgba(24,169,153,.18) 100%); border: 3px solid #fffdf6; border-radius: 50%; box-shadow: 0 8px 18px rgba(15,89,97,.32); transform: translateX(-50%); pointer-events: none; }
 .fleet-map-marker-clickable .fleet-map-marker-icon { cursor: pointer; }
 .fleet-map-marker-boat { position: relative; z-index: 1; width: 30px; height: 30px; transform: rotate(var(--fleet-heading, 0deg)); transform-origin: 50% 50%; transition: transform .28s cubic-bezier(.34, .9, .3, 1); will-change: transform; }

@@ -517,7 +517,7 @@ export function createFleetMarkerContent(position, onClick, options = {}) {
   return marker;
 }
 
-// 高德会为自定义 content 生成额外的 .amap-marker 容器；规划模式下不能让它覆盖地图点击区域。
+// 高德会为自定义 content 生成额外的 .amap-marker 容器；实时地图中不能让它覆盖地图点击区域。
 function disableFleetMarkerHitArea(content) {
   if (!content) return false;
 
@@ -662,28 +662,28 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           centeredSeqRef.current = centerSeq;
         }
 
-        const markerShouldBeCompact = planningMode;
+        // 常态和规划态必须共用同一套船体几何参数，否则切换规划时船体会发生视觉偏移。
         const markerIsCompact = markerContentRef.current?.classList.contains('fleet-map-marker-compact') === true;
-        if (markerRef.current && markerContentRef.current && markerIsCompact !== markerShouldBeCompact) {
+        if (markerRef.current && markerContentRef.current && !markerIsCompact) {
           safelyRemoveMarker(markerRef.current);
           markerRef.current = null;
           markerContentRef.current = null;
         }
 
         if (!markerRef.current) {
-          markerContentRef.current = createFleetMarkerContent(position, undefined, { compact: planningMode });
+          markerContentRef.current = createFleetMarkerContent(position, undefined, { compact: true });
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
             content: markerContentRef.current,
-            offset: new AMap.Pixel(planningMode ? -18 : -64, planningMode ? -44 : -88),
+            offset: new AMap.Pixel(-18, -44),
             clickable: false,
           });
-          if (planningMode) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
+          scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         } else {
           markerRef.current.setPosition(nextPosition);
           markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position);
-          if (planningMode) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
+          scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         }
 
         if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {

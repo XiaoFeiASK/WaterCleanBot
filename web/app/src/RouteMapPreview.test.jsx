@@ -55,4 +55,10 @@ describe('fleet marker content', () => {
     expect(boatIcon).toBeTruthy();
     expect(boatIcon.getAttribute('style')).toContain('--fleet-heading');
   });
+
+  it('supports the compact marker geometry used by the live location map', () => {
+    const content = createFleetMarkerContent({ robotName: 'USV-001', heading: 90 }, undefined, { compact: true });
+    expect(content.classList.contains('fleet-map-marker-compact')).toBe(true);
+    expect(content.querySelector('.fleet-map-marker-icon').style.bottom).toBe('');
+  });
 });
