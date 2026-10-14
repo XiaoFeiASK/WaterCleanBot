@@ -649,6 +649,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             position: nextPosition,
             content: markerContentRef.current,
             offset: new AMap.Pixel(-64, -88),
+            clickable: false,
           });
         } else {
           markerRef.current.setPosition(nextPosition);
