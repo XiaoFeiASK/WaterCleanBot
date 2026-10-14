@@ -1920,7 +1920,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteDurationSeconds(DEMO_PERCEPTION_ROUTE.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={togglePerceptionRoutePreview}>{showPerceptionRoute ? '取消查看' : '查看'}</button>
-                    <button type="button" onClick={sendPerception} disabled={!showPerceptionRoute || isRouteBusy}>{routeAction === 'send:perception' ? '下发中' : '下发'}</button>
+                    <button type="button" onClick={sendPerception} disabled={isRouteBusy}>{routeAction === 'send:perception' ? '下发中' : '下发'}</button>
                     <span className="route-table-local-note">本地演示</span>
                   </td>
                 </tr>
