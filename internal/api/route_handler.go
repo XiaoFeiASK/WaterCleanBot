@@ -206,3 +206,78 @@ func routeStartPoint(store *location.Store, robotName string, coordinateSystem s
 	}
 	return &routes.RoutePoint{Lat: lat, Lng: lng}
 }
+
+// SendPerceptionRouteHandler 下发本地感知航线，速度统一固定为 2 节。
+func SendPerceptionRouteHandler(store *location.Store, publisher RoutePublisher, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		robotName := r.PathValue("robotName")
+		if err := control.ValidateTarget(robotName); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid robot name"})
+			return
+		}
+		if store == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "robot location not found"})
+			return
+		}
+		if _, ok := store.Get(robotName); !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "robot location not found"})
+			return
+		}
+		if publisher == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "route publisher is unavailable"})
+			return
+		}
+
+		var request routes.CreateRouteRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, routeRequestMaxBytes))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+
+		// 感知航线下发速度固定为 2 节，客户端传入的速度不参与校验和下发。
+		for index := range request.Points {
+			request.Points[index].SpeedKnots = 2
+		}
+		normalizedRequest, err := routes.NormalizeCreateRouteRequest(request)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+
+		protocol, err := routes.BuildPathPointProtocol(routes.Route{
+			CoordinateSystem: normalizedRequest.CoordinateSystem,
+			Points:           normalizedRequest.Points,
+		}, routes.CoordinateSystemWGS84)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+
+		var protocolValues []json.Number
+		if err := json.Unmarshal([]byte(protocol), &protocolValues); err != nil || len(protocolValues) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+
+		if err := publisher.PublishRoute(r.Context(), robotName, protocol); err != nil {
+			log.Warn("publish perception route failed", slog.String("robot_name", robotName), slog.Any("error", err))
+			if control.IsValidationError(err) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+				return
+			}
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "publish route failed"})
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"status":               "published",
+			"target":               robotName,
+			"topic":                "mqtt",
+			"protocol":             protocolValues,
+			"pointCount":           len(normalizedRequest.Points),
+			"coordinateSystemSent": routes.CoordinateSystemWGS84,
+		})
+	}
+}

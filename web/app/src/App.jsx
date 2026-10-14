@@ -52,6 +52,7 @@ import {
   getTrackErrorMessage,
   fetchRobotRoutes,
   sendRobotRoute,
+  sendPerceptionRoute,
   sendRobotCommand,
   subscribeRobotLocations,
 } from './api';
@@ -347,6 +348,22 @@ const SHORELINE_MAP_SECTIONS = DEMO_SHORELINE_SECTIONS.map((section) => ({
 }));
 const PERCEPTION_ROUTE_MAP_POINTS = getRouteMapPoints(DEMO_PERCEPTION_ROUTE);
 
+// 感知航线展示路径：有船位时从当前船位连到第一个感知点，船位变化时实时更新。
+export function getPerceptionRouteMapPath(boatMapPoint, perceptionMapPoints = []) {
+  const points = Array.isArray(perceptionMapPoints) ? perceptionMapPoints : [];
+  if (!points.length) return [];
+  return boatMapPoint ? [boatMapPoint, ...points] : [...points];
+}
+
+// 规划航线即时预览路径：船位 -> 已确认点 -> 待确认候选点。
+export function getPlanningPreviewMapPoints(startMapPoint, draftMapPoints = [], pendingMapPoint = null) {
+  const points = [];
+  if (startMapPoint) points.push(startMapPoint);
+  if (Array.isArray(draftMapPoints)) points.push(...draftMapPoints);
+  if (pendingMapPoint) points.push(pendingMapPoint);
+  return points;
+}
+
 function getMapClickPoint(lngLat) {
   if (!lngLat) return null;
   const lng = typeof lngLat.getLng === 'function' ? lngLat.getLng() : lngLat.lng;
@@ -357,31 +374,6 @@ function getMapClickPoint(lngLat) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
-}
-
-function getFleetBubbleStyle(zoom = 13) {
-  const progress = clamp((zoom - 5) / 11, 0, 1);
-  const easedProgress = progress ** 0.85;
-  return {
-    scale: Number((0.32 + 0.68 * easedProgress).toFixed(3)),
-    opacity: Number((0.35 + 0.65 * progress).toFixed(3)),
-  };
-}
-
-function getMapZoom(map) {
-  return typeof map?.getZoom === 'function' ? map.getZoom() : 13;
-}
-
-function applyFleetBubbleStyle(content, zoom) {
-  const bubbleStyle = getFleetBubbleStyle(zoom);
-  content.style.setProperty('--fleet-bubble-scale', bubbleStyle.scale);
-  content.style.setProperty('--fleet-bubble-opacity', bubbleStyle.opacity);
-}
-
-function updateFleetMarkerBubbleScales(markerGroups, zoom) {
-  markerGroups.forEach((markerGroup) => {
-    applyFleetBubbleStyle(markerGroup.content, zoom);
-  });
 }
 
 function resetFleetHeadingAngles() {
@@ -418,10 +410,11 @@ function safelyRemoveOverlay(overlay) {
   }
 }
 
-function createRoutePointContent(index, isDraft, variant = 'standard', isBridge = false) {
+function createRoutePointContent(index, isDraft, variant = 'standard', isBridge = false, isPending = false) {
   const point = document.createElement('div');
   point.className = `route-planner-point ${isDraft ? 'route-planner-point-draft' : ''} ${variant === 'perception' ? 'route-planner-point-perception' : ''}`;
   if (isBridge) point.classList.add('route-planner-point-bridge');
+  if (isPending) point.classList.add('route-planner-point-pending');
   point.textContent = String(index + 1);
   return point;
 }
@@ -472,31 +465,9 @@ function getFleetBoatStructure(name, heading) {
   ].join('');
 }
 
-// 更新已有标记的文本和船体旋转，不重建 DOM，让转向动画可以真正播放。
-function updateFleetMarkerContent(content, position, zoom) {
+// 更新已有标记的船体旋转，不重建 DOM，让转向动画可以真正播放。
+function updateFleetMarkerContent(content, position) {
   if (!content) return content;
-  applyFleetBubbleStyle(content, zoom);
-
-  const nameNode = content.querySelector('.fleet-map-marker-name');
-  if (nameNode) nameNode.textContent = position.robotName;
-
-  const batteryNode = content.querySelector('.fleet-map-marker-battery');
-  if (batteryNode) batteryNode.textContent = `电量 ${formatBattery(position.battery)}`;
-
-  const details = content.querySelector('.fleet-map-marker-details');
-  if (details) {
-    const rows = details.querySelectorAll('.fleet-map-marker-detail');
-    const values = [
-      formatNumber(position.lat, 2),
-      formatNumber(position.lng, 2),
-      formatHeading(position.heading),
-      typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无数据',
-    ];
-    rows.forEach((row, index) => {
-      const rowValue = row.querySelector('strong');
-      if (rowValue && values[index] !== undefined) rowValue.textContent = values[index];
-    });
-  }
 
   const heading = normalizeFleetHeading(position.heading);
   const icon = content.querySelector('.fleet-map-marker-icon');
@@ -522,11 +493,10 @@ function updateFleetMarkerContent(content, position, zoom) {
   return content;
 }
 
-function createFleetMarkerContent(position, zoom, onClick) {
+export function createFleetMarkerContent(position, onClick) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
   if (onClick) marker.classList.add('fleet-map-marker-clickable');
-  applyFleetBubbleStyle(marker, zoom);
   if (onClick) {
     marker.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -534,66 +504,14 @@ function createFleetMarkerContent(position, zoom, onClick) {
     });
   }
 
-  const bubble = document.createElement('div');
-  bubble.className = 'fleet-map-marker-bubble';
-
-  const name = document.createElement('strong');
-  name.className = 'fleet-map-marker-name';
-  name.textContent = position.robotName;
-
-  const battery = document.createElement('span');
-  battery.className = 'fleet-map-marker-battery';
-  battery.textContent = `电量 ${formatBattery(position.battery)}`;
-
-  const hoverDetails = document.createElement('div');
-  hoverDetails.className = 'fleet-map-marker-details';
-  [
-    ['纬度', formatNumber(position.lat, 2)],
-    ['经度', formatNumber(position.lng, 2)],
-    ['航向', formatHeading(position.heading)],
-    ['速度', typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无数据'],
-  ].forEach(([label, value]) => {
-    const row = document.createElement('div');
-    row.className = 'fleet-map-marker-detail';
-    const rowLabel = document.createElement('span');
-    rowLabel.textContent = label;
-    const rowValue = document.createElement('strong');
-    rowValue.textContent = value;
-    row.append(rowLabel, rowValue);
-    hoverDetails.append(row);
-  });
-
   const icon = document.createElement('div');
   icon.className = 'fleet-map-marker-icon';
 
   const pulse = document.createElement('div');
   pulse.className = 'fleet-map-marker-pulse';
 
-  [bubble, icon].forEach((node) => {
-    node.addEventListener('mouseenter', () => marker.classList.add('fleet-map-marker-hover'));
-    node.addEventListener('mouseleave', () => marker.classList.remove('fleet-map-marker-hover'));
-  });
-
-  bubble.append(name, battery, hoverDetails);
-  marker.append(bubble, pulse, icon);
-  updateFleetMarkerContent(marker, position, zoom);
-
-  // 默认只显示船形图标，鼠标移到船上后再显示名称、电量和实时详情。
-  let hoverTimer;
-  const showMarkerDetails = () => {
-    window.clearTimeout(hoverTimer);
-    marker.classList.add('fleet-map-marker-hover');
-  };
-  const hideMarkerDetails = () => {
-    window.clearTimeout(hoverTimer);
-    hoverTimer = window.setTimeout(() => {
-      marker.classList.remove('fleet-map-marker-hover');
-    }, 120);
-  };
-  [bubble, icon].forEach((node) => {
-    node.addEventListener('mouseenter', showMarkerDetails);
-    node.addEventListener('mouseleave', hideMarkerDetails);
-  });
+  marker.append(pulse, icon);
+  updateFleetMarkerContent(marker, position);
 
   return marker;
 }
@@ -622,7 +540,7 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], previewRoutePoints = [], trackLines = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
+function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], pendingRoutePoint = null, previewRoutePoints = [], trackLines = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -634,7 +552,6 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
   const trackPolylineRefs = useRef([]);
   const perceptionPointMarkersRef = useRef([]);
   const mapClickHandlerRef = useRef(null);
-  const zoomHandlerRef = useRef(null);
   const centeredSeqRef = useRef(centerSeq);
   const [mapError, setMapError] = useState('');
 
@@ -659,11 +576,6 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       mapRef.current.off('click', mapClickHandlerRef.current);
     }
     mapClickHandlerRef.current = null;
-    if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
-      mapRef.current.off('zoomchange', zoomHandlerRef.current);
-      mapRef.current.off('zoomend', zoomHandlerRef.current);
-    }
-    zoomHandlerRef.current = null;
     safelyDestroyMap(mapRef.current);
     mapRef.current = null;
   }, []);
@@ -690,11 +602,6 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         mapRef.current.off('click', mapClickHandlerRef.current);
       }
       mapClickHandlerRef.current = null;
-      if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
-        mapRef.current.off('zoomchange', zoomHandlerRef.current);
-        mapRef.current.off('zoomend', zoomHandlerRef.current);
-      }
-      zoomHandlerRef.current = null;
       safelyDestroyMap(mapRef.current);
       mapRef.current = null;
       setMapError('');
@@ -727,13 +634,6 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             ],
           });
           centeredSeqRef.current = centerSeq;
-          if (typeof mapRef.current.on === 'function') {
-            zoomHandlerRef.current = () => {
-              if (markerContentRef.current) applyFleetBubbleStyle(markerContentRef.current, getMapZoom(mapRef.current));
-            };
-            mapRef.current.on('zoomchange', zoomHandlerRef.current);
-            mapRef.current.on('zoomend', zoomHandlerRef.current);
-          }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
 
@@ -742,9 +642,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           centeredSeqRef.current = centerSeq;
         }
 
-        const currentZoom = getMapZoom(mapRef.current);
         if (!markerRef.current) {
-          markerContentRef.current = createFleetMarkerContent(position, currentZoom);
+          markerContentRef.current = createFleetMarkerContent(position);
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
@@ -753,7 +652,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           });
         } else {
           markerRef.current.setPosition(nextPosition);
-          markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position, currentZoom);
+          markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position);
         }
 
         if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -805,7 +704,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             const shorelinePolyline = new AMap.Polyline({
               map: mapRef.current,
               path: section.path,
-              strokeColor: isBridge ? '#d06dff' : section.side === 0 ? '#00d4ff' : '#38ef9a',
+              strokeColor: isBridge ? '#d06dff' : '#38ef9a',
               strokeOpacity: isBridge ? 1 : 0.95,
               strokeWeight: isBridge ? 6 : 4,
               strokeStyle: isBridge ? 'dashed' : 'solid',
@@ -817,8 +716,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           });
         }
 
-        const routeLinePoints = planningMode && draftRoutePoints.length
-          ? [mapPosition, ...draftRoutePoints]
+        const routeLinePoints = planningMode
+          ? getPlanningPreviewMapPoints(mapPosition, draftRoutePoints, pendingRoutePoint)
           : previewRoutePoints.length
             ? [mapPosition, ...previewRoutePoints]
             : [];
@@ -835,12 +734,15 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             zIndex: 80,
           });
         }
-        const routeMarkerPoints = planningMode ? draftRoutePoints : previewRoutePoints;
+        const routeMarkerPoints = planningMode
+          ? [...draftRoutePoints, ...(pendingRoutePoint ? [pendingRoutePoint] : [])]
+          : previewRoutePoints;
         routeMarkerPoints.forEach((point, index) => {
+          const isPending = planningMode && Boolean(pendingRoutePoint) && index === draftRoutePoints.length;
           const pointMarker = new AMap.Marker({
             map: mapRef.current,
             position: [point.lng, point.lat],
-            content: createRoutePointContent(index, planningMode),
+            content: createRoutePointContent(index, planningMode, 'standard', false, isPending),
             offset: new AMap.Pixel(-12, -12),
             zIndex: 120,
           });
@@ -849,7 +751,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
 
         // 感知航线是本地演示数据，不写入数据库，也不参与下发和删除。
         if (perceptionRoutePoints.length >= 2) {
-          const perceptionPath = perceptionRoutePoints.map((point) => [point.lng, point.lat]);
+          const perceptionPath = getPerceptionRouteMapPath(mapPosition, perceptionRoutePoints).map((point) => [point.lng, point.lat]);
           [
             { strokeColor: '#5b4300', strokeOpacity: 0.8, strokeWeight: 10, zIndex: 90 },
             { strokeColor: '#ffc928', strokeOpacity: 1, strokeWeight: 5, zIndex: 91 },
@@ -885,7 +787,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, draftRoutePoints, previewRoutePoints, trackLines, perceptionRoutePoints, showShoreline, onMapPoint]);
+  }, [position, centerSeq, planningMode, draftRoutePoints, pendingRoutePoint, previewRoutePoints, trackLines, perceptionRoutePoints, showShoreline, onMapPoint]);
 
   if (!hasCoordinates(position)) {
     return (
@@ -913,18 +815,12 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
-  const zoomHandlerRef = useRef(null);
   const [mapError, setMapError] = useState('');
 
   useEffect(() => () => {
     markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
     markersRef.current.clear();
     resetFleetHeadingAngles();
-    if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
-      mapRef.current.off('zoomchange', zoomHandlerRef.current);
-      mapRef.current.off('zoomend', zoomHandlerRef.current);
-    }
-    zoomHandlerRef.current = null;
     safelyDestroyMap(mapRef.current);
     mapRef.current = null;
   }, []);
@@ -934,11 +830,6 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
       markersRef.current.forEach((markerGroup) => safelyRemoveMarker(markerGroup.marker));
       markersRef.current.clear();
       resetFleetHeadingAngles();
-      if (mapRef.current && zoomHandlerRef.current && typeof mapRef.current.off === 'function') {
-        mapRef.current.off('zoomchange', zoomHandlerRef.current);
-        mapRef.current.off('zoomend', zoomHandlerRef.current);
-      }
-      zoomHandlerRef.current = null;
       safelyDestroyMap(mapRef.current);
       mapRef.current = null;
       setMapError('');
@@ -967,17 +858,9 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
               new AMap.TileLayer.RoadNet({ zIndex: 2, detectRetina: true })
             ],
           });
-          if (typeof mapRef.current.on === 'function') {
-            zoomHandlerRef.current = () => {
-              updateFleetMarkerBubbleScales(markersRef.current, getMapZoom(mapRef.current));
-            };
-            mapRef.current.on('zoomchange', zoomHandlerRef.current);
-            mapRef.current.on('zoomend', zoomHandlerRef.current);
-          }
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
 
-        const currentZoom = getMapZoom(mapRef.current);
         const activeNames = new Set();
         positions.forEach((position) => {
           const markerKey = position.robotName;
@@ -988,11 +871,11 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
           const existingMarkerGroup = markersRef.current.get(markerKey);
           if (existingMarkerGroup) {
             existingMarkerGroup.marker.setPosition(nextPosition);
-            existingMarkerGroup.content = updateFleetMarkerContent(existingMarkerGroup.content, position, currentZoom);
+            existingMarkerGroup.content = updateFleetMarkerContent(existingMarkerGroup.content, position);
             return;
           }
 
-          const markerContent = createFleetMarkerContent(position, currentZoom, onOpenDeviceDetail);
+          const markerContent = createFleetMarkerContent(position, onOpenDeviceDetail);
 
           const marker = new AMap.Marker({
             map: mapRef.current,
@@ -1811,6 +1694,23 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
+  async function sendPerception() {
+    if (!routeDeviceId || isRouteBusy) return;
+    if (!showPerceptionRoute) {
+      onToast?.('请先查看感知航线再下发');
+      return;
+    }
+    setRouteAction('send:perception');
+    try {
+      const result = await sendPerceptionRoute(routeDeviceId, DEMO_PERCEPTION_ROUTE);
+      onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
+    } catch (error) {
+      onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
   async function stopTask() {
     if (!routeDeviceId || isRouteBusy) return;
     setRouteAction('stop');
@@ -1866,6 +1766,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             centerSeq={mapCenterSeq}
             planningMode={planningMode}
             draftRoutePoints={draftRoutePoints}
+            pendingRoutePoint={pendingRoutePoint}
             previewRoutePoints={previewRoutePoints}
             trackLines={trackLines}
             perceptionRoutePoints={showPerceptionRoute ? PERCEPTION_ROUTE_MAP_POINTS : []}
@@ -1878,7 +1779,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
             ))}
             {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />左岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
           </div>
@@ -2023,6 +1924,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteDurationSeconds(DEMO_PERCEPTION_ROUTE.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={togglePerceptionRoutePreview}>{showPerceptionRoute ? '取消查看' : '查看'}</button>
+                    <button type="button" onClick={sendPerception} disabled={!showPerceptionRoute || isRouteBusy}>{routeAction === 'send:perception' ? '下发中' : '下发'}</button>
                     <span className="route-table-local-note">本地演示</span>
                   </td>
                 </tr>

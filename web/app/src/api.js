@@ -356,6 +356,35 @@ function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) 
   return payload;
 }
 
+function validatePerceptionRouteSendResponse(payload, expectedRobotName) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  if (
+    payload.status !== 'published' ||
+    payload.target !== expectedRobotName ||
+    !Array.isArray(payload.protocol) ||
+    !Number.isInteger(payload.pointCount) || payload.pointCount < 2
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+
+  const protocol = payload.protocol;
+  if (
+    protocol.length !== 2 + payload.pointCount * 3 ||
+    protocol[0] !== 40 ||
+    protocol[1] !== payload.pointCount ||
+    protocol.slice(2).some((value) => typeof value !== 'number' || !Number.isFinite(value))
+  ) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  for (let index = 2; index < protocol.length; index += 3) {
+    if (protocol[index + 2] !== 2) throw createRouteError('REQUEST_FAILED');
+  }
+
+  return payload;
+}
+
 function validateCameraPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw createCameraError('REQUEST_FAILED');
@@ -600,6 +629,52 @@ export async function sendRobotRoute(deviceName, routeId, signal) {
 
     const payload = await parseJSONResponse(response, createRouteError);
     return validateRouteSendResponse(payload, robotName, routeId);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function sendPerceptionRoute(deviceName, route, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  const points = Array.isArray(route?.points) ? route.points : [];
+  if (!robotName || points.length < 2) throw createRouteError('INVALID_ROUTE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/perception-route/send`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coordinateSystem: route.coordinateSystem || 'WGS84',
+          points: points.map((point, index) => ({
+            seq: index + 1,
+            lng: point.lng,
+            lat: point.lat,
+            speedKnots: 2,
+          })),
+        }),
+        signal: requestSignal,
+        cache: 'no-store',
+      },
+    );
+
+    if (response.status === 400) throw createRouteError('INVALID_ROUTE');
+    if (response.status === 404) throw createRouteError('NOT_FOUND');
+    if (response.status === 503) throw createRouteError('PUBLISH_FAILED');
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok) throw createRouteError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createRouteError);
+    return validatePerceptionRouteSendResponse(payload, robotName);
   } catch (error) {
     if (error.code) throw error;
     if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
