@@ -689,7 +689,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             path: trackLine.path,
             strokeColor: trackLine.color || '#e5484d',
             strokeOpacity: 1,
-            strokeWeight: 2.6,
+            strokeWeight: 2,
             strokeStyle: 'solid',
             lineJoin: 'round',
             lineCap: 'round',
@@ -727,7 +727,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
             path: routeLinePoints.map((point) => [point.lng, point.lat]),
             strokeColor: planningMode ? '#18a999' : '#0b7a6f',
             strokeOpacity: 0.95,
-            strokeWeight: 5,
+            strokeWeight: 3,
             strokeStyle: planningMode ? 'dashed' : 'solid',
             lineJoin: 'round',
             lineCap: 'round',
@@ -753,8 +753,8 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         if (perceptionRoutePoints.length >= 2) {
           const perceptionPath = getPerceptionRouteMapPath(mapPosition, perceptionRoutePoints).map((point) => [point.lng, point.lat]);
           [
-            { strokeColor: '#5b4300', strokeOpacity: 0.8, strokeWeight: 10, zIndex: 90 },
-            { strokeColor: '#ffc928', strokeOpacity: 1, strokeWeight: 5, zIndex: 91 },
+            { strokeColor: '#5b4300', strokeOpacity: 0.8, strokeWeight: 6, zIndex: 90 },
+            { strokeColor: '#ffc928', strokeOpacity: 1, strokeWeight: 3, zIndex: 91 },
           ].forEach((lineStyle) => {
             const perceptionPolyline = new AMap.Polyline({
               map: mapRef.current,
