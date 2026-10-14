@@ -1696,10 +1696,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
 
   async function sendPerception() {
     if (!routeDeviceId || isRouteBusy) return;
-    if (!showPerceptionRoute) {
-      onToast?.('请先查看感知航线再下发');
-      return;
-    }
     setRouteAction('send:perception');
     try {
       const result = await sendPerceptionRoute(routeDeviceId, DEMO_PERCEPTION_ROUTE);
