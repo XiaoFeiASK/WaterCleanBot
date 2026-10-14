@@ -493,9 +493,10 @@ function updateFleetMarkerContent(content, position) {
   return content;
 }
 
-export function createFleetMarkerContent(position, onClick) {
+export function createFleetMarkerContent(position, onClick, options = {}) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
+  if (options.compact) marker.classList.add('fleet-map-marker-compact');
   if (onClick) marker.classList.add('fleet-map-marker-clickable');
   if (onClick) {
     marker.addEventListener('click', (event) => {
@@ -514,6 +515,25 @@ export function createFleetMarkerContent(position, onClick) {
   updateFleetMarkerContent(marker, position);
 
   return marker;
+}
+
+// 高德会为自定义 content 生成额外的 .amap-marker 容器；规划模式下不能让它覆盖地图点击区域。
+function disableFleetMarkerHitArea(content) {
+  if (!content) return false;
+
+  content.style.setProperty('pointer-events', 'none', 'important');
+  const host = content.closest?.('.amap-marker');
+  if (!host) return false;
+
+  host.style.setProperty('pointer-events', 'none', 'important');
+  host.style.setProperty('cursor', 'default', 'important');
+  return true;
+}
+
+function scheduleFleetMarkerHitAreaDisable(content) {
+  disableFleetMarkerHitArea(content);
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return;
+  window.requestAnimationFrame(() => disableFleetMarkerHitArea(content));
 }
 
 function getAverage(values) {
@@ -642,18 +662,28 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           centeredSeqRef.current = centerSeq;
         }
 
+        const markerShouldBeCompact = planningMode;
+        const markerIsCompact = markerContentRef.current?.classList.contains('fleet-map-marker-compact') === true;
+        if (markerRef.current && markerContentRef.current && markerIsCompact !== markerShouldBeCompact) {
+          safelyRemoveMarker(markerRef.current);
+          markerRef.current = null;
+          markerContentRef.current = null;
+        }
+
         if (!markerRef.current) {
-          markerContentRef.current = createFleetMarkerContent(position);
+          markerContentRef.current = createFleetMarkerContent(position, undefined, { compact: planningMode });
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
             content: markerContentRef.current,
-            offset: new AMap.Pixel(-64, -88),
+            offset: new AMap.Pixel(planningMode ? -18 : -64, planningMode ? -44 : -88),
             clickable: false,
           });
+          if (planningMode) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         } else {
           markerRef.current.setPosition(nextPosition);
           markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position);
+          if (planningMode) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         }
 
         if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
