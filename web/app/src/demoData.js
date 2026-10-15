@@ -1,3 +1,9 @@
+import nearBankWaypoints from './data/near_bank_waypoints_lonlat.json';
+import { getNearBankReferenceSections } from './shorelines';
+
+// 新增 WGS84 近岸参考线，与原始河岸边界叠加展示。
+export const DEMO_NEAR_BANK_REFERENCE_SECTIONS = Object.freeze(getNearBankReferenceSections(nearBankWaypoints));
+
 // 本地演示数据：由 2026-10-09 WGS84 岸线/航点文件生成，后续接入 MQTT 时替换。
 export const DEMO_SHORELINE_SECTIONS = Object.freeze([
   {

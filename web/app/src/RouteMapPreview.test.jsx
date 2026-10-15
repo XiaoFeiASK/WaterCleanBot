@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
+import nearBankWaypoints from './data/near_bank_waypoints_lonlat.json';
+import { DEMO_NEAR_BANK_REFERENCE_SECTIONS } from './demoData';
+import { getNearBankReferenceSections } from './shorelines';
 import { createFleetMarkerContent, getPerceptionRouteMapPath, getPlanningPreviewMapPoints } from './App';
 
 const boat = { lng: 121.429487, lat: 31.289906 };
@@ -60,5 +63,42 @@ describe('fleet marker content', () => {
     const content = createFleetMarkerContent({ robotName: 'USV-001', heading: 90 }, undefined, { compact: true });
     expect(content.classList.contains('fleet-map-marker-compact')).toBe(true);
     expect(content.querySelector('.fleet-map-marker-icon').style.bottom).toBe('');
+  });
+});
+
+describe('near-bank reference overlay', () => {
+  it('preserves all 36 WGS84 points in separate left and right reference lines', () => {
+    expect(nearBankWaypoints.datum).toBe('WGS84');
+    expect(DEMO_NEAR_BANK_REFERENCE_SECTIONS).toHaveLength(2);
+    for (const [index, route] of nearBankWaypoints.routes.entries()) {
+      expect(DEMO_NEAR_BANK_REFERENCE_SECTIONS[index]).toMatchObject({
+        side: route.side,
+        kind: 'near-bank-reference',
+        points: route.points.map((point) => [point.longitude_deg, point.latitude_deg]),
+      });
+    }
+    expect(DEMO_NEAR_BANK_REFERENCE_SECTIONS.map((section) => section.points.length)).toEqual([19, 17]);
+  });
+
+  it('uses reference connectivity even when the navigation link is unverified', () => {
+    const points = nearBankWaypoints.routes[0].points.slice(0, 2);
+    expect(points[1].can_connect_previous).toBe(false);
+    expect(points[1].reference_can_connect_previous).toBe(true);
+    const sections = getNearBankReferenceSections({ routes: [{ bank_name: 'left', side: 1, points }] });
+    expect(sections).toHaveLength(1);
+    expect(sections[0].points).toHaveLength(2);
+  });
+
+  it('keeps gaps and reference segment boundaries disconnected', () => {
+    const point = nearBankWaypoints.routes[0].points[0];
+    const points = [
+      point,
+      { ...point, reference_can_connect_previous: false },
+      { ...point, reference_can_connect_previous: true, reference_segment_id: 2 },
+      { ...point, reference_can_connect_previous: true, reference_segment_id: 2 },
+    ];
+    const sections = getNearBankReferenceSections({ routes: [{ bank_name: 'left', side: 1, points }] });
+    expect(sections.map((section) => section.points.length)).toEqual([1, 1, 2]);
+    expect(new Set(sections.map((section) => section.id)).size).toBe(3);
   });
 });

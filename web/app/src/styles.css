@@ -264,6 +264,8 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .legend-dot-shoreline-left { background: #38ef9a; }
 .legend-dot-shoreline-right { background: #38ef9a; }
 .legend-dot-bridge { background: #d06dff; }
+.legend-dot-near-bank-left { background: repeating-linear-gradient(to right, #ff963b 0 5px, transparent 5px 8px); }
+.legend-dot-near-bank-right { background: repeating-linear-gradient(to right, #36c7f4 0 5px, transparent 5px 8px); }
 .legend-line { width: 18px; height: 3px; display: inline-block; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,.14); }
 .track-list-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-top: 0; background: rgba(255,253,246,.96); }
 .track-list-heading { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 18px; border-bottom: 1px solid rgba(19,38,41,.08); }

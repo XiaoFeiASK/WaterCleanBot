@@ -60,3 +60,9 @@ POST /api/robots/{robotName}/routes/{routeId}/send
 ```
 
 规划模式下点击地图后必须先填写“到该点速度（节）”，确认后航点才会进入草稿。保存时前端提交 `GCJ02` 坐标和 `speedKnots`，后端保存到数据库；下发时后端编码为 `[40,点数,经度,纬度,速度,...]`，并与遥控指令统一发布到 `usv/{robotName}/web` Topic。
+
+## 河道边界演示
+
+在线地图点击“河道边界”后，同时展示原有河岸线、桥孔边界和新增的近岸参考线。左岸近岸参考线为橙色虚线，右岸为蓝色虚线。
+
+近岸数据保存在 `src/data/near_bank_waypoints_lonlat.json`，包含 WGS84 左岸 19 个点、右岸 17 个点；展示时转换为高德地图坐标。参考线按 `reference_segment_id` 和 `reference_can_connect_previous` 分段，`segment_id`、`can_connect_previous` 是导航连通信息。更新演示数据时可替换此 JSON 文件，保留相同结构和 WGS84 坐标系。

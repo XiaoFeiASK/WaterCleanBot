@@ -59,6 +59,7 @@ import {
 import { wgs84ToGcj02 } from './coordinates';
 import {
   DEMO_PERCEPTION_ROUTE,
+  DEMO_NEAR_BANK_REFERENCE_SECTIONS,
   DEMO_SHORELINE_SECTIONS,
   DEMO_TEST_DEVICE_NAME,
   DEMO_TEST_POSITION,
@@ -339,7 +340,7 @@ function getRouteMapPoints(route) {
   return route.points;
 }
 
-const SHORELINE_MAP_SECTIONS = DEMO_SHORELINE_SECTIONS.map((section) => ({
+const SHORELINE_MAP_SECTIONS = [...DEMO_SHORELINE_SECTIONS, ...DEMO_NEAR_BANK_REFERENCE_SECTIONS].map((section) => ({
   ...section,
   path: section.points.map(([lng, lat]) => {
     const mapPoint = wgs84ToGcj02({ lng, lat });
@@ -732,16 +733,18 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         if (showShoreline) {
           SHORELINE_MAP_SECTIONS.forEach((section) => {
             const isBridge = section.kind === 3;
+            const isNearBankReference = section.kind === 'near-bank-reference';
+            const referenceColor = section.side === 1 ? '#ff963b' : '#36c7f4';
             const shorelinePolyline = new AMap.Polyline({
               map: mapRef.current,
               path: section.path,
-              strokeColor: isBridge ? '#d06dff' : '#38ef9a',
+              strokeColor: isNearBankReference ? referenceColor : isBridge ? '#d06dff' : '#38ef9a',
               strokeOpacity: isBridge ? 1 : 0.95,
-              strokeWeight: isBridge ? 6 : 4,
-              strokeStyle: isBridge ? 'dashed' : 'solid',
+              strokeWeight: isNearBankReference ? 3 : isBridge ? 6 : 4,
+              strokeStyle: isBridge || isNearBankReference ? 'dashed' : 'solid',
               lineJoin: 'round',
               lineCap: 'round',
-              zIndex: isBridge ? 70 : 60,
+              zIndex: isNearBankReference ? 65 : isBridge ? 70 : 60,
             });
             shorelinePolylineRefs.current.push(shorelinePolyline);
           });
@@ -1806,9 +1809,11 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
             ))}
             {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />左岸边界</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-near-bank-left" />左岸近岸参考线</span>}
+            {showShoreline && <span><i className="legend-dot legend-dot-near-bank-right" />右岸近岸参考线</span>}
           </div>
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
