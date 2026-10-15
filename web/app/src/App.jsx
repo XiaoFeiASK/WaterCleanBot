@@ -742,6 +742,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
               strokeOpacity: isBridge ? 1 : 0.95,
               strokeWeight: isNearBankReference ? 3 : isBridge ? 6 : 4,
               strokeStyle: isBridge || isNearBankReference ? 'dashed' : 'solid',
+              strokeDasharray: isBridge || isNearBankReference ? [10, 5] : undefined,
               lineJoin: 'round',
               lineCap: 'round',
               zIndex: isNearBankReference ? 65 : isBridge ? 70 : 60,
