@@ -221,13 +221,15 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .online-map-card,
 .route-table-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-radius: 18px; background: rgba(255,253,246,.9); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
 .online-map-toolbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid rgba(19,38,41,.1); background: rgba(255,253,246,.94); }
-.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 12px; width: min(328px, calc(100% - 32px)); padding: 15px 16px; border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; }
+.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 12px; width: min(360px, calc(100% - 32px)); padding: 15px 16px; border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; }
 .telemetry-primary { grid-column: span 3; display: grid; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid rgba(19,38,41,.1); }
 .telemetry-primary span, .telemetry-item span { color: var(--muted); font-size: 11px; }
 .telemetry-primary strong { color: var(--teal-dark); font-size: 19px; line-height: 1.1; }
 .telemetry-item { grid-column: span 2; display: grid; gap: 3px; min-width: 0; }
 .telemetry-item-wide { grid-column: 1 / -1; }
 .telemetry-item strong { overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.telemetry-item.telemetry-throttle { grid-column: span 3; }
+.telemetry-item.telemetry-throttle strong { color: var(--water); }
 .online-map-toolbar h3,
 .route-table-heading h3 { margin: 0; color: var(--ink); font-size: 18px; letter-spacing: -.02em; }
 .online-map-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }

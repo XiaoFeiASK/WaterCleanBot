@@ -145,7 +145,7 @@ const REMOTE_SWITCH_COMMANDS = Object.freeze([
 ]);
 
 const CRITICAL_SWITCH_COMMANDS = Object.freeze([
-  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '自主', offText: '手动', icon: ShipWheel, tone: 'mode' },
+  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '网页端', offText: '应用端', icon: ShipWheel, tone: 'mode' },
   { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电', icon: Power, tone: 'power' },
 ]);
 
@@ -1835,6 +1835,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <span>电池电量</span>
               <strong>{formatBattery(position?.battery)}</strong>
             </div>
+            <div className="telemetry-item telemetry-throttle">
+              <span>左油门反馈</span>
+              <strong>{position?.leftThrottle != null ? `${position.leftThrottle}%` : '--'}</strong>
+            </div>
+            <div className="telemetry-item telemetry-throttle">
+              <span>右油门反馈</span>
+              <strong>{position?.rightThrottle != null ? `${position.rightThrottle}%` : '--'}</strong>
+            </div>
           </div>
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
@@ -2254,8 +2262,9 @@ export function RemoteControlPanel({ position, onToast }) {
     if (!position) return;
     setValues((current) => ({
       ...current,
-      ...(position.leftThrottle == null ? {} : { THROTTLE_L: position.leftThrottle }),
-      ...(position.rightThrottle == null ? {} : { THROTTLE_R: position.rightThrottle }),
+      // 油门反馈已移除，避免覆盖用户输入
+      // ...(position.leftThrottle == null ? {} : { THROTTLE_L: position.leftThrottle }),
+      // ...(position.rightThrottle == null ? {} : { THROTTLE_R: position.rightThrottle }),
       ...(position.actuators ? {
         BRUSH_L: position.actuators.leftBrush ?? current.BRUSH_L,
         BRUSH_R: position.actuators.rightBrush ?? current.BRUSH_R,
@@ -2265,7 +2274,7 @@ export function RemoteControlPanel({ position, onToast }) {
         HATCH_CYLINDER: position.actuators.hatchCylinder ?? current.HATCH_CYLINDER,
       } : {}),
     }));
-  }, [position?.leftThrottle, position?.rightThrottle, position?.actuators]);
+  }, [position?.actuators]);
 
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
     if (!hasRemoteTarget) return false;
