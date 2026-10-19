@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import { TotalDistanceDisplay } from './App';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import { LocationCoordinates, TotalDistanceDisplay } from './App';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('total distance display', () => {
   it('formats total distance in kilometers', () => {
@@ -21,5 +21,36 @@ describe('total distance display', () => {
   it('shows an empty state before distance feedback arrives', () => {
     render(<TotalDistanceDisplay />);
     expect(screen.getByLabelText('总航程').textContent).toContain('暂无数据');
+  });
+});
+
+
+describe('last known location display', () => {
+  it('keeps last coordinates when updates stop and does not refresh their age from status feedback', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    const position = { lat: 31.2, lng: 121.4, positionUpdatedAtMs: Date.now(), receivedAtMs: Date.now() };
+    const { rerender } = render(<LocationCoordinates position={position} />);
+    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.200000, 121.400000');
+    expect(screen.getByText(/最近定位/)).toBeTruthy();
+    act(() => vi.advanceTimersByTime(35000));
+    expect(screen.getByText(/最后有效位置（非实时）/)).toBeTruthy();
+    const lastLocationText = screen.getByLabelText('设备经纬度').textContent;
+    rerender(<LocationCoordinates position={{ ...position, receivedAtMs: Date.now(), battery: 33 }} />);
+    expect(screen.getByLabelText('设备经纬度').textContent).toBe(lastLocationText);
+    rerender(<LocationCoordinates position={{ ...position, positionUpdatedAtMs: Date.now(), lat: 31.3 }} />);
+    expect(screen.getByText(/最近定位/)).toBeTruthy();
+    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.300000, 121.400000');
+  });
+
+  it('shows no location for an unknown or legacy zero fix and labels offline coordinates as historical', () => {
+    const { rerender } = render(<LocationCoordinates position={{ lat: 0, lng: 0 }} />);
+    expect(screen.getByText('尚无有效定位')).toBeTruthy();
+    expect(screen.queryByText('0.000000, 0.000000')).toBeNull();
+    rerender(<LocationCoordinates position={{ lat: null, lng: null }} />);
+    expect(screen.getByText('尚无有效定位')).toBeTruthy();
+    rerender(<LocationCoordinates position={{ lat: 31.2, lng: 121.4, positionUpdatedAtMs: Date.now(), heartbeatStatus: 'offline' }} />);
+    expect(screen.getByText(/最后有效位置（非实时）/)).toBeTruthy();
+    expect(screen.getByText('31.200000, 121.400000')).toBeTruthy();
   });
 });

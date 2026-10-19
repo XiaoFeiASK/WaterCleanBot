@@ -39,14 +39,14 @@ func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool)
 // 调用方：Subscriber.handleMessage 在收到 MQTT 消息后解析它。
 // 会调用：Position 将合法报文转换成 HTTP 接口已有的 location.Position。
 type USVData struct {
-	USVID     string  `json:"usvId"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	Heading   float64 `json:"heading"`
-	Speed     float64 `json:"speed"`
-	Battery   float64 `json:"battery"`
-	Status    int     `json:"status"`
-	Timestamp int64   `json:"timestamp"`
+	USVID     string   `json:"usvId"`
+	Lat       *float64 `json:"lat"`
+	Lng       *float64 `json:"lng"`
+	Heading   float64  `json:"heading"`
+	Speed     float64  `json:"speed"`
+	Battery   float64  `json:"battery"`
+	Status    int      `json:"status"`
+	Timestamp int64    `json:"timestamp"`
 }
 
 // ParseUSVData 解析并校验一条 MQTT 遥测消息。
@@ -77,7 +77,7 @@ func ParseUSVData(topic string, payload []byte) (USVData, error) {
 
 func sanitizeTelemetryPayload(payload []byte) []byte {
 	// 设备端当前会上报 battery:nan。nan 不是合法 JSON 数字，先转成 null；
-	// 对 float64 字段来说 null 会解成 0，保证 HTTP JSON 响应仍是可编码的有限数值。
+	// 经纬度使用指针保留 null；其余 float64 字段回落为 0，保证响应可编码。
 	return []byte(nonFiniteJSONNumberPattern.ReplaceAllString(string(payload), `${1}null${3}`))
 }
 
@@ -86,10 +86,10 @@ func sanitizeTelemetryPayload(payload []byte) []byte {
 // 调用方：ParseUSVData。
 // 会调用：isFiniteNumber。
 func (d USVData) Validate() error {
-	if !isFiniteNumber(d.Lat) || d.Lat < -90 || d.Lat > 90 {
+	if d.Lat != nil && (!isFiniteNumber(*d.Lat) || *d.Lat < -90 || *d.Lat > 90) {
 		return fmt.Errorf("lat out of range: %v", d.Lat)
 	}
-	if !isFiniteNumber(d.Lng) || d.Lng < -180 || d.Lng > 180 {
+	if d.Lng != nil && (!isFiniteNumber(*d.Lng) || *d.Lng < -180 || *d.Lng > 180) {
 		return fmt.Errorf("lng out of range: %v", d.Lng)
 	}
 	if !isFiniteNumber(d.Heading) || d.Heading < 0 || d.Heading > 360 {
@@ -116,8 +116,8 @@ func (d USVData) Validate() error {
 func (d USVData) Position() location.Position {
 	return location.Position{
 		RobotName: d.USVID,
-		Lat:       location.Float(d.Lat),
-		Lng:       location.Float(d.Lng),
+		Lat:       d.Lat,
+		Lng:       d.Lng,
 		Heading:   location.Float(d.Heading),
 		Speed:     location.Float(d.Speed),
 		Battery:   location.Float(d.Battery),

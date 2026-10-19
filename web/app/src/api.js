@@ -226,7 +226,9 @@ export const createRobot = (robotName) => mutateRobot('POST', robotName.trim());
 export const deleteRobot = (robotName) => mutateRobot('DELETE', robotName);
 
 export function hasCoordinates(position) {
-  return Number.isFinite(position?.lat) && Number.isFinite(position?.lng);
+  return Number.isFinite(position?.lat) && Math.abs(position.lat) <= 90 &&
+    Number.isFinite(position?.lng) && Math.abs(position.lng) <= 180 &&
+    !(position.lat === 0 && position.lng === 0);
 }
 
 export function isRobotOnline(position, now = Date.now()) {

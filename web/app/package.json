@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test:coordinates": "node --test src/coordinates.test.js src/tracks.test.js",
     "test:video-proxy": "node --test video-proxy.test.js",
-    "test": "npm run test:video-proxy && vitest run src/auth-api.test.js src/roles.test.js src/CommandControls.test.jsx src/App.remote-controls.test.jsx src/TotalDistanceDisplay.test.jsx src/fleet-api.test.js src/FleetManagement.test.jsx src/TrackManagement.test.jsx src/PerceptionRoutePreview.test.js src/RouteMapPreview.test.jsx src/route-api.test.js",
+    "test": "npm run test:video-proxy && vitest run src/auth-api.test.js src/roles.test.js src/CommandControls.test.jsx src/App.remote-controls.test.jsx src/TotalDistanceDisplay.test.jsx src/fleet-api.test.js src/FleetManagement.test.jsx src/TrackManagement.test.jsx src/PerceptionRoutePreview.test.js src/RouteMapPreview.test.jsx src/App.route-planning.test.jsx src/route-api.test.js src/shoreline-api.test.js src/shorelines.test.js src/ShorelineManager.test.jsx src/LocationMap.shoreline.test.jsx src/usePublicShoreline.test.jsx",
     "test:all": "npm run test:coordinates && npm run test"
   },
   "dependencies": {

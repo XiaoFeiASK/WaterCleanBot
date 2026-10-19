@@ -23,6 +23,7 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/logger"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/routes"
+	"github.com/XiaoFeiASK/WaterCleanBot/internal/shoreline"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/telemetry"
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/tracks"
 )
@@ -124,7 +125,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, trackRepository, trackService, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), authService, log),
+		Handler:           api.NewRouter(locationStore, commandPublisher, routeRepository, commandPublisher, trackRepository, trackService, api.NewSharedCameraStreams(cfg.CameraHLSBaseURL), authService, log, shoreline.NewRepository(db)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

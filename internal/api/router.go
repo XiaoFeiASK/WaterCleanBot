@@ -8,8 +8,20 @@ import (
 	"net/http"
 )
 
-func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, routeRepository RouteRepository, routePublisher RoutePublisher, trackRepository TrackRepository, trackService TrackStarter, cameraStreams []CameraStream, authService *auth.Service, log *slog.Logger) http.Handler {
+func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, routeRepository RouteRepository, routePublisher RoutePublisher, trackRepository TrackRepository, trackService TrackStarter, cameraStreams []CameraStream, authService *auth.Service, log *slog.Logger, shorelineRepositories ...ShorelineRepository) http.Handler {
 	mux := http.NewServeMux()
+	var shorelineRepository ShorelineRepository
+	if len(shorelineRepositories) > 0 {
+		shorelineRepository = shorelineRepositories[0]
+	}
+	var shorelineAuth shorelineAuthenticator
+	if authService != nil {
+		shorelineAuth = authService
+	}
+	shorelineHandler := ShorelineHandler(shorelineRepository, shorelineAuth, log)
+	for _, method := range []string{"GET", "PUT", "DELETE"} {
+		mux.HandleFunc(method+" /api/shoreline", shorelineHandler)
+	}
 	mux.HandleFunc("POST /api/robots", CreateRobotHandler(store, log))
 	mux.HandleFunc("DELETE /api/robots/{robotName}", DeleteRobotHandler(store, log))
 	mux.HandleFunc("GET /api/robots/locations", RobotLocationsHandler(store))

@@ -46,14 +46,43 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-async function renderDetails() {
+async function renderDetails(expand = true) {
   render(<MemoryRouter><App /></MemoryRouter>);
   await act(async () => streamHandlers.onSnapshot([position]));
   await screen.findByText('历史轨迹');
-  return within(screen.getByLabelText('历史轨迹'));
+  const list = within(screen.getByLabelText('历史轨迹'));
+  if (expand) fireEvent.click(list.getByRole('button', { name: /展开/ }));
+  return list;
 }
 
 describe('track management', () => {
+  it('starts collapsed and keeps selected tracks when collapsed again', async () => {
+    const list = await renderDetails(false);
+    await waitFor(() => expect(list.getByText('1 条')).toBeTruthy());
+    const toggle = list.getByRole('button', { name: /展开/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(list.queryByRole('button', { name: /轨迹 1/ })).toBeNull();
+    fireEvent.click(toggle);
+    fireEvent.click(list.getByRole('button', { name: /轨迹 1/ }));
+    await waitFor(() => expect(fetchRobotTrackPoints).toHaveBeenCalledTimes(1));
+    fireEvent.click(toggle);
+    expect(list.getByText(/已显示 1 条/)).toBeTruthy();
+    expect(list.queryByRole('button', { name: /轨迹 1/ })).toBeNull();
+    fireEvent.click(toggle);
+    expect(list.getByRole('button', { name: /轨迹 1/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(fetchRobotTrackPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the recording status visible while collapsed', async () => {
+    fetchRobotTracks.mockResolvedValue([endedTrack, recordingTrack]);
+    const list = await renderDetails(false);
+    await waitFor(() => expect(list.getByText('正在记录 轨迹 2')).toBeTruthy());
+    expect(list.getByText('2 条')).toBeTruthy();
+    expect(list.queryByRole('button', { name: '全选' })).toBeNull();
+    expect(screen.getByRole('button', { name: '结束记录' })).toBeTruthy();
+    expect(endRobotTrack).not.toHaveBeenCalled();
+  });
+
   it('starts recording and shows an active recording state', async () => {
     createRobotTrack.mockResolvedValue(recordingTrack);
     const list = await renderDetails();
@@ -106,6 +135,7 @@ describe('track end recovery', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '开始记录' })).toBeTruthy());
     expect(screen.queryByRole('button', { name: '结束记录' })).toBeNull();
     const list = within(screen.getByLabelText('历史轨迹'));
+    fireEvent.click(list.getByRole('button', { name: /展开/ }));
     await waitFor(() => expect(list.getByRole('button', { name: /轨迹 2/ })).toBeTruthy());
     expect(list.getByRole('button', { name: '删除' })).toBeTruthy();
   });

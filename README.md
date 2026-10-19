@@ -114,6 +114,14 @@ WaterCleanBot/
 └─ README.md                        # 当前说明
 ```
 
+## 最后有效位置与停报
+
+运行期间，位置 HTTP 查询和 SSE 从内存读取；PostgreSQL 的 `robot_current_locations` 为每台船保留一行最后状态快照，后台默认每秒合并写入一次，并在后端启动时恢复到内存。MQTT 停报不会主动删除这条位置。
+
+经纬度缺失、非有限数、越界、`0,0`，以及导航反馈中 GNSS 解状态为 0 时，不覆盖最后有效坐标；电量、油门、航程等反馈仍可更新。保留的旧坐标不会作为新的轨迹采样点。单独为零的经度或纬度仍可作为合法坐标。
+
+`positionUpdatedAtMs` / 数据库 `position_updated_at_ms` 单独记录最后有效定位的接收时间，不跟随状态或心跳刷新。页面保留最后位置，超过 30 秒、心跳离线或 GNSS 无解时显示“最后有效位置（非实时）”；没有有效坐标则显示“尚无有效定位”，地图不定位到零点。迁移 `00007` 自动增加字段，旧数据首次升级以快照 `updated_at` 估算原位置时间；数据库中已经被覆盖的坐标无法通过这张单行快照表恢复，需要检查历史轨迹或等待新的有效定位。
+
 ## 实时定位链路
 
 ### 坐标系约定
@@ -232,18 +240,48 @@ MQTT telemetry / [18,...] webfeedback（有效 WGS-84 定位）
 
 轨迹点始终以 WGS-84 存储和传输，前端仅在高德地图渲染前转换为 GCJ-02，不做平滑或曲线拟合。
 
-## 本地运行
+## 公共河岸线
 
-一键启动本地 PostgreSQL/PostGIS 数据库：
+河岸线是全站共用、与设备无关的一套地图数据，存入 PostgreSQL `public_shoreline` 单行记录的 JSONB 字段；数据库是正式数据源，浏览器本地缓存不作为持久化来源。原始岸线及可选左岸、中心、右岸参考线按文件结构保存，不拆成逐点记录，也不改写核验字段。
 
-```powershell
-.\start-db.bat
+登录用户可在在线地图的“岸线管理”中选择同一 `session_id` 的 JSON 文件并预览。`shoreline_lonlat.json` 必传，三个 `*_waypoints_lonlat.json` 参考线可选。确认替换是整套覆盖：未上传的参考线会清空；应用不保留可回滚历史。删除会清除当前公共记录，但不会清理数据库常规备份或用户电脑上的源文件。
+
+服务端会复核 schema v3、WGS84、文件类型、左右侧别、坐标、状态及点数，并限制请求体为 20 MiB。修改与删除都携带预期版本，发生并发更新时返回 `409`，需要重新加载后再确认。接口要求登录：
+
+```text
+GET    /api/shoreline
+PUT    /api/shoreline   # {"expectedRevision": "...", "files": {"shoreline": {}, "left": {}, "center": {}, "right": {}}}
+DELETE /api/shoreline   # {"expectedRevision": "..."}
 ```
 
-启动本地 PostgreSQL/PostGIS 和 MQTT Broker：
+WGS84 原始坐标仅在前端交给高德地图绘制前转换为 GCJ-02。各轮廓、分段及左右岸不会跨段连接或闭合；参考线按参考连接标志分段。此图层只供查看，不构成通航核验，不会生成或下发无人艇航线。迁移 `00006_create_public_shoreline.sql` 会由后端启动时的 Goose 自动执行。
 
-```powershell
-docker compose up -d
+前端不再内置演示岸线或默认参考线。首次没有公共数据、删除成功后均显示空状态；取消预览恢复数据库中的正式图层，保存或删除失败时保留原数据。设备、轨迹和感知航线演示数据独立保留。
+
+## 本地运行
+
+macOS 可在 Finder 中双击项目根目录的 `.command` 文件，也可在终端执行：
+
+| 服务 | macOS | Windows |
+| --- | --- | --- |
+| PostgreSQL/PostGIS 数据库 | `./start-db.command` | `.\start-db.bat` |
+| 前端开发服务器 | `./start-frontend.command` | `.\start-frontend.bat` |
+| 本地 MQTT Broker | `./start-mqtt.command` | `.\start-mqtt.bat` |
+| 摄像头视频中转与转码 | `./start-video.command` | `.\start-video.bat` |
+
+启动数据库、MQTT 和视频前，请先打开 Docker Desktop 并等待其就绪；前端需要 Node.js 和 npm，首次启动会自动执行 `npm install`。Mac 脚本支持 Homebrew 常用路径以及 `~/.nvm/nvm.sh`（nvm 需设置默认 Node.js 版本），并会自动切换到项目目录。请保留 `scripts/start-common.sh`，它是四个 Mac 入口共用的辅助脚本。脚本完成或报错后按回车关闭窗口；前端持续运行，按 Ctrl+C 停止。
+
+如果复制项目后丢失执行权限，可在项目根目录执行一次：
+
+```bash
+chmod +x start-*.command scripts/start-common.sh
+```
+
+启动本地 PostgreSQL/PostGIS 和 MQTT Broker，需要分别执行两个入口（`docker-compose.yml` 仅包含数据库）：
+
+```bash
+./start-db.command
+./start-mqtt.command
 ```
 
 MQTT 本地端口：
@@ -255,8 +293,9 @@ WebSocket: 9001
 
 启动 Go 后端：
 
-```powershell
-copy .env.example .env
+如尚未创建 `.env`，macOS 执行 `cp .env.example .env`；Windows 执行 `copy .env.example .env`。根据需要修改配置后启动：
+
+```bash
 go run ./cmd/watercleanbot
 ```
 
@@ -269,9 +308,11 @@ http://localhost:8080/api/robots/清澜一号/location
 
 启动摄像头 HLS 中转服务：
 
-```powershell
-.\start-video.bat
+```bash
+./start-video.command
 ```
+
+Windows 使用 `.\start-video.bat`。
 
 需要在 `.env` 中配置 `CAMERA_FRONT_RTSP`、`CAMERA_REAR_RTSP` 和 `CAMERA_HLS_CDN_SECRET`：
 
@@ -290,7 +331,7 @@ http://localhost:8080/api/robots/清澜一号/location
 1. **必须转码 H.265 -> H.264**：摄像头输出 H.265/HEVC，Chrome/Edge 在 MSE 上无法解码 HEVC（只有 Safari 能放），因此浏览器会“播放失败”。`transcode-front` / `transcode-rear` 用 ffmpeg 把画面转成 H.264（`main` profile、每 1 秒一个关键帧），播放路径 `/front`、`/rear` 是转码后的输出；原始流在 `/frontraw`、`/rearraw`。
 2. **HLS 会话改用 CDN 密钥而非 cookie**：MediaMTX 默认用 `Secure+Partitioned` cookie 传递 HLS 会话，纯 HTTP 站点上该 cookie 会被浏览器丢弃，只能退化成 URL 里的 `?session=` 查询参数，一旦 cookie 与 URL 不同步就会返回 HTML 错误页导致播放失败。开启 `hlsCDNSecret` 后，站点 nginx 在每个 `/video/` 请求上注入 `Authorization: Bearer <CAMERA_HLS_CDN_SECRET>`，会话固定为按路径共享，不再依赖 cookie，也不再在播放列表里出现 `session=`。
 
-MediaMTX 常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）并开启 `hlsAlwaysRemux`：容器会一直保持摄像头 RTSP 连接并预生成 HLS 分片，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.bat` 会用 `--force-recreate` 重建 MediaMTX 与转码容器，确保 `.env` 修改后生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时把 `CAMERA_HLS_BASE_URL` 改成 `/video`，并在 nginx 加入 `deploy/nginx/watercleanbot-video.conf`（记得替换其中的 `__CAMERA_HLS_CDN_SECRET__`），让 `/video/` 反代到 `http://127.0.0.1:8888/` 并注入 Bearer 头。
+MediaMTX 常驻拉流（`MTX_PATHS_*_SOURCEONDEMAND=no`）并开启 `hlsAlwaysRemux`：容器会一直保持摄像头 RTSP 连接并预生成 HLS 分片，避免按需模式下每次无客户端就断开、下次请求重新拨号导致 10 秒以上冷启动和频繁超时失败。`start-video.command` / `start-video.bat` 会用 `--force-recreate` 重建 MediaMTX 与转码容器，确保 `.env` 修改后生效。后端接口 `GET /api/robots/{robotName}/cameras` 对所有合法设备名返回同一组浏览器播放地址，默认指向 MediaMTX HLS 端口 `http://localhost:8888`，不返回原始 RTSP 账号密码。生产部署时把 `CAMERA_HLS_BASE_URL` 改成 `/video`，并在 nginx 加入 `deploy/nginx/watercleanbot-video.conf`（记得替换其中的 `__CAMERA_HLS_CDN_SECRET__`），让 `/video/` 反代到 `http://127.0.0.1:8888/` 并注入 Bearer 头。
 
 ## 当前刻意不做
 

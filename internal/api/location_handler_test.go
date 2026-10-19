@@ -111,3 +111,26 @@ func readSSEEvent(t *testing.T, reader *bufio.Reader) (string, string) {
 		}
 	}
 }
+
+func TestOfflineHTTPAndSnapshotRetainLastFix(t *testing.T) {
+	store := location.NewStore()
+	store.LoadInitial([]location.Position{{RobotName: "boat", Lat: location.Float(31.2), Lng: location.Float(121.4), PositionUpdatedAtMS: 1000}})
+	store.Update(location.Position{RobotName: "boat", Lat: location.Float(0), Lng: location.Float(0), Battery: location.Float(33), ReceivedAtMS: 2000})
+	store.UpdateHeartbeat("boat", "offline", 0, 3)
+	request := httptest.NewRequest(http.MethodGet, "/api/robots/boat/location", nil)
+	request.SetPathValue("robotName", "boat")
+	response := httptest.NewRecorder()
+	RobotLocationHandler(store, slog.New(slog.NewTextHandler(io.Discard, nil)))(response, request)
+	var got location.Position
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("get last location: %d %s %v", response.Code, response.Body.String(), err)
+	}
+	if got.Lat == nil || got.Lng == nil || *got.Lat != 31.2 || *got.Lng != 121.4 || got.PositionUpdatedAtMS != 1000 || got.HeartbeatStatus != "offline" {
+		t.Fatalf("HTTP lost last fix: %+v", got)
+	}
+	snapshot, _, cancel := store.SubscribeWithSnapshot()
+	defer cancel()
+	if len(snapshot) != 1 || *snapshot[0].Lat != 31.2 || snapshot[0].PositionUpdatedAtMS != 1000 {
+		t.Fatalf("reconnected SSE lost last fix: %+v", snapshot)
+	}
+}

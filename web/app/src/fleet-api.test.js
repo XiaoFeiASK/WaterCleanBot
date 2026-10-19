@@ -6,6 +6,13 @@ const pending = { robotName: 'USV-002', lat: null, lng: null, heading: null, spe
 afterEach(() => vi.unstubAllGlobals());
 
 describe('fleet API', () => {
+  it('rejects unavailable and out of range locations without rejecting legitimate axis coordinates', () => {
+    for (const point of [{ lat: 0, lng: 0 }, { lat: 91, lng: 121 }, { lat: 31, lng: 181 }, { lat: NaN, lng: 121 }, pending]) {
+      expect(hasCoordinates(point)).toBe(false);
+    }
+    expect(hasCoordinates({ lat: 0, lng: 121 })).toBe(true);
+    expect(hasCoordinates({ lat: 31, lng: 0 })).toBe(true);
+  });
   it('accepts nullable telemetry without treating it as a location or online device', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [pending] }));
     expect(await fetchAllRobotLocations()).toEqual([pending]);

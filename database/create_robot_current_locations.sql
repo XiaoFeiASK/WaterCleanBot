@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS robot_current_locations (
   battery DOUBLE PRECISION,
   status INTEGER NOT NULL,
   source_timestamp_ms BIGINT,
+  position_updated_at_ms BIGINT,
   geom GEOMETRY(Point, 4326) GENERATED ALWAYS AS (
     ST_SetSRID(ST_MakePoint(lng, lat), 4326)
   ) STORED,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Hls from 'hls.js';
@@ -20,6 +20,7 @@ import {
   Plus,
   Power,
   Trash2,
+  Upload,
   X,
   Radio,
   Search,
@@ -59,8 +60,6 @@ import {
 import { wgs84ToGcj02 } from './coordinates';
 import {
   DEMO_PERCEPTION_ROUTE,
-  DEMO_NEAR_BANK_REFERENCE_SECTIONS,
-  DEMO_SHORELINE_SECTIONS,
   DEMO_TEST_DEVICE_NAME,
   DEMO_TEST_POSITION,
   DEMO_TEST_TRACK,
@@ -69,6 +68,8 @@ import {
 import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
+import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
+import { getShorelineSections } from './shorelines';
 import './fleet.css';
 
 function confirmAction(message) {
@@ -264,7 +265,7 @@ function formatRouteLength(lengthMeters) {
 
 function formatRouteDurationSeconds(durationSeconds) {
   if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds)) return '暂无数据';
-  const minutes = Math.max(1, Math.ceil(durationSeconds / 60));
+  const minutes = Math.max(0, Math.ceil(durationSeconds / 60));
   return `${minutes}分钟`;
 }
 
@@ -297,7 +298,7 @@ function formatSpeed(speed) {
 }
 
 function formatCoordinates(position) {
-  if (!position || !Number.isFinite(position.lat) || !Number.isFinite(position.lng)) return '暂无数据';
+  if (!hasCoordinates(position)) return '暂无数据';
   return `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
 }
 
@@ -316,9 +317,9 @@ function getRouteLengthMeters(points) {
   return points.slice(1).reduce((total, point, index) => total + getDistanceMeters(points[index], point), 0);
 }
 
-function getRouteDurationSeconds(points, startPoint) {
+function getRouteDurationSeconds(points) {
   if (!points.length) return null;
-  let previousPoint = startPoint || null;
+  let previousPoint = null;
   let durationSeconds = 0;
   points.forEach((point) => {
     if (previousPoint) {
@@ -340,27 +341,16 @@ function getRouteMapPoints(route) {
   return route.points;
 }
 
-const SHORELINE_MAP_SECTIONS = [...DEMO_SHORELINE_SECTIONS, ...DEMO_NEAR_BANK_REFERENCE_SECTIONS].map((section) => ({
-  ...section,
-  path: section.points.map(([lng, lat]) => {
-    const mapPoint = wgs84ToGcj02({ lng, lat });
-    return [mapPoint.lng, mapPoint.lat];
-  }),
-}));
+const EMPTY_MAP_SECTIONS = Object.freeze([]);
 const PERCEPTION_ROUTE_MAP_POINTS = getRouteMapPoints(DEMO_PERCEPTION_ROUTE);
 
-// 感知航线展示路径：有船位时从当前船位连到第一个感知点，船位变化时实时更新。
-export function getPerceptionRouteMapPath(boatMapPoint, perceptionMapPoints = []) {
-  const points = Array.isArray(perceptionMapPoints) ? perceptionMapPoints : [];
-  if (!points.length) return [];
-  return boatMapPoint ? [boatMapPoint, ...points] : [...points];
+// 航线仅连接航点，不添加船位到首点的引导线。
+export function getPerceptionRouteMapPath(perceptionMapPoints = []) {
+  return Array.isArray(perceptionMapPoints) ? [...perceptionMapPoints] : [];
 }
 
-// 规划航线即时预览路径：船位 -> 已确认点 -> 待确认候选点。
-export function getPlanningPreviewMapPoints(startMapPoint, draftMapPoints = [], pendingMapPoint = null) {
-  const points = [];
-  if (startMapPoint) points.push(startMapPoint);
-  if (Array.isArray(draftMapPoints)) points.push(...draftMapPoints);
+export function getPlanningPreviewMapPoints(draftMapPoints = [], pendingMapPoint = null) {
+  const points = Array.isArray(draftMapPoints) ? [...draftMapPoints] : [];
   if (pendingMapPoint) points.push(pendingMapPoint);
   return points;
 }
@@ -369,7 +359,7 @@ function getMapClickPoint(lngLat) {
   if (!lngLat) return null;
   const lng = typeof lngLat.getLng === 'function' ? lngLat.getLng() : lngLat.lng;
   const lat = typeof lngLat.getLat === 'function' ? lngLat.getLat() : lngLat.lat;
-  if (typeof lng !== 'number' || typeof lat !== 'number' || !Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) return null;
   return { lng, lat };
 }
 
@@ -561,30 +551,26 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = [], pendingRoutePoint = null, previewRoutePoints = [], trackLines = [], perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, onMapPoint }) {
+export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const markerContentRef = useRef(null);
-  const routePolylineRef = useRef(null);
-  const routePointMarkersRef = useRef([]);
   const shorelinePolylineRefs = useRef([]);
   const perceptionPolylineRefs = useRef([]);
   const trackPolylineRefs = useRef([]);
   const perceptionPointMarkersRef = useRef([]);
   const mapClickHandlerRef = useRef(null);
   const centeredSeqRef = useRef(centerSeq);
+  const fittedShorelineSeqRef = useRef(null);
   const [mapError, setMapError] = useState('');
+  const [routeMap, setRouteMap] = useState(null);
 
   useEffect(() => () => {
     safelyRemoveMarker(markerRef.current);
     markerRef.current = null;
     markerContentRef.current = null;
     resetFleetHeadingAngles();
-    safelyRemoveOverlay(routePolylineRef.current);
-    routePolylineRef.current = null;
-    routePointMarkersRef.current.forEach(safelyRemoveOverlay);
-    routePointMarkersRef.current = [];
     shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
     shorelinePolylineRefs.current = [];
     perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
@@ -602,15 +588,13 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
   }, []);
 
   useEffect(() => {
-    if (!hasCoordinates(position)) {
+    const hasBoatPosition = hasCoordinates(position);
+    const shorelineAnchor = showShoreline ? shorelineSections[0]?.path[0] : null;
+    if (!hasBoatPosition && !shorelineAnchor) {
       safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
       markerContentRef.current = null;
       resetFleetHeadingAngles();
-      safelyRemoveOverlay(routePolylineRef.current);
-      routePolylineRef.current = null;
-      routePointMarkersRef.current.forEach(safelyRemoveOverlay);
-      routePointMarkersRef.current = [];
       shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
       shorelinePolylineRefs.current = [];
       perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
@@ -625,16 +609,16 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       mapClickHandlerRef.current = null;
       safelyDestroyMap(mapRef.current);
       mapRef.current = null;
+      fittedShorelineSeqRef.current = null;
+      setRouteMap(null);
       setMapError('');
       return undefined;
     }
 
     if (!mapNode.current) return undefined;
 
-    const mapPosition = wgs84ToGcj02(position);
-    const lat = mapPosition.lat;
-    const lng = mapPosition.lng;
-    const nextPosition = [lng, lat];
+    const mapPosition = hasBoatPosition ? wgs84ToGcj02(position) : null;
+    const nextPosition = mapPosition ? [mapPosition.lng, mapPosition.lat] : shorelineAnchor;
     let resizeTimer;
     let cancelled = false;
     setMapError('');
@@ -654,6 +638,7 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
               new AMap.TileLayer.Satellite({ zIndex: 1, zooms: [3, 18], detectRetina: true }),
             ],
           });
+          setRouteMap({ map: mapRef.current, AMap });
           centeredSeqRef.current = centerSeq;
           resizeTimer = window.setTimeout(() => mapRef.current?.resize(), 0);
         }
@@ -671,7 +656,11 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           markerContentRef.current = null;
         }
 
-        if (!markerRef.current) {
+        if (!hasBoatPosition) {
+          safelyRemoveMarker(markerRef.current);
+          markerRef.current = null;
+          markerContentRef.current = null;
+        } else if (!markerRef.current) {
           markerContentRef.current = createFleetMarkerContent(position, undefined, { compact: true });
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
@@ -699,11 +688,6 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
           mapRef.current.on('click', mapClickHandlerRef.current);
         }
 
-        // 航线规划第一版只维护前端覆盖物：规划中从船当前位置连到用户航点，保存后只回显航点之间的航线。
-        safelyRemoveOverlay(routePolylineRef.current);
-        routePolylineRef.current = null;
-        routePointMarkersRef.current.forEach(safelyRemoveOverlay);
-        routePointMarkersRef.current = [];
         shorelinePolylineRefs.current.forEach(safelyRemoveOverlay);
         shorelinePolylineRefs.current = [];
         perceptionPolylineRefs.current.forEach(safelyRemoveOverlay);
@@ -731,62 +715,35 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
         });
 
         if (showShoreline) {
-          SHORELINE_MAP_SECTIONS.forEach((section) => {
+          shorelineSections.forEach((section) => {
             const isBridge = section.kind === 3;
             const isNearBankReference = section.kind === 'near-bank-reference';
-            const referenceColor = section.side === 1 ? '#ff963b' : '#36c7f4';
+            const isCenterReference = section.kind === 'center-reference';
+            const isReference = isNearBankReference || isCenterReference;
+            const referenceColor = isCenterReference ? '#ffc928' : section.side === 1 ? '#ff963b' : '#36c7f4';
             const shorelinePolyline = new AMap.Polyline({
               map: mapRef.current,
               path: section.path,
-              strokeColor: isNearBankReference ? referenceColor : isBridge ? '#d06dff' : '#38ef9a',
+              strokeColor: isReference ? referenceColor : isBridge ? '#d06dff' : '#38ef9a',
               strokeOpacity: isBridge ? 1 : 0.95,
-              strokeWeight: isNearBankReference ? 3 : isBridge ? 6 : 4,
-              strokeStyle: isBridge || isNearBankReference ? 'dashed' : 'solid',
-              strokeDasharray: isBridge || isNearBankReference ? [10, 5] : undefined,
+              strokeWeight: isReference ? 3 : isBridge ? 6 : 4,
+              strokeStyle: isBridge || isReference ? 'dashed' : 'solid',
+              strokeDasharray: isBridge || isReference ? [10, 5] : undefined,
               lineJoin: 'round',
               lineCap: 'round',
-              zIndex: isNearBankReference ? 65 : isBridge ? 70 : 60,
+              zIndex: isReference ? 65 : isBridge ? 70 : 60,
             });
             shorelinePolylineRefs.current.push(shorelinePolyline);
           });
+          if (shorelinePolylineRefs.current.length && fittedShorelineSeqRef.current !== shorelineFitSeq) {
+            mapRef.current.setFitView?.(shorelinePolylineRefs.current, true, [36, 36, 36, 36], 18);
+            fittedShorelineSeqRef.current = shorelineFitSeq;
+          }
         }
-
-        const routeLinePoints = planningMode
-          ? getPlanningPreviewMapPoints(mapPosition, draftRoutePoints, pendingRoutePoint)
-          : previewRoutePoints.length
-            ? [mapPosition, ...previewRoutePoints]
-            : [];
-        if (routeLinePoints.length >= 2) {
-          routePolylineRef.current = new AMap.Polyline({
-            map: mapRef.current,
-            path: routeLinePoints.map((point) => [point.lng, point.lat]),
-            strokeColor: planningMode ? '#18a999' : '#0b7a6f',
-            strokeOpacity: 0.95,
-            strokeWeight: 3,
-            strokeStyle: planningMode ? 'dashed' : 'solid',
-            lineJoin: 'round',
-            lineCap: 'round',
-            zIndex: 80,
-          });
-        }
-        const routeMarkerPoints = planningMode
-          ? [...draftRoutePoints, ...(pendingRoutePoint ? [pendingRoutePoint] : [])]
-          : previewRoutePoints;
-        routeMarkerPoints.forEach((point, index) => {
-          const isPending = planningMode && Boolean(pendingRoutePoint) && index === draftRoutePoints.length;
-          const pointMarker = new AMap.Marker({
-            map: mapRef.current,
-            position: [point.lng, point.lat],
-            content: createRoutePointContent(index, planningMode, 'standard', false, isPending),
-            offset: new AMap.Pixel(-12, -12),
-            zIndex: 120,
-          });
-          routePointMarkersRef.current.push(pointMarker);
-        });
 
         // 感知航线是本地演示数据，不写入数据库，也不参与下发和删除。
         if (perceptionRoutePoints.length >= 2) {
-          const perceptionPath = getPerceptionRouteMapPath(mapPosition, perceptionRoutePoints).map((point) => [point.lng, point.lat]);
+          const perceptionPath = getPerceptionRouteMapPath(perceptionRoutePoints).map((point) => [point.lng, point.lat]);
           [
             { strokeColor: '#5b4300', strokeOpacity: 0.8, strokeWeight: 6, zIndex: 90 },
             { strokeColor: '#ffc928', strokeOpacity: 1, strokeWeight: 3, zIndex: 91 },
@@ -822,9 +779,75 @@ function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoin
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, draftRoutePoints, pendingRoutePoint, previewRoutePoints, trackLines, perceptionRoutePoints, showShoreline, onMapPoint]);
+  }, [position, centerSeq, planningMode, trackLines, perceptionRoutePoints, showShoreline, shorelineSections, shorelineFitSeq, onMapPoint]);
 
-  if (!hasCoordinates(position)) {
+  // 航点覆盖物独立于实时船位更新，避免遥测刷新中断拖动。
+  useEffect(() => {
+    if (!routeMap || routeMap.map !== mapRef.current) return undefined;
+    const { map, AMap } = routeMap;
+    const routeLinePoints = planningMode
+      ? getPlanningPreviewMapPoints(draftRoutePoints, pendingRoutePoint)
+      : previewRoutePoints;
+    const polyline = routeLinePoints.length >= 2 ? new AMap.Polyline({
+      map,
+      path: routeLinePoints.map(({ lng, lat }) => [lng, lat]),
+      strokeColor: planningMode ? '#18a999' : '#0b7a6f',
+      strokeOpacity: 0.95,
+      strokeWeight: 3,
+      strokeStyle: planningMode ? 'dashed' : 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      zIndex: 80,
+    }) : null;
+    const listeners = [];
+    let active = true;
+    const pointMarkers = routeLinePoints.map((point, index) => {
+      const isPending = planningMode && Boolean(pendingRoutePoint) && index === draftRoutePoints.length;
+      const draggable = planningMode && !isPending && typeof onRoutePointMove === 'function';
+      const pointMarker = new AMap.Marker({
+        map,
+        position: [point.lng, point.lat],
+        content: createRoutePointContent(index, planningMode, 'standard', false, isPending),
+        offset: new AMap.Pixel(-12, -12),
+        draggable,
+        bubble: false,
+        cursor: draggable ? 'move' : 'pointer',
+        title: draggable ? `拖动调整航点 ${index + 1}` : `航点 ${index + 1}`,
+        zIndex: 120,
+      });
+      if (draggable) {
+        const updatePath = (event) => {
+          if (!active) return null;
+          const nextPoint = getMapClickPoint(event?.lnglat || pointMarker.getPosition?.());
+          if (!nextPoint) return null;
+          polyline?.setPath(routeLinePoints.map((routePoint, pointIndex) => {
+            const next = pointIndex === index ? nextPoint : routePoint;
+            return [next.lng, next.lat];
+          }));
+          return nextPoint;
+        };
+        const finishDrag = (event) => {
+          const nextPoint = updatePath(event);
+          if (nextPoint) onRoutePointMove(index, nextPoint);
+        };
+        pointMarker.on('dragging', updatePath);
+        pointMarker.on('dragend', finishDrag);
+        listeners.push(() => {
+          pointMarker.off?.('dragging', updatePath);
+          pointMarker.off?.('dragend', finishDrag);
+        });
+      }
+      return pointMarker;
+    });
+    return () => {
+      active = false;
+      listeners.forEach((remove) => remove());
+      safelyRemoveOverlay(polyline);
+      pointMarkers.forEach(safelyRemoveMarker);
+    };
+  }, [routeMap, planningMode, draftRoutePoints, pendingRoutePoint, previewRoutePoints, onRoutePointMove]);
+
+  if (!hasCoordinates(position) && !(showShoreline && shorelineSections.length)) {
     return (
       <div className="map-empty">
         <MapPinned size={28} strokeWidth={1.5} />
@@ -1017,6 +1040,23 @@ function useCurrentTime() {
     return () => window.clearInterval(timer);
   }, []);
   return now;
+}
+
+export function LocationCoordinates({ position }) {
+  const now = useCurrentTime();
+  const hasPosition = hasCoordinates(position);
+  const updatedAt = position?.positionUpdatedAtMs ?? position?.receivedAtMs;
+  const hasTime = Number.isFinite(updatedAt) && updatedAt > 0;
+  const stale = position?.heartbeatStatus === 'offline' || position?.gnssSolutionStatus === 0 || !hasTime || now - updatedAt >= 30000;
+  return (
+    <div className="telemetry-item telemetry-item-wide" aria-label="设备经纬度">
+      <span>经纬度</span>
+      <strong>{formatCoordinates(position)}</strong>
+      <small className="telemetry-coordinate-status">
+        {!hasPosition ? '尚无有效定位' : `${stale ? '最后有效位置（非实时）' : '最近定位'} · ${hasTime ? formatTrackTime(updatedAt) : '更新时间未知'}`}
+      </small>
+    </div>
+  );
 }
 
 export function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDetail, onToast }) {
@@ -1315,6 +1355,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [trackPointsByID, setTrackPointsByID] = useState({});
   const [loadedTrackIds, setLoadedTrackIds] = useState({});
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);
+  const [tracksExpanded, setTracksExpanded] = useState(false);
   const [tracksLoading, setTracksLoading] = useState(false);
   const [tracksError, setTracksError] = useState('');
   const [trackAction, setTrackAction] = useState('');
@@ -1328,15 +1369,35 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [previewRouteId, setPreviewRouteId] = useState('');
   const [showPerceptionRoute, setShowPerceptionRoute] = useState(false);
   const [showShoreline, setShowShoreline] = useState(false);
+  const shorelineStore = usePublicShoreline();
+  const [showShorelineManager, setShowShorelineManager] = useState(false);
+  const [shorelinePreview, setShorelinePreview] = useState(null);
+  const [shorelineFitSeq, setShorelineFitSeq] = useState(0);
+  const previewVisibilityRef = useRef(null);
+  const shorelineFiles = shorelinePreview || shorelineStore.dataset?.files;
+  const shorelineSections = useMemo(() => getShorelineSections(shorelineFiles), [shorelineFiles]);
+  const hasShorelineLayer = (kind, side) => shorelineSections.some((section) => section.kind === kind && (side === undefined || section.side === side));
+
+  function cancelShorelinePreview() {
+    setShorelinePreview(null);
+    if (previewVisibilityRef.current !== null) {
+      setShowShoreline(previewVisibilityRef.current);
+      previewVisibilityRef.current = null;
+      setShorelineFitSeq((seq) => seq + 1);
+    }
+  }
+
+  function previewShoreline(files) {
+    if (previewVisibilityRef.current === null) previewVisibilityRef.current = showShoreline;
+    setShorelinePreview(files);
+    setShowShoreline(true);
+    setShorelineFitSeq((seq) => seq + 1);
+  }
   const previewRoute = routes.find((route) => route.id === previewRouteId);
-  const previewRoutePoints = getRouteMapPoints(previewRoute);
+  const previewRoutePoints = useMemo(() => getRouteMapPoints(previewRoute), [previewRoute]);
   const activePreviewRoute = showPerceptionRoute ? DEMO_PERCEPTION_ROUTE : previewRoute;
-  const startMapPoint = position ? wgs84ToGcj02(position) : null;
-  const draftRouteLinePoints = startMapPoint && draftRoutePoints.length
-    ? [startMapPoint, ...draftRoutePoints]
-    : draftRoutePoints;
-  const draftRouteLength = getRouteLengthMeters(draftRouteLinePoints);
-  const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints, startMapPoint);
+  const draftRouteLength = getRouteLengthMeters(draftRoutePoints);
+  const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints);
   const isRouteBusy = Boolean(routeAction);
   const isTrackBusy = Boolean(trackAction);
   const recordingTrack = tracks.find((track) => track.status === 'recording');
@@ -1414,6 +1475,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
 
   useEffect(() => {
     setTracks([]);
+    setTracksExpanded(false);
     setTrackPointsByID({});
     setLoadedTrackIds({});
     setSelectedTrackIds([]);
@@ -1603,10 +1665,17 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   }
 
   function addDraftRoutePoint(point) {
-    if (!planningMode) return;
+    if (!planningMode || isRouteBusy) return;
     setPendingRoutePoint(point);
     setPendingSpeedKnots('2.0');
   }
+
+  const moveDraftRoutePoint = useCallback((index, point) => {
+    if (!planningMode || isRouteBusy) return;
+    setDraftRoutePoints((currentPoints) => currentPoints.map((current, pointIndex) => (
+      pointIndex === index ? { ...current, lng: point.lng, lat: point.lat } : current
+    )));
+  }, [planningMode, isRouteBusy]);
 
   function confirmPendingRoutePoint() {
     if (!pendingRoutePoint) return;
@@ -1776,15 +1845,45 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               className={`button ${showShoreline ? 'button-boundary-active' : 'button-secondary'}`}
               type="button"
               aria-pressed={showShoreline}
-              onClick={() => setShowShoreline((isVisible) => !isVisible)}
+              onClick={() => {
+                if (showShoreline) {
+                  setShowShoreline(false);
+                  return;
+                }
+                setShowShoreline(true);
+                void shorelineStore.reload().catch(() => {}).finally(() => {
+                  setShorelineFitSeq((seq) => seq + 1);
+                });
+              }}
             >
               河道边界
             </button>
+            <button className="button button-secondary" type="button" aria-expanded={showShorelineManager} onClick={() => {
+              if (showShorelineManager) { cancelShorelinePreview(); setShowShorelineManager(false); }
+              else { setShowShorelineManager(true); void shorelineStore.reload().catch(() => {}); }
+            }} disabled={shorelineStore.busy}><Upload size={16} aria-hidden="true" />岸线管理</button>
             <button className="button button-secondary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
             <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
         </div>
+
+        {showShorelineManager && <ShorelineManager
+          store={shorelineStore}
+          onPreview={previewShoreline}
+          onCancelPreview={cancelShorelinePreview}
+          onSaved={() => {
+            setShowShoreline(true);
+            setShorelineFitSeq((seq) => seq + 1);
+            onToast?.('公共岸线已替换', 'success');
+          }}
+          onDeleted={() => onToast?.('公共岸线已删除', 'success')}
+          onClose={() => setShowShorelineManager(false)}
+        />}
+        {showShoreline && <div className="shoreline-map-status" role="status">
+          <span>{shorelinePreview ? '待导入预览 · 尚未保存' : shorelineStore.loading ? '正在读取公共岸线' : shorelineStore.error || (shorelineFiles ? `公共岸线 · ${shorelineFiles.shoreline.session_id}` : '暂无公共岸线')}</span>
+          <ShorelineWarnings files={shorelineFiles} />
+        </div>}
 
         <div className="map-frame online-map-frame">
           {isDemoTestDevice && (
@@ -1802,7 +1901,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             trackLines={trackLines}
             perceptionRoutePoints={showPerceptionRoute ? PERCEPTION_ROUTE_MAP_POINTS : []}
             showShoreline={showShoreline}
+            shorelineSections={shorelineSections}
+            shorelineFitSeq={shorelineFitSeq}
             onMapPoint={addDraftRoutePoint}
+            onRoutePointMove={isRouteBusy ? undefined : moveDraftRoutePoint}
           />
           <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
           <div className="map-layer-legend" aria-label="地图图层图例">
@@ -1810,11 +1912,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
             ))}
             {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-near-bank-left" />左岸近岸参考线</span>}
-            {showShoreline && <span><i className="legend-dot legend-dot-near-bank-right" />右岸近岸参考线</span>}
+            {showShoreline && hasShorelineLayer(1, 1) && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
+            {showShoreline && hasShorelineLayer(1, 0) && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
+            {showShoreline && hasShorelineLayer(3) && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
+            {showShoreline && hasShorelineLayer('near-bank-reference', 1) && <span><i className="legend-dot legend-dot-near-bank-left" />左岸近岸参考线</span>}
+            {showShoreline && hasShorelineLayer('center-reference') && <span><i className="legend-dot legend-dot-center-reference" />中心参考线</span>}
+            {showShoreline && hasShorelineLayer('near-bank-reference', 0) && <span><i className="legend-dot legend-dot-near-bank-right" />右岸近岸参考线</span>}
           </div>
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
@@ -1825,10 +1928,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <span>控制状态</span>
               <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
             </div>
-            <div className="telemetry-item telemetry-item-wide">
-              <span>经纬度</span>
-              <strong>{formatCoordinates(position)}</strong>
-            </div>
+            <LocationCoordinates position={position} />
             <div className="telemetry-item">
               <span>航向</span>
               <strong>{formatHeading(position?.heading)}</strong>
@@ -1854,7 +1954,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
               <div>
                 <strong>规划模式</strong>
-                <span>点击地图后输入到该点速度，当前 {draftRoutePoints.length} 个点，长度 {formatRouteLength(draftRouteLength)}，预计 {formatRouteDurationSeconds(draftRouteDuration)}</span>
+                <span>点击地图添加航点，已确认点可拖动调整，当前 {draftRoutePoints.length} 个点，长度 {formatRouteLength(draftRouteLength)}，预计 {formatRouteDurationSeconds(draftRouteDuration)}</span>
               </div>
               <div className="route-planning-actions">
                 <button type="button" onClick={undoDraftRoutePoint} disabled={!draftRoutePoints.length}>撤销点</button>
@@ -1890,34 +1990,55 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         </div>
 
         <section className="track-list-card" aria-label="历史轨迹">
-          <div className="track-list-heading">
-            <div>
-              <strong>历史轨迹</strong>
-              <span>
-                {recordingTrack ? `正在记录 ${recordingTrack.name}` : '轨迹记录已停止'}
-                {tracksError ? ` · ${tracksError}` : ` · ${tracks.length} 条`}
+          <button
+            className="track-list-toggle"
+            type="button"
+            aria-label={tracksExpanded ? '收起历史轨迹' : '展开历史轨迹'}
+            aria-expanded={tracksExpanded}
+            aria-controls="track-history-content"
+            onClick={() => setTracksExpanded((expanded) => !expanded)}
+          >
+            <span className="track-list-icon"><Clock3 size={19} aria-hidden="true" /></span>
+            <span className="track-list-summary">
+              <span className="track-list-title">
+                <strong>历史轨迹</strong>
+                <span className="track-list-count">{tracksLoading ? '读取中' : `${tracks.length} 条`}</span>
               </span>
+              <span className="track-list-status">
+                {recordingTrack && <i className="track-recording-dot" aria-hidden="true" />}
+                {tracksError ? tracksError : recordingTrack ? `正在记录 ${recordingTrack.name}` : '暂无正在记录的轨迹'}
+                {selectedTrackIds.length > 0 && ` · 已显示 ${selectedTrackIds.length} 条`}
+              </span>
+            </span>
+            <span className="track-list-expand-label">{tracksExpanded ? '收起' : '展开'}</span>
+            <ChevronDown className={`track-list-chevron ${tracksExpanded ? 'is-expanded' : ''}`} size={17} aria-hidden="true" />
+          </button>
+          <div id="track-history-content" hidden={!tracksExpanded}>
+            <div className="track-list-toolbar">
+              <span>选择轨迹，在地图上查看</span>
+              <button type="button" onClick={toggleSelectAllTracks} disabled={tracksLoading || !tracks.length}>
+                {tracks.length > 0 && selectedTrackIds.length === tracks.length ? '取消全选' : '全选'}
+              </button>
             </div>
-            <button type="button" onClick={toggleSelectAllTracks} disabled={!tracks.length}>
-              {tracks.length > 0 && selectedTrackIds.length === tracks.length ? '取消全选' : '全选'}
-            </button>
+            <div className="track-list-scroll" role="region" aria-label="历史轨迹列表" tabIndex={0}>
+              {!tracksLoading && !tracks.length && <div className="track-list-empty">{tracksError || '暂无历史轨迹'}</div>}
+              {tracksLoading && <div className="track-list-empty">正在读取轨迹...</div>}
+              {!tracksLoading && tracks.map((track) => (
+                <div className={`track-list-row ${selectedTrackSet.has(track.id) ? 'track-list-row-active' : ''}`} key={track.id}>
+                  <button type="button" className="track-list-select" aria-pressed={selectedTrackSet.has(track.id)} onClick={() => toggleTrackSelection(track.id)}>
+                    <i aria-hidden="true" style={{ backgroundColor: selectedTrackSet.has(track.id) ? getTrackColor(track, selectedTrackIds) : 'transparent' }} />
+                    <span>
+                      <strong>{track.name}</strong>
+                      <small>{formatTrackTime(track.startedAt)} 开始 · {track.status === 'recording' ? '记录中' : `${formatTrackTime(track.endedAt)} 结束`}{' · '}<span className="track-point-count">{track.pointCount} 点</span></small>
+                    </span>
+                  </button>
+                  <button className="track-list-delete" type="button" disabled={isDemoTestDevice || track.status === 'recording' || isTrackBusy} onClick={() => deleteTrack(track)}>
+                    {isDemoTestDevice ? '演示' : trackAction === `delete:${track.id}` ? '删除中' : '删除'}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-          {!tracksLoading && !tracks.length && <div className="track-list-empty">暂无历史轨迹</div>}
-          {tracksLoading && <div className="track-list-empty">正在读取轨迹...</div>}
-          {!tracksLoading && tracks.map((track) => (
-            <div className={`track-list-row ${selectedTrackSet.has(track.id) ? 'track-list-row-active' : ''}`} key={track.id}>
-              <button type="button" className="track-list-select" onClick={() => toggleTrackSelection(track.id)}>
-                <i style={{ backgroundColor: selectedTrackSet.has(track.id) ? getTrackColor(track, selectedTrackIds) : 'transparent' }} />
-                <span>
-                  <strong>{track.name}</strong>
-                  <small>{formatTrackTime(track.startedAt)} 开始 · {track.status === 'recording' ? '记录中' : `${formatTrackTime(track.endedAt)} 结束`} · {track.pointCount} 点</small>
-                </span>
-              </button>
-              <button className="track-list-delete" type="button" disabled={isDemoTestDevice || track.status === 'recording' || isTrackBusy} onClick={() => deleteTrack(track)}>
-                {isDemoTestDevice ? '演示' : trackAction === `delete:${track.id}` ? '删除中' : '删除'}
-              </button>
-            </div>
-          ))}
         </section>
       </section>
 

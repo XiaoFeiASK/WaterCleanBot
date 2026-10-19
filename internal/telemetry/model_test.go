@@ -23,6 +23,7 @@ func TestParseNavigationFeedback(t *testing.T) {
 
 func TestParseNavigationFeedbackRejectsInvalidPayload(t *testing.T) {
 	tests := [][]byte{
+		[]byte(`[18,106.3975,null,135,0,0,0,0,0,0,0,4.2,18,4]`),
 		[]byte(`[18,181,29.9087,135,0,0,0,0,0,0,0,4.2,18,4]`),
 		[]byte(`[18,106.3975,91,135,0,0,0,0,0,0,0,4.2,18,4]`),
 		[]byte(`[18,106.3975,29.9087,135,0,0,0,0,0,0,0,4.2,18,3]`),
@@ -113,5 +114,22 @@ func TestParseStatusFeedbackMappings(t *testing.T) {
 	_, p, ok = ParseStatusFeedback("usv/USV-001/webfeedback", []byte(`[21,88,-20,35,0]`))
 	if !ok || p.LeftThrottle == nil || *p.LeftThrottle != -20 || p.RightThrottle == nil || *p.RightThrottle != 35 {
 		t.Fatalf("bad 21 mapping: %+v", p)
+	}
+}
+
+func TestTelemetryMissingAndNullCoordinatesStayUnavailable(t *testing.T) {
+	for _, payload := range []string{
+		`{"battery":33}`,
+		`{"lat":null,"lng":null,"battery":33}`,
+		`{"lat":nan,"lng":inf,"battery":33}`,
+	} {
+		data, err := ParseUSVData("usv/boat/telemetry", []byte(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		position := data.Position()
+		if position.Lat != nil || position.Lng != nil || *position.Battery != 33 {
+			t.Fatalf("payload %s invented coordinates: %+v", payload, position)
+		}
 	}
 }

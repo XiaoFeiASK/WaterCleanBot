@@ -18,14 +18,20 @@ func ParseNavigationFeedback(topic string, payload []byte) (location.Position, b
 		return location.Position{}, false
 	}
 
-	var values []float64
-	if err := json.Unmarshal(payload, &values); err != nil || len(values) != 14 || values[0] != 18 {
+	var numbers []json.Number
+	if err := json.Unmarshal(payload, &numbers); err != nil || len(numbers) != 14 {
 		return location.Position{}, false
 	}
-	for _, value := range values {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
+	values := make([]float64, len(numbers))
+	for index, number := range numbers {
+		value, err := number.Float64()
+		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 			return location.Position{}, false
 		}
+		values[index] = value
+	}
+	if values[0] != 18 {
+		return location.Position{}, false
 	}
 
 	lng, lat, heading, speedKnots := values[1], values[2], values[3], values[11]

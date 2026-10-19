@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,31 @@ func TestRepositoryUpsertIntegration(t *testing.T) {
 		t.Fatalf("set search_path: %v", err)
 	}
 
+	// Apply the production migration to a legacy table inside this isolated schema.
+	if _, err := scoped.ExecContext(ctx, `INSERT INTO robot_current_locations (robot_name, lat, lng, status, updated_at)
+		VALUES ('legacy-valid', 31, 121, 0, to_timestamp(1000)), ('legacy-zero', 0, 0, 0, to_timestamp(1000))`); err != nil {
+		t.Fatal(err)
+	}
+	migration, err := os.ReadFile("../../database/00007_preserve_location_fix_time.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := scoped.ExecContext(ctx, strings.Split(string(migration), "-- +goose Down")[0]); err != nil {
+			t.Fatalf("apply last fix migration: %v", err)
+		}
+	}
+	var legacyTime sql.NullInt64
+	if err := scoped.QueryRowContext(ctx, `SELECT position_updated_at_ms FROM robot_current_locations WHERE robot_name = 'legacy-valid'`).Scan(&legacyTime); err != nil || !legacyTime.Valid || legacyTime.Int64 != 1000000 {
+		t.Fatalf("legacy backfill time = %+v, err = %v", legacyTime, err)
+	}
+	if err := scoped.QueryRowContext(ctx, `SELECT position_updated_at_ms FROM robot_current_locations WHERE robot_name = 'legacy-zero'`).Scan(&legacyTime); err != nil || legacyTime.Valid {
+		t.Fatalf("zero fix backfilled as usable: %+v, err = %v", legacyTime, err)
+	}
+	if _, err := scoped.ExecContext(ctx, `DELETE FROM robot_current_locations`); err != nil {
+		t.Fatal(err)
+	}
+
 	repository := NewRepository(scoped)
 	now := time.Now().UnixMilli()
 	position := Position{
@@ -142,5 +168,23 @@ func TestRepositoryUpsertIntegration(t *testing.T) {
 	}
 	if !battery.Valid || battery.Float64 != 61 {
 		t.Fatalf("battery after second write = %+v, want 61", battery)
+	}
+	// Invalid or status-only updates must not erase the last coordinate pair or fix time.
+	for index, invalid := range []Position{
+		{RobotName: position.RobotName, Lat: Float(0), Lng: Float(0), Battery: Float(33)},
+		{RobotName: position.RobotName, Lat: Float(40), Battery: Float(32)},
+		{RobotName: position.RobotName, Battery: Float(31)},
+	} {
+		if _, err := repository.UpsertCurrentPosition(ctx, invalid, now+3000+int64(index)); err != nil {
+			t.Fatalf("upsert invalid fix: %v", err)
+		}
+		positions, err := repository.ListCurrentPositions(ctx)
+		if err != nil || len(positions) != 1 {
+			t.Fatalf("reload locations: %+v, %v", positions, err)
+		}
+		got := positions[0]
+		if *got.Lat != *position.Lat || *got.Lng != *position.Lng || got.PositionUpdatedAtMS != now+2000 || *got.Battery != *invalid.Battery {
+			t.Fatalf("last valid fix lost after invalid update: %+v", got)
+		}
 	}
 }

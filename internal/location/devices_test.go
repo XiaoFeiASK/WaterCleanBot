@@ -92,7 +92,7 @@ func TestCreateBroadcastsBeforeDatabaseAndPreservesNullTelemetry(t *testing.T) {
 
 func TestDeleteClearsPendingSnapshotAndAllCachesThenMQTTCanReappear(t *testing.T) {
 	s, w, r := deviceTestStore()
-	s.Update(Position{RobotName: "boat", Lat: Float(31), SourceTimestampMS: 900, ReceivedAtMS: 900})
+	s.Update(Position{RobotName: "boat", Lat: Float(31), Lng: Float(120), SourceTimestampMS: 900, ReceivedAtMS: 900})
 	s.UpdateDistance("boat", 150)
 	_, events, cancel := s.SubscribeWithSnapshot()
 	defer cancel()
@@ -119,7 +119,7 @@ func TestDeleteClearsPendingSnapshotAndAllCachesThenMQTTCanReappear(t *testing.T
 	if len(r.rows) != 0 {
 		t.Fatal("old snapshot recreated deleted boat")
 	}
-	p, accepted := s.Update(Position{RobotName: "boat", Lat: Float(32), SourceTimestampMS: 1, ReceivedAtMS: 1000})
+	p, accepted := s.Update(Position{RobotName: "boat", Lat: Float(32), Lng: Float(120), SourceTimestampMS: 1, ReceivedAtMS: 1000})
 	if !accepted || p.DistanceKm != nil {
 		t.Fatalf("new telemetry=%+v accepted=%v", p, accepted)
 	}
@@ -131,7 +131,7 @@ func TestDeleteClearsPendingSnapshotAndAllCachesThenMQTTCanReappear(t *testing.T
 
 func TestInFlightWriteFinishesBeforeDeleteAndNewTelemetrySurvives(t *testing.T) {
 	s, w, r := deviceTestStore()
-	s.Update(Position{RobotName: "boat", Lat: Float(1), SourceTimestampMS: 1, ReceivedAtMS: 1})
+	s.Update(Position{RobotName: "boat", Lat: Float(1), Lng: Float(120), SourceTimestampMS: 1, ReceivedAtMS: 1})
 	entered, release, flushed := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	r.before = func(kind string) error {
@@ -154,7 +154,7 @@ func TestInFlightWriteFinishesBeforeDeleteAndNewTelemetrySurvives(t *testing.T) 
 	case <-time.After(time.Second):
 		t.Fatal("delete waited for database before updating cache")
 	}
-	s.Update(Position{RobotName: "boat", Lat: Float(2), SourceTimestampMS: 2, ReceivedAtMS: 2})
+	s.Update(Position{RobotName: "boat", Lat: Float(2), Lng: Float(120), SourceTimestampMS: 2, ReceivedAtMS: 2})
 	close(release)
 	<-flushed
 	if err := <-deleted; err != nil {
@@ -179,7 +179,7 @@ func TestFailedDeletionRetriesButDoesNotDeleteNewTelemetry(t *testing.T) {
 		t.Fatal("cache must already be deleted")
 	}
 	r.before = nil
-	s.Update(Position{RobotName: "boat", Lat: Float(3), SourceTimestampMS: 3, ReceivedAtMS: 3})
+	s.Update(Position{RobotName: "boat", Lat: Float(3), Lng: Float(120), SourceTimestampMS: 3, ReceivedAtMS: 3})
 	w.flush(context.Background())
 	w.flush(context.Background())
 	if *r.rows["boat"].Lat != 3 {

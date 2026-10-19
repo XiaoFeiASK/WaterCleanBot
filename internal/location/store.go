@@ -188,10 +188,22 @@ func (s *Store) prepareRealtimePosition(position Position, previous Position, ex
 	return position
 }
 
+// mergeCoordinates keeps the last usable coordinate pair when GNSS loses its fix.
+// A missing coordinate or (0,0) is an unavailable fix in this vessel protocol.
+func mergeCoordinates(position *Position, previous Position, hasFix bool) {
+	if hasFix {
+		position.PositionUpdatedAtMS = position.ReceivedAtMS
+		return
+	}
+	position.Lat, position.Lng = previous.Lat, previous.Lng
+	position.PositionUpdatedAtMS = previous.PositionUpdatedAtMS
+}
+
 // Update 写入 MQTT telemetry 的最新位置，并立即通知 SSE 客户端。
 func (s *Store) Update(position Position) (Position, bool) {
 	s.mu.Lock()
 	previous, exists := s.positions[position.RobotName]
+	hasFix := validTrackCoordinate(position.Lat, position.Lng)
 	position = s.prepareRealtimePosition(position, previous, exists)
 	if latestVersion := s.telemetryVersions[position.RobotName]; position.SourceTimestampMS > 0 && latestVersion > 0 && position.SourceTimestampMS < latestVersion {
 		s.mu.Unlock()
@@ -205,12 +217,13 @@ func (s *Store) Update(position Position) (Position, bool) {
 		s.telemetryVersions[position.RobotName] = position.SourceTimestampMS
 	}
 	s.latestReceivedAtMS[position.RobotName] = position.ReceivedAtMS
+	mergeCoordinates(&position, previous, hasFix)
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	recorder := s.trackRecorder
 	s.mu.Unlock()
-	if recorder != nil && validTrackCoordinate(position.Lat, position.Lng) {
+	if recorder != nil && hasFix {
 		recorder.RecordPosition(position.RobotName, *position.Lat, *position.Lng, position.ReceivedAtMS)
 	}
 	return clonePosition(position), true
@@ -224,6 +237,13 @@ func (s *Store) LoadInitial(positions []Position) {
 	next := make(map[string]Position, len(positions))
 	distances := make(map[string]distanceState)
 	for _, position := range positions {
+		if !validTrackCoordinate(position.Lat, position.Lng) {
+			position.Lat, position.Lng = nil, nil
+			position.PositionUpdatedAtMS = 0
+		} else if position.PositionUpdatedAtMS <= 0 {
+			// Compatibility for snapshots saved before a separate fix timestamp existed.
+			position.PositionUpdatedAtMS = position.ReceivedAtMS
+		}
 		if position.LastDistanceKm != nil && position.TotalDistanceKm != nil {
 			distance := distanceState{last: *position.LastDistanceKm, total: *position.TotalDistanceKm}
 			distances[position.RobotName] = distance
@@ -239,6 +259,7 @@ func (s *Store) LoadInitial(positions []Position) {
 func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 	s.mu.Lock()
 	previous, exists := s.positions[position.RobotName]
+	hasFix := validTrackCoordinate(position.Lat, position.Lng) && (position.GNSSSolutionStatus == nil || *position.GNSSSolutionStatus != 0)
 	if position.ReceivedAtMS <= 0 {
 		position.ReceivedAtMS = time.Now().UnixMilli()
 	}
@@ -271,12 +292,13 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 		position.LastDistanceKm = Float(distance.last)
 		position.TotalDistanceKm = Float(distance.total)
 	}
+	mergeCoordinates(&position, previous, hasFix)
 	s.positions[position.RobotName] = clonePosition(position)
 	s.queuePositionLocked(position)
 	s.broadcastLocked(position)
 	recorder := s.trackRecorder
 	s.mu.Unlock()
-	if recorder != nil && validTrackCoordinate(position.Lat, position.Lng) {
+	if recorder != nil && hasFix {
 		recorder.RecordPosition(position.RobotName, *position.Lat, *position.Lng, position.ReceivedAtMS)
 	}
 	return clonePosition(position), true
@@ -285,7 +307,7 @@ func (s *Store) UpdateNavigation(position Position) (Position, bool) {
 // validTrackCoordinate 判断实时位置是否具备可用于轨迹采样的有效 WGS-84 坐标。
 func validTrackCoordinate(lat, lng *float64) bool {
 	return lat != nil && lng != nil && !math.IsNaN(*lat) && !math.IsInf(*lat, 0) && *lat >= -90 && *lat <= 90 &&
-		!math.IsNaN(*lng) && !math.IsInf(*lng, 0) && *lng >= -180 && *lng <= 180
+		!math.IsNaN(*lng) && !math.IsInf(*lng, 0) && *lng >= -180 && *lng <= 180 && !(*lat == 0 && *lng == 0)
 }
 
 // UpdateFeedback 合并设备通过 webfeedback 上报的最新状态。

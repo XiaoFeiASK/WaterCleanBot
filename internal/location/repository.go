@@ -27,7 +27,7 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 
 	rows, err := r.db.QueryContext(queryCtx, `
 		SELECT p.robot_name, p.lat, p.lng, p.heading, p.speed, p.battery, p.status,
-		       COALESCE(p.source_timestamp_ms, 0),
+		       COALESCE(p.source_timestamp_ms, 0), COALESCE(p.position_updated_at_ms, 0),
 		       (EXTRACT(EPOCH FROM p.updated_at) * 1000)::bigint,
 		       d.last_distance_km,
 		       d.total_distance_km
@@ -52,6 +52,7 @@ func (r *Repository) ListCurrentPositions(ctx context.Context) ([]Position, erro
 			&position.Battery,
 			&position.Status,
 			&position.SourceTimestampMS,
+			&position.PositionUpdatedAtMS,
 			&position.ReceivedAtMS,
 			&position.LastDistanceKm,
 			&position.TotalDistanceKm,
@@ -71,6 +72,13 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 	queryCtx, cancel := context.WithTimeout(ctx, currentPositionQueryTimeout)
 	defer cancel()
 
+	if !validTrackCoordinate(position.Lat, position.Lng) {
+		position.Lat, position.Lng = nil, nil
+		position.PositionUpdatedAtMS = 0
+	} else if position.PositionUpdatedAtMS <= 0 {
+		position.PositionUpdatedAtMS = receivedAtMS
+	}
+
 	tx, err := r.db.BeginTx(queryCtx, nil)
 	if err != nil {
 		return false, err
@@ -80,12 +88,13 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 	var robotName string
 	err = tx.QueryRowContext(queryCtx, `
 		INSERT INTO robot_current_locations (
-			robot_name, lat, lng, heading, speed, battery, status, source_timestamp_ms, updated_at
+			robot_name, lat, lng, heading, speed, battery, status, source_timestamp_ms, updated_at, position_updated_at_ms
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8::bigint, 0), to_timestamp($9 / 1000.0))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8::bigint, 0), to_timestamp($9 / 1000.0), NULLIF($10::bigint, 0))
 		ON CONFLICT (robot_name) DO UPDATE SET
-			lat = EXCLUDED.lat,
-			lng = EXCLUDED.lng,
+			lat = COALESCE(EXCLUDED.lat, robot_current_locations.lat),
+			lng = COALESCE(EXCLUDED.lng, robot_current_locations.lng),
+			position_updated_at_ms = COALESCE(EXCLUDED.position_updated_at_ms, robot_current_locations.position_updated_at_ms),
 			heading = EXCLUDED.heading,
 			speed = EXCLUDED.speed,
 			battery = EXCLUDED.battery,
@@ -104,6 +113,7 @@ func (r *Repository) UpsertCurrentPosition(ctx context.Context, position Positio
 		position.Status,
 		position.SourceTimestampMS,
 		receivedAtMS,
+		position.PositionUpdatedAtMS,
 	).Scan(&robotName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
