@@ -436,6 +436,7 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .throttle-meta strong { color: var(--ink); font-size: 13px; }
 .throttle-meta span { color: var(--muted); font-size: 12px; text-align: right; }
 .throttle-inputs { display: grid; grid-template-columns: minmax(120px, 1fr) 74px auto; gap: 9px; align-items: center; }
+.throttle-actions { display: flex; gap: 9px; }
 .throttle-inputs input[type="range"] { width: 100%; accent-color: var(--teal-dark); }
 .throttle-value { height: 38px; padding: 0 9px; border: 1px solid rgba(19,38,41,.16); border-radius: 12px; color: var(--ink); background: #fffdf6; text-align: center; outline: none; }
 .throttle-value:focus { border-color: rgba(24,169,153,.7); box-shadow: 0 0 0 4px rgba(24,169,153,.13); }
@@ -560,7 +561,8 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .throttle-meta { align-items: flex-start; flex-direction: column; }
   .throttle-meta span { text-align: left; }
   .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 68px; }
-  .throttle-inputs .button-secondary { grid-column: 1 / -1; }
+  .throttle-inputs .throttle-actions { grid-column: 1 / -1; }
+  .throttle-actions .button { flex: 1; }
   .lower-grid { grid-template-columns: 1fr; }
 }
 
@@ -1038,7 +1040,8 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .throttle-meta { align-items: flex-start; flex-direction: column; }
   .throttle-meta span { text-align: left; }
   .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 68px; }
-  .throttle-inputs .button-secondary { grid-column: 1 / -1; }
+  .throttle-inputs .throttle-actions { grid-column: 1 / -1; }
+  .throttle-actions .button { flex: 1; }
   .lower-grid { grid-template-columns: 1fr; }
   .toast { top: 76px; max-width: min(420px, calc(100vw - 32px)); padding: 11px 17px; border-radius: 999px; font-size: 13px; }
 }
@@ -1299,7 +1302,8 @@ h1 { color: #f5fffd; font-size: clamp(29px, 3.5vw, 43px); letter-spacing: -.045e
   .throttle-meta { align-items: flex-start; flex-direction: column; }
   .throttle-meta span { text-align: left; }
   .throttle-inputs { grid-template-columns: minmax(120px, 1fr) 68px; }
-  .throttle-inputs .button-secondary { grid-column: 1 / -1; }
+  .throttle-inputs .throttle-actions { grid-column: 1 / -1; }
+  .throttle-actions .button { flex: 1; }
   .lower-grid { grid-template-columns: 1fr; }
   .fleet-management-toolbar, .fleet-management-table-heading { align-items: stretch; flex-direction: column; }
   .fleet-search { width: 100%; max-width: none; }

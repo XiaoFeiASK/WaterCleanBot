@@ -2429,8 +2429,10 @@ export function RemoteControlPanel({ position, onToast }) {
     setValues((currentValues) => ({ ...currentValues, [cmd]: nextValue }));
   }
 
-  function sendThrottle(command) {
-    submitRemoteCommand(command.cmd, values[command.cmd], command.label, `${values[command.cmd]}%`, { ...values });
+  function sendThrottle(command, value = values[command.cmd]) {
+    const nextValues = { ...values, [command.cmd]: value };
+    setValues(nextValues);
+    submitRemoteCommand(command.cmd, value, command.label, `${value}%`, nextValues);
   }
 
   async function toggleSwitch(command) {
@@ -2499,7 +2501,10 @@ export function RemoteControlPanel({ position, onToast }) {
                     onChange={(event) => updateThrottle(command.cmd, event.target.value)}
                     aria-label={`${command.label}数值`}
                   />
-                    <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget}>下发</button>
+                    <div className="throttle-actions">
+                      <button className="button button-secondary" type="button" onClick={() => sendThrottle(command)} disabled={!hasRemoteTarget}>下发</button>
+                      <button className="button button-danger-soft" type="button" aria-label={`${command.label}停止`} onClick={() => sendThrottle(command, 0)} disabled={!hasRemoteTarget}>停止</button>
+                    </div>
                   </div>
                 </div>
               ))}
