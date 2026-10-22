@@ -8,6 +8,7 @@ import {
   createRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes,
   fetchRobotTracks, subscribeRobotLocations,
 } from './api';
+import { fetchShoreline, replaceShoreline } from './shoreline-api';
 
 vi.mock('./api', async (original) => ({
   ...(await original()),
@@ -18,7 +19,7 @@ vi.mock('./api', async (original) => ({
   fetchRobotTracks: vi.fn(),
   subscribeRobotLocations: vi.fn(),
 }));
-vi.mock('./shoreline-api', () => ({ fetchShoreline: vi.fn(async () => null) }));
+vi.mock('./shoreline-api', () => ({ fetchShoreline: vi.fn(), replaceShoreline: vi.fn() }));
 vi.mock('./AuthContext', () => ({ useAuth: () => ({ user: { displayName: '测试', username: 'tester' }, signOut: vi.fn() }) }));
 
 let maps;
@@ -39,6 +40,35 @@ const defaults = { position, centerSeq: 0, perceptionRoutePoints: empty };
 const pathOf = (routePoints) => routePoints.map(({ lng, lat }) => [lng, lat]);
 const activeMarkers = () => markers.filter((marker) => marker.options.zIndex === 120 && !marker.removed);
 const activeLine = (color = '#18a999') => lines.findLast((line) => line.options.strokeColor === color && !line.removed);
+const importedMarkers = () => markers.filter((marker) => marker.options.zIndex === 130 && !marker.removed);
+
+function shorelineDataset() {
+  const common = { schema_version: 3, session_id: 'bundle-a', state: 'completed', datum: 'WGS84', valid: true, point_count: 2 };
+  const coordinates = [
+    { longitude_deg: 121.4, latitude_deg: 31.2 },
+    { longitude_deg: 121.401, latitude_deg: 31.201 },
+  ];
+  const files = {
+    shoreline: {
+      ...common, contour_count: 1,
+      contours: [{ contour_id: 1, side: 1, sections: [{ line_id: 1, contour_id: 1, section_order: 1, side: 1, kind: 1, points: coordinates }] }],
+    },
+  };
+  for (const key of ['left', 'center', 'right']) {
+    const center = key === 'center';
+    const side = key === 'left' ? 1 : 0;
+    files[key] = {
+      ...common, route_name: key,
+      planning_mode: center ? 'center_reference' : 'near_bank_reference',
+      ...(center ? {} : { side, bank_name: key }),
+      points: coordinates.map((point, index) => ({
+        ...point, point_id: index + 1, reference_segment_id: 1, reference_can_connect_previous: index > 0,
+        ...(center ? {} : { side, map_section: 1 }),
+      })),
+    };
+  }
+  return { revision: 'revision-1', files, updatedAt: '2026-10-22T10:00:00Z', uploadedBy: { displayName: '测试' } };
+}
 
 class Events {
   listeners = new Map();
@@ -56,11 +86,13 @@ beforeEach(() => {
   markers = [];
   window.localStorage.clear();
   vi.clearAllMocks();
+  Element.prototype.scrollIntoView = vi.fn();
   subscribeRobotLocations.mockImplementation((callbacks) => { streamHandlers = callbacks; return () => {}; });
   fetchRobotLocation.mockResolvedValue(position);
   fetchRobotTracks.mockResolvedValue([]);
   fetchRobotRoutes.mockResolvedValue([]);
   fetchRobotCameras.mockResolvedValue([]);
+  fetchShoreline.mockResolvedValue(null);
   window.AMap = {
     Map: class extends Events {
       constructor() {
@@ -96,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   delete window.AMap;
+  delete Element.prototype.scrollIntoView;
   vi.restoreAllMocks();
 });
 
@@ -188,5 +221,81 @@ describe('planning state and persistence', () => {
     await waitFor(() => expect(activeLine('#0b7a6f')?.options.path).toEqual(pathOf([moved, points[1]])));
     expect(activeMarkers()).toHaveLength(2);
     expect(activeMarkers().every((marker) => marker.options.draggable === false)).toBe(true);
+  });
+});
+
+describe('imported route visibility', () => {
+  async function openDataset() {
+    const dataset = shorelineDataset();
+    fetchShoreline.mockResolvedValue(dataset);
+    window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
+    render(<MemoryRouter><App /></MemoryRouter>);
+    await act(async () => streamHandlers.onSnapshot([position]));
+    await screen.findByText('中心感知航线');
+    return dataset;
+  }
+
+  const routeRow = (name) => screen.getByText(name, { selector: 'strong' }).closest('tr');
+
+  it('toggles only boundaries and shows a single explicitly selected route independently at 2 m/s', async () => {
+    await openDataset();
+    expect(importedMarkers()).toHaveLength(0);
+    const boundaryButton = screen.getByRole('button', { name: '河道边界', exact: true });
+    fireEvent.click(boundaryButton);
+    await waitFor(() => expect(activeLine('#38ef9a')).toBeDefined());
+    expect(importedMarkers()).toHaveLength(0);
+    for (const name of ['左岸航线', '中心感知航线', '右岸航线']) {
+      expect(within(routeRow(name)).getByRole('button', { name: '查看', exact: true })).toBeTruthy();
+      expect(routeRow(name).textContent).toContain('2 m/s');
+      expect(routeRow(name).textContent).not.toContain('暂无数据');
+    }
+    fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '查看', exact: true }));
+    await waitFor(() => expect(importedMarkers()).toHaveLength(2));
+    expect(activeLine('#ffc928')).toBeDefined();
+    expect(activeLine('#ff963b')).toBeUndefined();
+    expect(activeLine('#36c7f4')).toBeUndefined();
+
+    fireEvent.click(boundaryButton);
+    await waitFor(() => expect(activeLine('#38ef9a')).toBeUndefined());
+    expect(importedMarkers()).toHaveLength(2);
+    fireEvent.click(boundaryButton);
+    await waitFor(() => expect(activeLine('#38ef9a')).toBeDefined());
+    expect(importedMarkers()).toHaveLength(2);
+
+    fireEvent.click(within(routeRow('左岸航线')).getByRole('button', { name: '查看', exact: true }));
+    await waitFor(() => expect(activeLine('#ff963b')).toBeDefined());
+    expect(activeLine('#ffc928')).toBeUndefined();
+    expect(importedMarkers()).toHaveLength(2);
+    fireEvent.click(within(routeRow('左岸航线')).getByRole('button', { name: '取消查看', exact: true }));
+    await waitFor(() => expect(importedMarkers()).toHaveLength(0));
+    expect(activeLine('#38ef9a')).toBeDefined();
+  });
+
+  it('previews all uploaded routes temporarily, restores selection on cancel, and saves without auto-showing routes', async () => {
+    const dataset = await openDataset();
+    fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '查看', exact: true }));
+    await waitFor(() => expect(importedMarkers()).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: '岸线管理', exact: true }));
+    const files = Object.entries(dataset.files).map(([key, data]) => new File(
+      [JSON.stringify(data)], key === 'shoreline' ? 'shoreline_lonlat.json' : `${key}_waypoints_lonlat.json`, { type: 'application/json' },
+    ));
+    async function previewUpload() {
+      fireEvent.change(screen.getByLabelText('上传岸线 JSON 文件'), { target: { files } });
+      fireEvent.click(await screen.findByRole('button', { name: '地图预览', exact: true }));
+      await waitFor(() => expect(importedMarkers()).toHaveLength(6));
+    }
+    await previewUpload();
+    fireEvent.click(screen.getByRole('button', { name: '取消导入', exact: true }));
+    await waitFor(() => expect(importedMarkers()).toHaveLength(2));
+    expect(activeLine('#ffc928')).toBeDefined();
+    expect(activeLine('#38ef9a')).toBeUndefined();
+
+    await previewUpload();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    replaceShoreline.mockResolvedValue({ ...dataset, revision: 'revision-2' });
+    fireEvent.click(screen.getByRole('button', { name: '确认替换', exact: true }));
+    await waitFor(() => expect(replaceShoreline).toHaveBeenCalledExactlyOnceWith(dataset.files, dataset.revision));
+    await waitFor(() => expect(importedMarkers()).toHaveLength(0));
+    expect(activeLine('#38ef9a')).toBeDefined();
   });
 });

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 
-const status = () => screen.getByRole('status', { name: '设备 MQTT 连接状态' });
+const status = () => screen.getByRole('status', { name: '设备运行状态' });
 const position = (overrides = {}) => ({
   robotName: 'USV-001', lat: 31.2, lng: 121.4,
   positionUpdatedAtMs: Date.now(), receivedAtMs: Date.now(), ...overrides,
@@ -22,13 +22,15 @@ describe('MQTT coordinate connection indicator', () => {
     render(<DeviceConnectionIndicator position={position()} />);
     expect(status()).toHaveClass('device-connection--online');
     expect(status()).toHaveTextContent('开机');
-    expect(status()).toHaveTextContent('MQTT 已连接');
+    expect(status()).toHaveTextContent('设备在线');
+    expect(status().outerHTML).not.toMatch(/MQTT|经纬度|3\s*秒/);
     act(() => vi.advanceTimersByTime(3000));
     expect(status()).toHaveClass('device-connection--online');
     act(() => vi.advanceTimersByTime(1));
     expect(status()).toHaveClass('device-connection--offline');
     expect(status()).toHaveTextContent('关机');
-    expect(status()).toHaveTextContent('超过 3 秒未收到经纬度');
+    expect(status()).toHaveTextContent('设备离线');
+    expect(status().outerHTML).not.toMatch(/MQTT|经纬度|3\s*秒/);
   });
 
   it('restarts the deadline for each report even when the vessel has not moved', () => {
@@ -75,6 +77,8 @@ describe('MQTT coordinate connection indicator', () => {
     render(<DeviceConnectionIndicator position={value} />);
     expect(status()).toHaveClass('device-connection--offline');
     expect(status()).toHaveTextContent('关机');
+    expect(status()).toHaveTextContent('设备离线');
+    expect(status().outerHTML).not.toMatch(/MQTT|经纬度|3\s*秒/);
   });
 
   it('does not carry over the previous device connection state', () => {

@@ -154,7 +154,26 @@ describe('public shoreline rendering', () => {
     expect(routes[0].segments[0].map(({ seq }) => seq)).toEqual([1, 2]);
     expect(routes[0].segments[0][0]).toMatchObject({ seq: 1, pointId: 1 });
     expect(routes[0].lengthMeters).toBeGreaterThan(0);
-    expect(routes[0].durationSeconds).toBeNull();
+    for (const route of routes) {
+      expect(route.speedMetersPerSecond).toBe(2);
+      expect(route.points.every((point) => point.speedMetersPerSecond === 2)).toBe(true);
+      expect(route.segments.flat().every((point) => point.speedMetersPerSecond === 2)).toBe(true);
+      expect(route.durationSeconds).toBe(Math.ceil(route.lengthMeters / 2));
+    }
+  });
+
+  it('estimates time at 2 m/s without counting disconnected gaps or changing the source JSON', () => {
+    const files = fullFiles();
+    const original = structuredClone(files);
+    const route = files.center;
+    const connected = getImportedRoutes({ center: route })[0];
+    const firstSegmentOnly = getImportedRoutes({ center: { ...route, points: route.points.slice(0, 2) } })[0];
+    expect(connected.durationSeconds).toBe(firstSegmentOnly.durationSeconds);
+    expect(connected.lengthMeters).toBe(firstSegmentOnly.lengthMeters);
+    expect(files).toEqual(original);
+    const isolated = getImportedRoutes({ center: { ...route, points: route.points.map((point) => ({ ...point, reference_can_connect_previous: false })) } })[0];
+    expect(isolated.lengthMeters).toBe(0);
+    expect(isolated.durationSeconds).toBe(0);
   });
 
   it('deletes only the selected imported route and preserves shoreline and sibling routes', () => {

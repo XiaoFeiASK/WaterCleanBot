@@ -1388,7 +1388,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
   const [previewImportedRouteId, setPreviewImportedRouteId] = useState('');
-  const [hiddenImportedKeys, setHiddenImportedKeys] = useState([]);
   const [showShoreline, setShowShoreline] = useState(false);
   const shorelineStore = usePublicShoreline();
   const [showShorelineManager, setShowShorelineManager] = useState(false);
@@ -1400,15 +1399,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const importedRoutes = useMemo(() => getImportedRoutes(shorelineFiles), [shorelineFiles]);
   const savedImportedRoutes = useMemo(() => getImportedRoutes(shorelineStore.dataset?.files), [shorelineStore.dataset]);
   const visibleImportedRoutes = useMemo(() => importedRoutes.filter((route) =>
-    !hiddenImportedKeys.includes(route.sourceKey) && (showShoreline || route.id === previewImportedRouteId)),
-  [importedRoutes, hiddenImportedKeys, showShoreline, previewImportedRouteId]);
+    shorelinePreview || route.id === previewImportedRouteId),
+  [importedRoutes, shorelinePreview, previewImportedRouteId]);
   const hasShorelineLayer = (kind, side) => shorelineSections.some((section) => section.kind === kind && (side === undefined || section.side === side));
 
   function cancelShorelinePreview() {
     setShorelinePreview(null);
     if (previewVisibilityRef.current !== null) {
       setShowShoreline(previewVisibilityRef.current.showShoreline);
-      setHiddenImportedKeys(previewVisibilityRef.current.hiddenImportedKeys);
       setPreviewImportedRouteId(previewVisibilityRef.current.previewImportedRouteId);
       previewVisibilityRef.current = null;
       setShorelineFitSeq((seq) => seq + 1);
@@ -1416,9 +1414,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   }
 
   function previewShoreline(files) {
-    if (previewVisibilityRef.current === null) previewVisibilityRef.current = { showShoreline, hiddenImportedKeys, previewImportedRouteId };
+    if (previewVisibilityRef.current === null) previewVisibilityRef.current = { showShoreline, previewImportedRouteId };
     setShorelinePreview(files);
-    setHiddenImportedKeys([]);
     setShowShoreline(true);
     setShorelineFitSeq((seq) => seq + 1);
   }
@@ -1791,7 +1788,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setPendingRoutePoint(null);
     setPreviewRouteId('');
     setPreviewImportedRouteId(shouldHide ? '' : route.id);
-    setHiddenImportedKeys((keys) => shouldHide ? [...keys.filter((key) => key !== route.sourceKey), route.sourceKey] : keys.filter((key) => key !== route.sourceKey));
     if (!shouldHide) {
       void shorelineStore.reload().catch(() => {});
       setShorelineFitSeq((seq) => seq + 1);
@@ -1910,7 +1906,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           onCancelPreview={cancelShorelinePreview}
           onSaved={() => {
             setShowShoreline(true);
-            setHiddenImportedKeys([]);
             setPreviewImportedRouteId('');
             setShorelineFitSeq((seq) => seq + 1);
             onToast?.('公共岸线已替换', 'success');
@@ -2115,7 +2110,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               )}
               {savedImportedRoutes.map((route) => (
                 <tr key={route.id} className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
-                  <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · 公共</small></td>
+                  <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · {route.speedMetersPerSecond} m/s · 公共</small></td>
                   <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{route.type}</span></td>
                   <td>{formatRouteLength(route.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>

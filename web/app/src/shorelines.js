@@ -1,6 +1,7 @@
 import { wgs84ToGcj02 } from './coordinates';
 
 export const SHORELINE_MAX_BYTES = 20 * 1024 * 1024;
+const IMPORTED_ROUTE_SPEED_METERS_PER_SECOND = 2;
 export const SHORELINE_FILE_TYPES = Object.freeze([
   { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔', required: true },
   { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸航线' },
@@ -131,8 +132,8 @@ export function getImportedRoutes(files) {
         if (!previous || point.reference_can_connect_previous !== true
           || point.reference_segment_id !== previous.reference_segment_id
           || (key !== 'center' && point.map_section !== previous.map_section)) segments.push([]);
-        const position = { lng: point.longitude_deg, lat: point.latitude_deg };
-        const mapped = { ...wgs84ToGcj02(position), seq: index + 1, pointId: point.point_id };
+        const position = { lng: point.longitude_deg, lat: point.latitude_deg, speedMetersPerSecond: IMPORTED_ROUTE_SPEED_METERS_PER_SECOND };
+        const mapped = { ...wgs84ToGcj02(position), speedMetersPerSecond: position.speedMetersPerSecond, seq: index + 1, pointId: point.point_id };
         segments.at(-1).push(mapped);
         previous = point;
         return position;
@@ -150,7 +151,9 @@ export function getImportedRoutes(files) {
         id: `imported-${key}`, sourceKey: key, filename, name: label,
         type: key === 'center' ? '感知航线' : '规划航线', coordinateSystem: 'WGS84',
         color: key === 'center' ? '#ffc928' : key === 'left' ? '#ff963b' : '#36c7f4',
-        points, segments, lengthMeters, durationSeconds: null,
+        points, segments, lengthMeters,
+        speedMetersPerSecond: IMPORTED_ROUTE_SPEED_METERS_PER_SECOND,
+        durationSeconds: Math.ceil(lengthMeters / IMPORTED_ROUTE_SPEED_METERS_PER_SECOND),
       };
     });
 }

@@ -35,11 +35,7 @@ export default function DeviceConnectionIndicator({ position }) {
     };
   }, [position?.robotName, updatedAt]);
 
-  const detail = online
-    ? 'MQTT 已连接'
-    : hasCoordinates(position) && hasPositionTime
-      ? '超过 3 秒未收到经纬度'
-      : '等待 MQTT 经纬度';
+  const detail = online ? '设备在线' : '设备离线';
 
   return (
     <div
@@ -47,8 +43,8 @@ export default function DeviceConnectionIndicator({ position }) {
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      aria-label="设备 MQTT 连接状态"
-      title="按 MQTT 经纬度上报判断：3 秒内为开机，超过 3 秒为关机"
+      aria-label="设备运行状态"
+      title="设备运行状态"
     >
       <span className="device-connection-lamp" aria-hidden="true"><span /></span>
       <span className="device-connection-copy">
