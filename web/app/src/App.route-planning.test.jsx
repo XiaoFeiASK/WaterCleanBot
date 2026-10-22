@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter } from 'react-router-dom';
 import App, { LocationMap } from './App';
 import {
-  createRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes,
+  createRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes, sendImportedRoute,
   fetchRobotTracks, subscribeRobotLocations,
 } from './api';
 import { fetchShoreline, replaceShoreline } from './shoreline-api';
@@ -17,6 +17,7 @@ vi.mock('./api', async (original) => ({
   fetchRobotLocation: vi.fn(),
   fetchRobotRoutes: vi.fn(),
   fetchRobotTracks: vi.fn(),
+  sendImportedRoute: vi.fn(),
   subscribeRobotLocations: vi.fn(),
 }));
 vi.mock('./shoreline-api', () => ({ fetchShoreline: vi.fn(), replaceShoreline: vi.fn() }));
@@ -91,6 +92,7 @@ beforeEach(() => {
   fetchRobotLocation.mockResolvedValue(position);
   fetchRobotTracks.mockResolvedValue([]);
   fetchRobotRoutes.mockResolvedValue([]);
+  sendImportedRoute.mockResolvedValue({ protocol: [40, 2, 121.4, 31.2, 3.888, 121.5, 31.3, 3.888] });
   fetchRobotCameras.mockResolvedValue([]);
   fetchShoreline.mockResolvedValue(null);
   window.AMap = {
@@ -297,5 +299,13 @@ describe('imported route visibility', () => {
     await waitFor(() => expect(replaceShoreline).toHaveBeenCalledExactlyOnceWith(dataset.files, dataset.revision));
     await waitFor(() => expect(importedMarkers()).toHaveLength(0));
     expect(activeLine('#38ef9a')).toBeDefined();
+  });
+
+  it('confirms and sends only the selected persisted public route to the active device', async () => {
+    const dataset = await openDataset();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '下发', exact: true }));
+    await waitFor(() => expect(sendImportedRoute).toHaveBeenCalledExactlyOnceWith('USV-001', 'center', dataset.revision));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('默认速度为 2 m/s'));
   });
 });

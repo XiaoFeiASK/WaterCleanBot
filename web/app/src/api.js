@@ -686,6 +686,45 @@ export async function sendPerceptionRoute(deviceName, route, signal) {
   }
 }
 
+export async function sendImportedRoute(deviceName, routeKey, expectedRevision, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !['left', 'center', 'right'].includes(routeKey) || !expectedRevision) {
+    throw createRouteError('INVALID_ROUTE');
+  }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeoutId = window.setTimeout(abort, ROUTE_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/shoreline-routes/${routeKey}/send`,
+      {
+        method: 'POST', credentials: 'include', cache: 'no-store', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision }),
+      },
+    );
+    const payload = await parseJSONResponse(response, createRouteError);
+    if (!response.ok) {
+      const error = new Error(payload?.error?.message || ROUTE_ERROR_MESSAGES.REQUEST_FAILED);
+      error.code = payload?.error?.code;
+      error.status = response.status;
+      throw error;
+    }
+    const result = validateRouteSendResponse(payload, robotName, `imported-${routeKey}`);
+    if (result.revision !== expectedRevision || result.coordinateSystemSent !== 'WGS84'
+      || result.speedMetersPerSecond !== 2) throw createRouteError('REQUEST_FAILED');
+    return result;
+  } catch (error) {
+    if (error.code || error.status) throw error;
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abort);
+  }
+}
+
 function trackConflictCode(response, action) {
   if (response.status !== 409) return null;
   if (action === 'create') return 'ACTIVE_TRACK_EXISTS';

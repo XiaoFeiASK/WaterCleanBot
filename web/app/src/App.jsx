@@ -53,6 +53,7 @@ import {
   getTrackErrorMessage,
   fetchRobotRoutes,
   sendRobotRoute,
+  sendImportedRoute,
   sendRobotCommand,
   subscribeRobotLocations,
 } from './api';
@@ -67,7 +68,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getShorelineSections, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getShorelineSections, getShorelineWarnings, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -1829,12 +1830,21 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
 
   async function sendRoute(route) {
     if (!routeDeviceId || !route || isRouteBusy) return;
+    const dataset = shorelineStore.dataset;
+    if (route.sourceKey) {
+      if (!dataset || shorelinePreview) return;
+      const warnings = getShorelineWarnings({ [route.sourceKey]: dataset.files[route.sourceKey] });
+      if (!window.confirm(`确认向设备「${routeDeviceId}」下发「${route.name}」？\n默认速度为 2 m/s。${warnings.length ? `\n注意：${warnings.join('；')}。请确认航线安全后再下发。` : ''}`)) return;
+    }
     setRouteAction(`send:${route.id}`);
     try {
-      const result = await sendRobotRoute(routeDeviceId, route.id);
+      const result = route.sourceKey
+        ? await sendImportedRoute(routeDeviceId, route.sourceKey, dataset.revision)
+        : await sendRobotRoute(routeDeviceId, route.id);
       onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
-      onToast?.(getRouteErrorMessage(error));
+      onToast?.(route.sourceKey ? error.message : getRouteErrorMessage(error));
+      if (error.status === 409) void shorelineStore.reload().catch(() => {});
     } finally {
       setRouteAction('');
     }
@@ -1894,7 +1904,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               if (showShorelineManager) { cancelShorelinePreview(); setShowShorelineManager(false); }
               else { setShowShorelineManager(true); void shorelineStore.reload().catch(() => {}); }
             }} disabled={shorelineStore.busy}><Upload size={16} aria-hidden="true" />岸线管理</button>
-            <button className="button button-secondary" type="button" onClick={() => sendRoute(previewRoute)} disabled={!previewRoute || isRouteBusy}>{routeAction === `send:${previewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
+            <button className="button button-secondary" type="button" onClick={() => sendRoute(activePreviewRoute)} disabled={!routeDeviceId || !activePreviewRoute || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${activePreviewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
             <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
@@ -2116,6 +2126,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
+                    <button type="button" onClick={() => sendRoute(route)} disabled={!routeDeviceId || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
                     <button className="route-table-danger" type="button" onClick={() => deleteImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>
                 </tr>

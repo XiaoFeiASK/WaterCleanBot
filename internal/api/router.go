@@ -34,6 +34,7 @@ func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, r
 	mux.HandleFunc("DELETE /api/robots/{robotName}/routes/{routeId}", DeleteRobotRouteHandler(routeRepository, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/routes/{routeId}/send", SendRobotRouteHandler(store, routeRepository, routePublisher, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/perception-route/send", SendPerceptionRouteHandler(store, routePublisher, log))
+	mux.HandleFunc("POST /api/robots/{robotName}/shoreline-routes/{routeKey}/send", SendShorelineRouteHandler(store, shorelineRepository, shorelineAuth, routePublisher, log))
 	mux.HandleFunc("GET /api/robots/{robotName}/tracks", RobotTracksHandler(trackRepository, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/tracks", CreateRobotTrackHandler(store, trackRepository, trackService, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/tracks/{trackId}/end", EndRobotTrackHandler(trackRepository, trackService, log))

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sendPerceptionRoute } from './api';
+import { sendImportedRoute, sendPerceptionRoute } from './api';
 
 const route = {
   coordinateSystem: 'WGS84',
@@ -27,6 +27,35 @@ function publishedResponse(overrides = {}) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('sendImportedRoute', () => {
+  it('sends only route identity and expected public revision', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(publishedResponse({
+      routeId: 'imported-center', revision: 'revision-1',
+      speedMetersPerSecond: 2, coordinateSystemSent: 'WGS84',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await sendImportedRoute('USV-001', 'center', 'revision-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/robots/USV-001/shoreline-routes/center/send'),
+      expect.objectContaining({
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({ expectedRevision: 'revision-1' }),
+      }),
+    );
+    expect(result.speedMetersPerSecond).toBe(2);
+  });
+
+  it('rejects bad keys, missing revisions, and stale versions without accepting a response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: { code: 'revision_conflict', message: 'stale' } }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendImportedRoute('USV-001', 'shoreline', 'revision-1')).rejects.toMatchObject({ code: 'INVALID_ROUTE' });
+    await expect(sendImportedRoute('USV-001', 'left', '')).rejects.toMatchObject({ code: 'INVALID_ROUTE' });
+    await expect(sendImportedRoute('USV-001', 'center', 'revision-1')).rejects.toMatchObject({ status: 409 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
 
 describe('sendPerceptionRoute', () => {
   it('posts all points with the fixed speed of 2', async () => {
