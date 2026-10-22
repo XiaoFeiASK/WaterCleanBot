@@ -84,7 +84,7 @@ describe('public shoreline manager', () => {
     selectShorelineFile();
     fireEvent.click(await screen.findByRole('button', { name: '确认替换' }));
     await waitFor(() => expect(store.replace).toHaveBeenCalledWith(stagedFiles, 'revision-1'));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('未上传的参考线将被清空'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('未上传的航线将被清空'));
     expect(onSaved).toHaveBeenCalled();
     expect(onCancelPreview).toHaveBeenCalled();
   });

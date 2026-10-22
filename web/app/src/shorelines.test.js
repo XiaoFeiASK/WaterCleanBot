@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getImportedRoutes,
   getShorelineSections,
   getShorelineWarnings,
   readShorelineFiles,
   validateShorelineFiles,
+  withoutImportedRoute,
 } from './shorelines';
 
 function shorelineDocument(overrides = {}) {
@@ -113,20 +115,9 @@ describe('public shoreline validation', () => {
   });
 });
 
-describe('public shoreline rendering sections', () => {
+describe('public shoreline rendering', () => {
   it('returns no demo boundaries for an empty or deleted dataset', () => {
     for (const files of [null, undefined, {}]) expect(getShorelineSections(files)).toEqual([]);
-  });
-
-  it('uses reference connectivity independently of navigation verification', () => {
-    const route = referenceDocument('left');
-    route.points = route.points.slice(0, 2).map((point) => ({ ...point, can_connect_previous: false }));
-    route.point_count = 2;
-    const files = validateShorelineFiles({ shoreline: shorelineDocument(), left: route });
-    const lines = getShorelineSections(files).filter(({ kind }) => kind === 'near-bank-reference');
-    expect(lines).toHaveLength(1);
-    expect(lines[0].points).toEqual(route.points.map((point) => [point.longitude_deg, point.latitude_deg]));
-    expect(files.left.points[1].can_connect_previous).toBe(false);
   });
 
   it('sorts contour sections by section_order and keeps every contour independent', () => {
@@ -145,16 +136,36 @@ describe('public shoreline rendering sections', () => {
     ]);
   });
 
-  it('breaks reference lines at connection, reference segment, and near-bank map-section boundaries', () => {
-    const sections = getShorelineSections({ shoreline: shorelineDocument(), left: referenceDocument('left') });
-    const left = sections.filter(({ kind }) => kind === 'near-bank-reference');
-    expect(left).toHaveLength(3);
-    expect(left.map(({ points }) => points.length)).toEqual([2, 1, 1]);
+  it('renders only shoreline and bridge boundaries from shoreline_lonlat.json', () => {
+    const sections = getShorelineSections(fullFiles());
+    expect(sections.map(({ kind }) => kind)).toEqual([3, 1]);
   });
 
-  it('keeps center references independent and reports non-navigation warnings', () => {
-    const sections = getShorelineSections({ shoreline: shorelineDocument(), center: referenceDocument('center') });
-    expect(sections.filter(({ kind }) => kind === 'center-reference')).toHaveLength(3);
+  it('turns the three waypoint files into separately styled routes with numbered, disconnected segments', () => {
+    const routes = getImportedRoutes(fullFiles());
+    expect(routes.map(({ sourceKey, type, color }) => [sourceKey, type, color])).toEqual([
+      ['left', '规划航线', '#ff963b'],
+      ['center', '感知航线', '#ffc928'],
+      ['right', '规划航线', '#36c7f4'],
+    ]);
+    expect(routes.map(({ segments }) => segments.map((segment) => segment.length))).toEqual([
+      [2, 1, 1], [2, 1, 1], [2, 1, 1],
+    ]);
+    expect(routes[0].segments[0].map(({ seq }) => seq)).toEqual([1, 2]);
+    expect(routes[0].segments[0][0]).toMatchObject({ seq: 1, pointId: 1 });
+    expect(routes[0].lengthMeters).toBeGreaterThan(0);
+    expect(routes[0].durationSeconds).toBeNull();
+  });
+
+  it('deletes only the selected imported route and preserves shoreline and sibling routes', () => {
+    const files = fullFiles();
+    const next = withoutImportedRoute(files, 'center');
+    expect(next).toEqual({ shoreline: files.shoreline, left: files.left, right: files.right });
+    expect(files.center).toBeDefined();
+    expect(() => withoutImportedRoute(files, 'shoreline')).toThrow(/只能删除导入的航线/);
+  });
+
+  it('reports partial, unverified, and non-navigation warnings', () => {
     expect(getShorelineWarnings({
       shoreline: shorelineDocument({ state: 'partial', geographic_accuracy_verified: false }),
       center: referenceDocument('center', { navigation_valid: false }),

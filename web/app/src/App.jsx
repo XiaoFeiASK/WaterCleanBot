@@ -53,13 +53,11 @@ import {
   getTrackErrorMessage,
   fetchRobotRoutes,
   sendRobotRoute,
-  sendPerceptionRoute,
   sendRobotCommand,
   subscribeRobotLocations,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 import {
-  DEMO_PERCEPTION_ROUTE,
   DEMO_TEST_DEVICE_NAME,
   DEMO_TEST_POSITION,
   DEMO_TEST_TRACK,
@@ -69,7 +67,8 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getShorelineSections } from './shorelines';
+import { getImportedRoutes, getShorelineSections, withoutImportedRoute } from './shorelines';
+import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
 function confirmAction(message) {
@@ -342,7 +341,6 @@ function getRouteMapPoints(route) {
 }
 
 const EMPTY_MAP_SECTIONS = Object.freeze([]);
-const PERCEPTION_ROUTE_MAP_POINTS = getRouteMapPoints(DEMO_PERCEPTION_ROUTE);
 
 // 航线仅连接航点，不添加船位到首点的引导线。
 export function getPerceptionRouteMapPath(perceptionMapPoints = []) {
@@ -406,6 +404,7 @@ function createRoutePointContent(index, isDraft, variant = 'standard', isBridge 
   point.className = `route-planner-point ${isDraft ? 'route-planner-point-draft' : ''} ${variant === 'perception' ? 'route-planner-point-perception' : ''}`;
   if (isBridge) point.classList.add('route-planner-point-bridge');
   if (isPending) point.classList.add('route-planner-point-pending');
+  if (variant === 'left' || variant === 'right') point.classList.add(`route-planner-point-${variant}`);
   point.textContent = String(index + 1);
   return point;
 }
@@ -551,7 +550,7 @@ function StatusBadge({ position, loading }) {
   );
 }
 
-export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = PERCEPTION_ROUTE_MAP_POINTS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove }) {
+export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = EMPTY_MAP_SECTIONS, importedRoutes = EMPTY_MAP_SECTIONS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -589,7 +588,9 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
 
   useEffect(() => {
     const hasBoatPosition = hasCoordinates(position);
-    const shorelineAnchor = showShoreline ? shorelineSections[0]?.path[0] : null;
+    const firstRoutePoint = importedRoutes[0]?.segments[0]?.[0];
+    const shorelineAnchor = (showShoreline ? shorelineSections[0]?.path[0] : null)
+      || (firstRoutePoint ? [firstRoutePoint.lng, firstRoutePoint.lat] : null);
     if (!hasBoatPosition && !shorelineAnchor) {
       safelyRemoveMarker(markerRef.current);
       markerRef.current = null;
@@ -717,31 +718,50 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
         if (showShoreline) {
           shorelineSections.forEach((section) => {
             const isBridge = section.kind === 3;
-            const isNearBankReference = section.kind === 'near-bank-reference';
-            const isCenterReference = section.kind === 'center-reference';
-            const isReference = isNearBankReference || isCenterReference;
-            const referenceColor = isCenterReference ? '#ffc928' : section.side === 1 ? '#ff963b' : '#36c7f4';
             const shorelinePolyline = new AMap.Polyline({
               map: mapRef.current,
               path: section.path,
-              strokeColor: isReference ? referenceColor : isBridge ? '#d06dff' : '#38ef9a',
+              strokeColor: isBridge ? '#d06dff' : '#38ef9a',
               strokeOpacity: isBridge ? 1 : 0.95,
-              strokeWeight: isReference ? 3 : isBridge ? 6 : 4,
-              strokeStyle: isBridge || isReference ? 'dashed' : 'solid',
-              strokeDasharray: isBridge || isReference ? [10, 5] : undefined,
+              strokeWeight: isBridge ? 6 : 4,
+              strokeStyle: isBridge ? 'dashed' : 'solid',
+              strokeDasharray: isBridge ? [10, 5] : undefined,
               lineJoin: 'round',
               lineCap: 'round',
-              zIndex: isReference ? 65 : isBridge ? 70 : 60,
+              zIndex: isBridge ? 70 : 60,
             });
             shorelinePolylineRefs.current.push(shorelinePolyline);
           });
-          if (shorelinePolylineRefs.current.length && fittedShorelineSeqRef.current !== shorelineFitSeq) {
-            mapRef.current.setFitView?.(shorelinePolylineRefs.current, true, [36, 36, 36, 36], 18);
-            fittedShorelineSeqRef.current = shorelineFitSeq;
-          }
         }
 
-        // 感知航线是本地演示数据，不写入数据库，也不参与下发和删除。
+        importedRoutes.forEach((route) => {
+          route.segments.forEach((segment) => {
+            if (segment.length >= 2) {
+              const line = new AMap.Polyline({
+                map: mapRef.current,
+                path: segment.map(({ lng, lat }) => [lng, lat]),
+                strokeColor: route.color, strokeWeight: 4, strokeOpacity: 1,
+                strokeStyle: 'solid', lineJoin: 'round', lineCap: 'round', zIndex: 91,
+              });
+              perceptionPolylineRefs.current.push(line);
+            }
+            segment.forEach((point) => {
+              const marker = new AMap.Marker({
+                map: mapRef.current, position: [point.lng, point.lat],
+                content: createRoutePointContent(point.seq - 1, false, route.sourceKey === 'center' ? 'perception' : route.sourceKey),
+                offset: new AMap.Pixel(-12, -12), draggable: false,
+                title: `${route.name} · 航点 ${point.seq}（原始编号 ${point.pointId}）`, zIndex: 130,
+              });
+              perceptionPointMarkersRef.current.push(marker);
+            });
+          });
+        });
+        const importedOverlays = [...shorelinePolylineRefs.current, ...perceptionPolylineRefs.current, ...perceptionPointMarkersRef.current];
+        if (importedOverlays.length && fittedShorelineSeqRef.current !== shorelineFitSeq) {
+          mapRef.current.setFitView?.(importedOverlays, true, [36, 36, 36, 36], 18);
+          fittedShorelineSeqRef.current = shorelineFitSeq;
+        }
+
         if (perceptionRoutePoints.length >= 2) {
           const perceptionPath = getPerceptionRouteMapPath(perceptionRoutePoints).map((point) => [point.lng, point.lat]);
           [
@@ -779,7 +799,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, trackLines, perceptionRoutePoints, showShoreline, shorelineSections, shorelineFitSeq, onMapPoint]);
+  }, [position, centerSeq, planningMode, trackLines, perceptionRoutePoints, importedRoutes, showShoreline, shorelineSections, shorelineFitSeq, onMapPoint]);
 
   // 航点覆盖物独立于实时船位更新，避免遥测刷新中断拖动。
   useEffect(() => {
@@ -847,7 +867,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
     };
   }, [routeMap, planningMode, draftRoutePoints, pendingRoutePoint, previewRoutePoints, onRoutePointMove]);
 
-  if (!hasCoordinates(position) && !(showShoreline && shorelineSections.length)) {
+  if (!hasCoordinates(position) && !(showShoreline && shorelineSections.length) && !importedRoutes.length) {
     return (
       <div className="map-empty">
         <MapPinned size={28} strokeWidth={1.5} />
@@ -1367,7 +1387,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
   const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
-  const [showPerceptionRoute, setShowPerceptionRoute] = useState(false);
+  const [previewImportedRouteId, setPreviewImportedRouteId] = useState('');
+  const [hiddenImportedKeys, setHiddenImportedKeys] = useState([]);
   const [showShoreline, setShowShoreline] = useState(false);
   const shorelineStore = usePublicShoreline();
   const [showShorelineManager, setShowShorelineManager] = useState(false);
@@ -1376,29 +1397,37 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const previewVisibilityRef = useRef(null);
   const shorelineFiles = shorelinePreview || shorelineStore.dataset?.files;
   const shorelineSections = useMemo(() => getShorelineSections(shorelineFiles), [shorelineFiles]);
+  const importedRoutes = useMemo(() => getImportedRoutes(shorelineFiles), [shorelineFiles]);
+  const savedImportedRoutes = useMemo(() => getImportedRoutes(shorelineStore.dataset?.files), [shorelineStore.dataset]);
+  const visibleImportedRoutes = useMemo(() => importedRoutes.filter((route) =>
+    !hiddenImportedKeys.includes(route.sourceKey) && (showShoreline || route.id === previewImportedRouteId)),
+  [importedRoutes, hiddenImportedKeys, showShoreline, previewImportedRouteId]);
   const hasShorelineLayer = (kind, side) => shorelineSections.some((section) => section.kind === kind && (side === undefined || section.side === side));
 
   function cancelShorelinePreview() {
     setShorelinePreview(null);
     if (previewVisibilityRef.current !== null) {
-      setShowShoreline(previewVisibilityRef.current);
+      setShowShoreline(previewVisibilityRef.current.showShoreline);
+      setHiddenImportedKeys(previewVisibilityRef.current.hiddenImportedKeys);
+      setPreviewImportedRouteId(previewVisibilityRef.current.previewImportedRouteId);
       previewVisibilityRef.current = null;
       setShorelineFitSeq((seq) => seq + 1);
     }
   }
 
   function previewShoreline(files) {
-    if (previewVisibilityRef.current === null) previewVisibilityRef.current = showShoreline;
+    if (previewVisibilityRef.current === null) previewVisibilityRef.current = { showShoreline, hiddenImportedKeys, previewImportedRouteId };
     setShorelinePreview(files);
+    setHiddenImportedKeys([]);
     setShowShoreline(true);
     setShorelineFitSeq((seq) => seq + 1);
   }
   const previewRoute = routes.find((route) => route.id === previewRouteId);
   const previewRoutePoints = useMemo(() => getRouteMapPoints(previewRoute), [previewRoute]);
-  const activePreviewRoute = showPerceptionRoute ? DEMO_PERCEPTION_ROUTE : previewRoute;
+  const activePreviewRoute = importedRoutes.find((route) => route.id === previewImportedRouteId) || previewRoute;
   const draftRouteLength = getRouteLengthMeters(draftRoutePoints);
   const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints);
-  const isRouteBusy = Boolean(routeAction);
+  const isRouteBusy = Boolean(routeAction) || shorelineStore.busy;
   const isTrackBusy = Boolean(trackAction);
   const recordingTrack = tracks.find((track) => track.status === 'recording');
   const selectedTrackSet = new Set(selectedTrackIds);
@@ -1611,7 +1640,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       setRoutes([]);
       setRoutesError('');
       setPreviewRouteId('');
-      setShowPerceptionRoute(false);
+      setPreviewImportedRouteId('');
       return undefined;
     }
     if (isDemoTestDevice) {
@@ -1619,7 +1648,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       setRoutesLoading(false);
       setRoutesError('');
       setPreviewRouteId('');
-      setShowPerceptionRoute(false);
+      setPreviewImportedRouteId('');
       return undefined;
     }
 
@@ -1659,7 +1688,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
     setPlanningMode((isPlanning) => !isPlanning);
     setPreviewRouteId('');
-    setShowPerceptionRoute(false);
+    setPreviewImportedRouteId('');
     setDraftRoutePoints([]);
     setPendingRoutePoint(null);
   }
@@ -1728,7 +1757,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       });
       setRoutes((currentRoutes) => [...currentRoutes, route]);
       setPreviewRouteId(route.id);
-      setShowPerceptionRoute(false);
+      setPreviewImportedRouteId('');
       setPlanningMode(false);
       setDraftRoutePoints([]);
       onToast?.('航线已保存到数据库', 'success');
@@ -1748,23 +1777,40 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setPlanningMode(false);
     setDraftRoutePoints([]);
     setPendingRoutePoint(null);
-    setShowPerceptionRoute(false);
+    setPreviewImportedRouteId('');
     setPreviewRouteId(shouldHide ? '' : route.id);
     if (!shouldHide) {
       document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
-  function togglePerceptionRoutePreview() {
-    const shouldHide = showPerceptionRoute;
+  function toggleImportedRoutePreview(route) {
+    const shouldHide = visibleImportedRoutes.some((current) => current.id === route.id);
     setPlanningMode(false);
     setDraftRoutePoints([]);
     setPendingRoutePoint(null);
     setPreviewRouteId('');
-    setShowPerceptionRoute(getNextPerceptionPreview(shouldHide));
+    setPreviewImportedRouteId(shouldHide ? '' : route.id);
+    setHiddenImportedKeys((keys) => shouldHide ? [...keys.filter((key) => key !== route.sourceKey), route.sourceKey] : keys.filter((key) => key !== route.sourceKey));
     if (!shouldHide) {
+      void shorelineStore.reload().catch(() => {});
+      setShorelineFitSeq((seq) => seq + 1);
       document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  async function deleteImportedRoute(route) {
+    const dataset = shorelineStore.dataset;
+    if (!dataset || isRouteBusy || shorelinePreview) return;
+    if (!window.confirm(`确认删除公共${route.name}？所有用户都会移除此航线，岸线与其他航线保留。应用内无法恢复，电脑上的原始 JSON 不会删除。`)) return;
+    setRouteAction(`delete:${route.id}`);
+    try {
+      await shorelineStore.replace(withoutImportedRoute(dataset.files, route.sourceKey), dataset.revision);
+      if (previewImportedRouteId === route.id) setPreviewImportedRouteId('');
+      onToast?.(`${route.name}已从数据库删除，其他数据保留`, 'success');
+    } catch (error) {
+      onToast?.(error.status === 409 ? '公共数据已被其他用户更新，请重新加载后再删除' : error.message);
+    } finally { setRouteAction(''); }
   }
 
   async function deleteRoute(route) {
@@ -1798,19 +1844,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     }
   }
 
-  async function sendPerception() {
-    if (!routeDeviceId || isRouteBusy) return;
-    setRouteAction('send:perception');
-    try {
-      const result = await sendPerceptionRoute(routeDeviceId, DEMO_PERCEPTION_ROUTE);
-      onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
-    } catch (error) {
-      onToast?.(getRouteErrorMessage(error));
-    } finally {
-      setRouteAction('');
-    }
-  }
-
   async function stopTask() {
     if (!routeDeviceId || isRouteBusy) return;
     setRouteAction('stop');
@@ -1828,9 +1861,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     <div className="online-map-layout">
       <section className="online-map-card">
         <div className="online-map-toolbar">
-          <div>
-            <p className="eyebrow">在线地图</p>
-            <h3>在线地图 - {deviceName}</h3>
+          <div className="online-map-heading">
+            <div>
+              <p className="eyebrow">在线地图</p>
+              <h3>在线地图 - {deviceName}</h3>
+            </div>
+            <DeviceConnectionIndicator position={position} />
           </div>
           <div className="online-map-actions" aria-label="航线任务操作">
             <button
@@ -1874,13 +1910,15 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           onCancelPreview={cancelShorelinePreview}
           onSaved={() => {
             setShowShoreline(true);
+            setHiddenImportedKeys([]);
+            setPreviewImportedRouteId('');
             setShorelineFitSeq((seq) => seq + 1);
             onToast?.('公共岸线已替换', 'success');
           }}
           onDeleted={() => onToast?.('公共岸线已删除', 'success')}
           onClose={() => setShowShorelineManager(false)}
         />}
-        {showShoreline && <div className="shoreline-map-status" role="status">
+        {(showShoreline || visibleImportedRoutes.length > 0) && <div className="shoreline-map-status" role="status">
           <span>{shorelinePreview ? '待导入预览 · 尚未保存' : shorelineStore.loading ? '正在读取公共岸线' : shorelineStore.error || (shorelineFiles ? `公共岸线 · ${shorelineFiles.shoreline.session_id}` : '暂无公共岸线')}</span>
           <ShorelineWarnings files={shorelineFiles} />
         </div>}
@@ -1899,7 +1937,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             pendingRoutePoint={pendingRoutePoint}
             previewRoutePoints={previewRoutePoints}
             trackLines={trackLines}
-            perceptionRoutePoints={showPerceptionRoute ? PERCEPTION_ROUTE_MAP_POINTS : []}
+            importedRoutes={visibleImportedRoutes}
             showShoreline={showShoreline}
             shorelineSections={shorelineSections}
             shorelineFitSeq={shorelineFitSeq}
@@ -1911,13 +1949,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             {trackLines.map((trackLine) => (
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
             ))}
-            {showPerceptionRoute && <span><i className="legend-dot legend-dot-perception" />感知航线</span>}
+            {visibleImportedRoutes.map((route) => <span key={route.id}><i className="legend-line" style={{ backgroundColor: route.color }} />{route.name}</span>)}
             {showShoreline && hasShorelineLayer(1, 1) && <span><i className="legend-dot legend-dot-shoreline-left" />左岸边界</span>}
             {showShoreline && hasShorelineLayer(1, 0) && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && hasShorelineLayer(3) && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
-            {showShoreline && hasShorelineLayer('near-bank-reference', 1) && <span><i className="legend-dot legend-dot-near-bank-left" />左岸近岸参考线</span>}
-            {showShoreline && hasShorelineLayer('center-reference') && <span><i className="legend-dot legend-dot-center-reference" />中心参考线</span>}
-            {showShoreline && hasShorelineLayer('near-bank-reference', 0) && <span><i className="legend-dot legend-dot-near-bank-right" />右岸近岸参考线</span>}
           </div>
           <div className="device-distance-overlay" aria-label="设备实时状态">
             <div className="telemetry-primary">
@@ -1985,7 +2020,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             </div>
           )}
           {!planningMode && activePreviewRoute && (
-            <div className="route-preview-badge">正在查看 {activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点</div>
+            <div className="route-preview-badge">正在查看 {activePreviewRoute.name || activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点</div>
           )}
         </div>
 
@@ -2052,9 +2087,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         <div className="route-table-heading">
           <div>
             <h3>规划航线</h3>
-            <span>{routesError || '数据库已保存航线，另含 1 条本地感知航线演示数据'}</span>
+            <span>{routesError || '设备航线与公共导入航线'}</span>
           </div>
-          <span className="status-badge status-pending">{routesLoading ? '读取中' : `${routes.length + 1} 条`}</span>
+          <span className="status-badge status-pending">{routesLoading || shorelineStore.loading ? '读取中' : `${routes.length + savedImportedRoutes.length} 条`}</span>
         </div>
 
         <div className="route-table-wrap">
@@ -2075,22 +2110,21 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               {!routesLoading && routesError && (
                 <tr><td className="route-table-empty route-table-error" colSpan="5">{routesError}</td></tr>
               )}
-              {!routesLoading && !routesError && !routes.length && (
-                <tr><td className="route-table-empty" colSpan="5">数据库暂无已保存航线，下方仍展示本地感知航线演示数据。</td></tr>
+              {!routesLoading && !routesError && !routes.length && !savedImportedRoutes.length && (
+                <tr><td className="route-table-empty" colSpan="5">暂无已保存航线</td></tr>
               )}
-              {!routesLoading && !routesError && (
-                <tr className={`route-table-row-perception ${showPerceptionRoute ? 'route-table-row-active' : ''}`}>
-                  <td>{DEMO_PERCEPTION_ROUTE.id}</td>
-                  <td><span className="route-type-badge route-type-perception">{DEMO_PERCEPTION_ROUTE.type}</span></td>
-                  <td>{formatRouteLength(DEMO_PERCEPTION_ROUTE.lengthMeters)}</td>
-                  <td>{formatRouteDurationSeconds(DEMO_PERCEPTION_ROUTE.durationSeconds)}</td>
+              {savedImportedRoutes.map((route) => (
+                <tr key={route.id} className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
+                  <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · 公共</small></td>
+                  <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{route.type}</span></td>
+                  <td>{formatRouteLength(route.lengthMeters)}</td>
+                  <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
-                    <button type="button" onClick={togglePerceptionRoutePreview}>{showPerceptionRoute ? '取消查看' : '查看'}</button>
-                    <button type="button" onClick={sendPerception} disabled={isRouteBusy}>{routeAction === 'send:perception' ? '下发中' : '下发'}</button>
-                    <span className="route-table-local-note">本地演示</span>
+                    <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
+                    <button className="route-table-danger" type="button" onClick={() => deleteImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>
                 </tr>
-              )}
+              ))}
               {!routesLoading && !routesError && routes.map((route) => (
                 <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''} key={route.id}>
                   <td>{route.id}</td>

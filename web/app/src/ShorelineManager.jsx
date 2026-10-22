@@ -119,7 +119,7 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
   }
   async function save() {
     if (!staged || conflict) return;
-    if (!window.confirm('确认替换公共岸线？所有用户将使用新数据，旧数据及未上传的参考线将被清空，无法从应用恢复。')) return;
+    if (!window.confirm('确认替换公共岸线及导入航线？所有用户将使用新数据，旧数据及未上传的航线将被清空，无法从应用恢复。')) return;
     try {
       await replace(staged, expectedRevision);
       clearStage();
@@ -128,7 +128,7 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
     } catch (failure) { report(failure); }
   }
   async function deleteCurrent() {
-    if (!dataset || !window.confirm('确认删除公共岸线及全部参考线？此操作影响所有用户，应用内无法恢复，不会删除电脑上的原始 JSON。')) return;
+    if (!dataset || !window.confirm('确认删除公共岸线及全部导入航线？此操作影响所有用户，应用内无法恢复，不会删除电脑上的原始 JSON。')) return;
     try {
       await remove(dataset.revision);
       clearStage();
@@ -157,7 +157,7 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
           <Upload size={16} aria-hidden="true" />{reading ? '校验中' : '选择 JSON 文件'}
           <input ref={inputRef} type="file" accept=".json,application/json" multiple aria-label="上传岸线 JSON 文件" onChange={selectFiles} disabled={disabled} />
         </label>
-        <span className="shoreline-file-limit">岸线必传 · 参考线可选 · 20 MiB</span>
+        <span className="shoreline-file-limit">岸线必传 · 航线可选 · 20 MiB</span>
         {dataset && <button type="button" className="button button-danger-soft" onClick={deleteCurrent} disabled={disabled || conflict}><Trash2 size={15} />删除公共岸线</button>}
       </div>
       <div className="shoreline-files" role="list" aria-label="岸线文件列表">

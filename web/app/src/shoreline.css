@@ -29,6 +29,9 @@
 .shoreline-map-status { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; padding: 9px 18px; background: #f0f6f7; border-bottom: 1px solid #d6e1e3; color: #536c78; font-size: 12px; overflow-wrap: anywhere; }
 .shoreline-map-status > span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-dot-center-reference { background: repeating-linear-gradient(to right, #ffc928 0 5px, transparent 5px 8px); }
+.route-planner-point-left { color: #482300; background: #ff963b; border-color: #fff0db; }
+.route-planner-point-right { color: #073649; background: #36c7f4; border-color: #dcf7ff; }
+.route-import-source { display: block; margin-top: 5px; color: #657b85; font-size: 11px; font-weight: 400; overflow-wrap: anywhere; white-space: normal; }
 .online-map-toolbar > div:first-child { flex-shrink: 0; }
 .online-map-frame .map-layer-legend { max-width: min(420px, calc(100% - 380px)); }
 @media (max-width: 1100px) {

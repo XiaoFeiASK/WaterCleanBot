@@ -3,9 +3,9 @@ import { wgs84ToGcj02 } from './coordinates';
 export const SHORELINE_MAX_BYTES = 20 * 1024 * 1024;
 export const SHORELINE_FILE_TYPES = Object.freeze([
   { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔', required: true },
-  { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸参考线' },
-  { key: 'center', filename: 'center_waypoints_lonlat.json', label: '中心参考线' },
-  { key: 'right', filename: 'right_waypoints_lonlat.json', label: '右岸参考线' },
+  { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸航线' },
+  { key: 'center', filename: 'center_waypoints_lonlat.json', label: '中心感知航线' },
+  { key: 'right', filename: 'right_waypoints_lonlat.json', label: '右岸航线' },
 ]);
 
 function requireValue(condition, message) {
@@ -112,22 +112,6 @@ export function getShorelineSections(files) {
       kind: section.kind,
       points: section.points.map((point) => [point.longitude_deg, point.latitude_deg]),
     })));
-  for (const key of ['left', 'center', 'right']) {
-    const route = files[key];
-    if (!route) continue;
-    let current;
-    let previous;
-    for (const point of route.points) {
-      if (!current || point.reference_can_connect_previous !== true
-        || point.reference_segment_id !== previous.reference_segment_id
-        || (key !== 'center' && point.map_section !== previous.map_section)) {
-        current = { id: `${key}-${sections.length}`, side: route.side, kind: key === 'center' ? 'center-reference' : 'near-bank-reference', points: [] };
-        sections.push(current);
-      }
-      current.points.push([point.longitude_deg, point.latitude_deg]);
-      previous = point;
-    }
-  }
   return sections.map((section) => ({
     ...section,
     path: section.points.map(([lng, lat]) => {
@@ -135,6 +119,46 @@ export function getShorelineSections(files) {
       return [mapped.lng, mapped.lat];
     }),
   }));
+}
+
+export function getImportedRoutes(files) {
+  return SHORELINE_FILE_TYPES.filter(({ key }) => key !== 'shoreline' && files?.[key]?.points?.length)
+    .map(({ key, filename, label }) => {
+      const document = files[key];
+      const segments = [];
+      let previous;
+      const points = document.points.map((point, index) => {
+        if (!previous || point.reference_can_connect_previous !== true
+          || point.reference_segment_id !== previous.reference_segment_id
+          || (key !== 'center' && point.map_section !== previous.map_section)) segments.push([]);
+        const position = { lng: point.longitude_deg, lat: point.latitude_deg };
+        const mapped = { ...wgs84ToGcj02(position), seq: index + 1, pointId: point.point_id };
+        segments.at(-1).push(mapped);
+        previous = point;
+        return position;
+      });
+      // Length follows only connected segments; gaps must not become navigation legs.
+      const lengthMeters = segments.reduce((total, segment) => total + segment.slice(1).reduce((sum, point, index) => {
+        const a = points[segment[index].seq - 1];
+        const b = points[point.seq - 1];
+        const rad = Math.PI / 180;
+        const h = Math.sin((b.lat - a.lat) * rad / 2) ** 2
+          + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin((b.lng - a.lng) * rad / 2) ** 2;
+        return sum + 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
+      }, 0), 0);
+      return {
+        id: `imported-${key}`, sourceKey: key, filename, name: label,
+        type: key === 'center' ? '感知航线' : '规划航线', coordinateSystem: 'WGS84',
+        color: key === 'center' ? '#ffc928' : key === 'left' ? '#ff963b' : '#36c7f4',
+        points, segments, lengthMeters, durationSeconds: null,
+      };
+    });
+}
+
+export function withoutImportedRoute(files, key) {
+  if (!['left', 'center', 'right'].includes(key)) throw new Error('只能删除导入的航线文件');
+  const { [key]: removed, ...remaining } = files;
+  return remaining;
 }
 
 export function getShorelineWarnings(files) {
