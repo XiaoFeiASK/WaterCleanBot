@@ -68,7 +68,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getShorelineSections, getShorelineWarnings, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getShorelineSections, getShorelineSession, getShorelineWarnings, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -1802,7 +1802,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     if (!window.confirm(`确认删除公共${route.name}？所有用户都会移除此航线，岸线与其他航线保留。应用内无法恢复，电脑上的原始 JSON 不会删除。`)) return;
     setRouteAction(`delete:${route.id}`);
     try {
-      await shorelineStore.replace(withoutImportedRoute(dataset.files, route.sourceKey), dataset.revision);
+      const remaining = withoutImportedRoute(dataset.files, route.sourceKey);
+      if (Object.values(remaining).some(Boolean)) {
+        await shorelineStore.replace(remaining, dataset.revision);
+      } else {
+        await shorelineStore.remove(dataset.revision);
+      }
       if (previewImportedRouteId === route.id) setPreviewImportedRouteId('');
       onToast?.(`${route.name}已从数据库删除，其他数据保留`, 'success');
     } catch (error) {
@@ -1924,7 +1929,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           onClose={() => setShowShorelineManager(false)}
         />}
         {(showShoreline || visibleImportedRoutes.length > 0) && <div className="shoreline-map-status" role="status">
-          <span>{shorelinePreview ? '待导入预览 · 尚未保存' : shorelineStore.loading ? '正在读取公共岸线' : shorelineStore.error || (shorelineFiles ? `公共岸线 · ${shorelineFiles.shoreline.session_id}` : '暂无公共岸线')}</span>
+          <span>{shorelinePreview ? '待导入预览 · 尚未保存' : shorelineStore.loading ? '正在读取公共岸线' : shorelineStore.error || (shorelineFiles ? `公共岸线 · ${getShorelineSession(shorelineFiles)}` : '暂无公共岸线')}</span>
           <ShorelineWarnings files={shorelineFiles} />
         </div>}
 

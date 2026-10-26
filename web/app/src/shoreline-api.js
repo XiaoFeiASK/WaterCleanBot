@@ -20,7 +20,9 @@ async function request(method, body, signal) {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      const error = new Error(payload?.error?.message || '岸线请求失败，请稍后重试');
+      const error = new Error(payload?.error?.message || (response.status === 413
+        ? '文件超过服务器上传大小限制，请管理员调整 Nginx 的 client_max_body_size 后重试'
+        : '岸线请求失败，请稍后重试'));
       error.code = payload?.error?.code;
       error.status = response.status;
       throw error;
@@ -40,3 +42,4 @@ async function request(method, body, signal) {
 export const fetchShoreline = (signal) => request('GET', undefined, signal);
 export const replaceShoreline = (files, expectedRevision) => request('PUT', { files, expectedRevision });
 export const deleteShoreline = (expectedRevision) => request('DELETE', { expectedRevision });
+export const updateShoreline = (files, expectedRevision) => request('PATCH', { files, expectedRevision });

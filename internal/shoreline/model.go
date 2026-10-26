@@ -15,7 +15,7 @@ const MaxRequestBytes = 20 << 20
 var ErrConflict = errors.New("shoreline revision conflict")
 
 type Files struct {
-	Shoreline json.RawMessage `json:"shoreline"`
+	Shoreline json.RawMessage `json:"shoreline,omitempty"`
 	Left      json.RawMessage `json:"left,omitempty"`
 	Center    json.RawMessage `json:"center,omitempty"`
 	Right     json.RawMessage `json:"right,omitempty"`
@@ -104,9 +104,6 @@ func ValidateFiles(files Files) (Files, error) {
 			return Files{}, &ValidationError{Message: fmt.Sprintf("%s: %s", entry.name, message)}
 		}
 		if absent(*entry.raw) {
-			if entry.name == "shoreline" {
-				return invalid("岸线文件必传")
-			}
 			*entry.raw = nil
 			continue
 		}
@@ -189,7 +186,27 @@ func ValidateFiles(files Files) (Files, error) {
 			return invalid("point_count 与实际点数不一致")
 		}
 	}
+	if absent(result.Shoreline) && absent(result.Left) && absent(result.Center) && absent(result.Right) {
+		return Files{}, &ValidationError{Message: "请至少上传一个有效的岸线或航线文件"}
+	}
 	return result, nil
+}
+
+// MergeFiles replaces only uploaded files; omitted and empty files retain current data.
+func MergeFiles(current, uploaded Files) (Files, error) {
+	validated, err := ValidateFiles(uploaded)
+	if err != nil {
+		return Files{}, err
+	}
+	for _, pair := range []struct{ target, source *json.RawMessage }{
+		{&current.Shoreline, &validated.Shoreline}, {&current.Left, &validated.Left},
+		{&current.Center, &validated.Center}, {&current.Right, &validated.Right},
+	} {
+		if !absent(*pair.source) {
+			*pair.target = *pair.source
+		}
+	}
+	return ValidateFiles(current)
 }
 
 func validSide(side *int) bool { return side != nil && (*side == 0 || *side == 1) }

@@ -19,7 +19,7 @@ func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, r
 		shorelineAuth = authService
 	}
 	shorelineHandler := ShorelineHandler(shorelineRepository, shorelineAuth, log)
-	for _, method := range []string{"GET", "PUT", "DELETE"} {
+	for _, method := range []string{"GET", "PUT", "PATCH", "DELETE"} {
 		mux.HandleFunc(method+" /api/shoreline", shorelineHandler)
 	}
 	mux.HandleFunc("POST /api/robots", CreateRobotHandler(store, log))

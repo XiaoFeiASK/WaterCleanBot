@@ -11,12 +11,37 @@ vi.mock('./shorelines', async () => {
   return { ...actual, readShorelineFiles: vi.fn() };
 });
 
-const stagedFiles = {
-  shoreline: { session_id: 'new-bundle', point_count: 12, state: 'completed' },
-};
+function shorelineFile(sessionId, longitude) {
+  return {
+    schema_version: 3,
+    session_id: sessionId,
+    state: 'completed',
+    datum: 'WGS84',
+    valid: true,
+    contour_count: 1,
+    point_count: 2,
+    contours: [{
+      contour_id: 1,
+      side: 1,
+      sections: [{
+        line_id: 1,
+        contour_id: 1,
+        section_order: 1,
+        side: 1,
+        kind: 1,
+        points: [
+          { longitude_deg: longitude, latitude_deg: 31.2 },
+          { longitude_deg: longitude + 0.01, latitude_deg: 31.3 },
+        ],
+      }],
+    }],
+  };
+}
+
+const stagedFiles = { shoreline: shorelineFile('new-bundle', 121.6) };
 const currentDataset = {
   revision: 'revision-1',
-  files: { shoreline: { session_id: 'old-bundle', point_count: 8, state: 'completed' } },
+  files: { shoreline: shorelineFile('old-bundle', 121.4) },
   updatedAt: '2026-10-16T08:00:00Z',
   uploadedBy: { id: 'user-1', displayName: '测试用户' },
 };
@@ -28,7 +53,7 @@ function makeStore(overrides = {}) {
     busy: false,
     error: '',
     reload: vi.fn().mockResolvedValue(currentDataset),
-    replace: vi.fn().mockResolvedValue(currentDataset),
+    update: vi.fn().mockResolvedValue(currentDataset),
     remove: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
@@ -51,13 +76,13 @@ beforeEach(() => {
 });
 
 describe('public shoreline manager', () => {
-  it('shows the current dataset metadata and explicitly marks missing optional files for clearing', async () => {
+  it('shows the current dataset metadata and allows selecting one file independently', async () => {
     const store = makeStore();
     render(<ShorelineManager store={store} onPreview={vi.fn()} onCancelPreview={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText(/来源 old-bundle/)).toBeTruthy();
     expect(screen.getByText('上传人 测试用户')).toBeTruthy();
     selectShorelineFile();
-    const missingOptionalFiles = await screen.findAllByText('未上传，将清空');
+    const missingOptionalFiles = await screen.findAllByText('未导入');
     expect(missingOptionalFiles).toHaveLength(3);
     expect(screen.getByText('shoreline_lonlat.json')).toBeTruthy();
   });
@@ -69,29 +94,32 @@ describe('public shoreline manager', () => {
     render(<ShorelineManager store={store} onPreview={onPreview} onCancelPreview={onCancelPreview} onSaved={vi.fn()} onClose={vi.fn()} />);
     selectShorelineFile();
     fireEvent.click(await screen.findByRole('button', { name: '地图预览' }));
-    expect(onPreview).toHaveBeenCalledWith(stagedFiles);
+    expect(onPreview).toHaveBeenCalledWith({
+      ...currentDataset.files,
+      ...stagedFiles,
+    });
     fireEvent.click(screen.getByRole('button', { name: '取消导入' }));
     expect(onCancelPreview).toHaveBeenCalled();
-    expect(store.replace).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: '确认替换' })).toBeNull();
   });
 
-  it('replaces using the revision captured with the imported files and confirms the update', async () => {
+  it('updates only the selected file using the captured revision', async () => {
     const store = makeStore();
     const onSaved = vi.fn();
     const onCancelPreview = vi.fn();
     render(<ShorelineManager store={store} onPreview={vi.fn()} onCancelPreview={onCancelPreview} onSaved={onSaved} onClose={vi.fn()} />);
     selectShorelineFile();
     fireEvent.click(await screen.findByRole('button', { name: '确认替换' }));
-    await waitFor(() => expect(store.replace).toHaveBeenCalledWith(stagedFiles, 'revision-1'));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('未上传的航线将被清空'));
+    await waitFor(() => expect(store.update).toHaveBeenCalledWith(stagedFiles, 'revision-1'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('其他已上传的岸线和航线将保留'));
     expect(onSaved).toHaveBeenCalled();
     expect(onCancelPreview).toHaveBeenCalled();
   });
 
   it('retains the staged import after a save error and requires reload after a version conflict', async () => {
     const conflict = Object.assign(new Error('版本冲突，请重新加载'), { status: 409 });
-    const store = makeStore({ replace: vi.fn().mockRejectedValue(conflict) });
+    const store = makeStore({ update: vi.fn().mockRejectedValue(conflict) });
     render(<ShorelineManager store={store} onPreview={vi.fn()} onCancelPreview={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} />);
     selectShorelineFile();
     fireEvent.click(await screen.findByRole('button', { name: '确认替换' }));

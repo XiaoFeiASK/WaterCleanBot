@@ -3,7 +3,7 @@ import { wgs84ToGcj02 } from './coordinates';
 export const SHORELINE_MAX_BYTES = 20 * 1024 * 1024;
 const IMPORTED_ROUTE_SPEED_METERS_PER_SECOND = 2;
 export const SHORELINE_FILE_TYPES = Object.freeze([
-  { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔', required: true },
+  { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔' },
   { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸航线' },
   { key: 'center', filename: 'center_waypoints_lonlat.json', label: '中心感知航线' },
   { key: 'right', filename: 'right_waypoints_lonlat.json', label: '右岸航线' },
@@ -22,15 +22,12 @@ function validCoordinate(point) {
 export function validateShorelineFiles(files) {
   const normalized = {};
   let session;
-  for (const { key, label, required } of SHORELINE_FILE_TYPES) {
+  for (const { key, label } of SHORELINE_FILE_TYPES) {
     const data = files?.[key];
     const check = (condition, message) => requireValue(condition, `${label}：${message}`);
-    if (data == null) {
-      check(!required, '请选择 shoreline_lonlat.json');
-      continue;
-    }
+    if (data == null) continue;
     check(typeof data === 'object' && !Array.isArray(data), 'JSON 根节点必须是对象');
-    if (!required && Array.isArray(data.points) && data.points.length === 0 && data.contours == null) continue;
+    if (key !== 'shoreline' && Array.isArray(data.points) && data.points.length === 0 && data.contours == null) continue;
     check(data.schema_version === 3 && data.datum === 'WGS84'
       && typeof data.session_id === 'string' && data.session_id.trim(), '需要 schema_version=3、WGS84 和 session_id');
     check(data.valid === true && ['completed', 'partial'].includes(data.state), '仅接受有效的 completed 或 partial 数据');
@@ -78,7 +75,16 @@ export function validateShorelineFiles(files) {
     check(data.point_count === count, 'point_count 与实际点数不一致');
     normalized[key] = data;
   }
+  requireValue(Object.keys(normalized).length > 0, '请至少上传一个有效的岸线或航线文件');
   return normalized;
+}
+
+export function mergeShorelineFiles(current, uploaded) {
+  return validateShorelineFiles({ ...current, ...validateShorelineFiles(uploaded) });
+}
+
+export function getShorelineSession(files) {
+  return SHORELINE_FILE_TYPES.map(({ key }) => files?.[key]?.session_id).find(Boolean) || '';
 }
 
 export async function readShorelineFiles(selectedFiles) {

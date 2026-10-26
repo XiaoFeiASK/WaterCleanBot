@@ -37,7 +37,7 @@ func readDataset(row *sql.Row) (*Dataset, error) {
 }
 
 // A table lock also serializes the first insert when no singleton row exists yet.
-func (r *Repository) mutate(ctx context.Context, expected *string, files *Files, uploader Uploader) (*Dataset, error) {
+func (r *Repository) mutate(ctx context.Context, expected *string, files *Files, uploader Uploader, merge bool) (*Dataset, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -61,6 +61,17 @@ func (r *Repository) mutate(ctx context.Context, expected *string, files *Files,
 			return nil, err
 		}
 	} else {
+		if merge {
+			var base Files
+			if current != nil {
+				base = current.Files
+			}
+			merged, err := MergeFiles(base, *files)
+			if err != nil {
+				return nil, err
+			}
+			files = &merged
+		}
 		var token [16]byte
 		if _, err := rand.Read(token[:]); err != nil {
 			return nil, err
@@ -91,10 +102,15 @@ func (r *Repository) Replace(ctx context.Context, expected *string, files Files,
 	if err != nil {
 		return nil, err
 	}
-	return r.mutate(ctx, expected, &validated, uploader)
+	return r.mutate(ctx, expected, &validated, uploader, false)
 }
 
 func (r *Repository) Delete(ctx context.Context, expected *string) error {
-	_, err := r.mutate(ctx, expected, nil, Uploader{})
+	_, err := r.mutate(ctx, expected, nil, Uploader{}, false)
 	return err
+}
+
+// Update merges the upload under the same transaction and revision check as replacement.
+func (r *Repository) Update(ctx context.Context, expected *string, files Files, uploader Uploader) (*Dataset, error) {
+	return r.mutate(ctx, expected, &files, uploader, true)
 }

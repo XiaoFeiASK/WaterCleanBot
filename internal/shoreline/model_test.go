@@ -83,12 +83,50 @@ func TestValidateFilesAllowsPartialAndClearsAbsentOrEmptyOptionalFiles(t *testin
 	}
 }
 
+func TestValidateFilesAllowsEachFileIndependently(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		files Files
+		key   string
+	}{
+		{name: "shoreline", files: Files{Shoreline: testShoreline()}, key: "shoreline"},
+		{name: "left", files: Files{Left: testReference("left")}, key: "left"},
+		{name: "center", files: Files{Center: testReference("center")}, key: "center"},
+		{name: "right", files: Files{Right: testReference("right")}, key: "right"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			validated, err := ValidateFiles(test.files)
+			if err != nil {
+				t.Fatalf("ValidateFiles rejected independent %s upload: %v", test.name, err)
+			}
+			if len(validated.raw(test.key)) == 0 {
+				t.Fatalf("validated %s file was lost", test.name)
+			}
+		})
+	}
+}
+
+func TestMergeFilesReplacesOnlyUploadedFile(t *testing.T) {
+	current := fullTestFiles()
+	updatedCenter := raw(strings.Replace(string(testReference("center")), `"longitude_deg":121.4`, `"longitude_deg":121.41`, 1))
+	merged, err := MergeFiles(current, Files{Center: updatedCenter})
+	if err != nil {
+		t.Fatalf("MergeFiles rejected independent upload: %v", err)
+	}
+	if !equalJSON(merged.Shoreline, current.Shoreline) || !equalJSON(merged.Left, current.Left) || !equalJSON(merged.Right, current.Right) {
+		t.Fatal("MergeFiles changed files that were not uploaded")
+	}
+	if equalJSON(merged.Center, current.Center) || !equalJSON(merged.Center, updatedCenter) {
+		t.Fatal("MergeFiles did not replace the uploaded file")
+	}
+}
+
 func TestValidateFilesRejectsInvalidBundles(t *testing.T) {
 	tests := []struct {
 		name string
 		edit func(*Files)
 	}{
-		{name: "missing shoreline", edit: func(f *Files) { f.Shoreline = nil }},
+		{name: "empty upload", edit: func(f *Files) { *f = Files{} }},
 		{name: "schema version", edit: func(f *Files) {
 			f.Shoreline = raw(strings.Replace(string(f.Shoreline), `"schema_version":3`, `"schema_version":2`, 1))
 		}},

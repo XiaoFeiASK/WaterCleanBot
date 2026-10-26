@@ -29,9 +29,11 @@ type fakeShorelineRepository struct {
 	dataset      *shoreline.Dataset
 	getErr       error
 	replaceErr   error
+	updateErr    error
 	deleteErr    error
 	getCalls     int
 	replaceCalls int
+	updateCalls  int
 	deleteCalls  int
 	expected     *string
 	uploader     shoreline.Uploader
@@ -48,6 +50,23 @@ func (r *fakeShorelineRepository) Replace(_ context.Context, expected *string, f
 		return nil, r.replaceErr
 	}
 	r.dataset = &shoreline.Dataset{Revision: "new-revision", Files: files, UploadedBy: uploader}
+	return r.dataset, nil
+}
+func (r *fakeShorelineRepository) Update(_ context.Context, expected *string, files shoreline.Files, uploader shoreline.Uploader) (*shoreline.Dataset, error) {
+	r.updateCalls++
+	r.expected, r.uploader = expected, uploader
+	if r.updateErr != nil {
+		return nil, r.updateErr
+	}
+	var current shoreline.Files
+	if r.dataset != nil {
+		current = r.dataset.Files
+	}
+	merged, err := shoreline.MergeFiles(current, files)
+	if err != nil {
+		return nil, err
+	}
+	r.dataset = &shoreline.Dataset{Revision: "updated-revision", Files: merged, UploadedBy: uploader}
 	return r.dataset, nil
 }
 func (r *fakeShorelineRepository) Delete(_ context.Context, expected *string) error {

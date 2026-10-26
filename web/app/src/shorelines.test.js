@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   getImportedRoutes,
   getShorelineSections,
+  getShorelineSession,
   getShorelineWarnings,
+  mergeShorelineFiles,
   readShorelineFiles,
   validateShorelineFiles,
   withoutImportedRoute,
@@ -100,9 +102,9 @@ describe('public shoreline validation', () => {
     })).toThrow(/session_id/);
   });
 
-  it('rejects incorrect file types, duplicate files, illegal coordinates, and overlarge input', async () => {
+  it('accepts independent route files and rejects incorrect file types, duplicate files, illegal coordinates, and overlarge input', async () => {
     await expect(readShorelineFiles([selectedFile('left_waypoints_lonlat.json', referenceDocument('left'))]))
-      .rejects.toThrow(/shoreline_lonlat/);
+      .resolves.toEqual({ left: referenceDocument('left') });
     await expect(readShorelineFiles([
       selectedFile('shoreline_lonlat.json', shorelineDocument()),
       selectedFile('shoreline_lonlat.json', shorelineDocument()),
@@ -182,6 +184,17 @@ describe('public shoreline rendering', () => {
     expect(next).toEqual({ shoreline: files.shoreline, left: files.left, right: files.right });
     expect(files.center).toBeDefined();
     expect(() => withoutImportedRoute(files, 'shoreline')).toThrow(/只能删除导入的航线/);
+  });
+
+  it('merges one uploaded file while retaining the other official files', () => {
+    const files = fullFiles();
+    const replacement = referenceDocument('center', { point_count: 4, session_id: 'bundle-a' });
+    const merged = mergeShorelineFiles(files, { center: replacement });
+    expect(merged.shoreline).toEqual(files.shoreline);
+    expect(merged.left).toEqual(files.left);
+    expect(merged.center).toEqual(replacement);
+    expect(merged.right).toEqual(files.right);
+    expect(getShorelineSession(merged)).toBe('bundle-a');
   });
 
   it('reports partial, unverified, and non-navigation warnings', () => {

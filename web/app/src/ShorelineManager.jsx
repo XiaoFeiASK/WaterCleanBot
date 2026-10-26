@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, Eye, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react';
-import { deleteShoreline, fetchShoreline, replaceShoreline } from './shoreline-api';
-import { getShorelineWarnings, readShorelineFiles, SHORELINE_FILE_TYPES } from './shorelines';
+import { deleteShoreline, fetchShoreline, replaceShoreline, updateShoreline } from './shoreline-api';
+import {
+  getShorelineSession,
+  getShorelineWarnings,
+  mergeShorelineFiles,
+  readShorelineFiles,
+  SHORELINE_FILE_TYPES,
+} from './shorelines';
 import './shoreline.css';
 
 export function usePublicShoreline() {
@@ -58,6 +64,7 @@ export function usePublicShoreline() {
   return {
     dataset, loading, error, busy, reload,
     replace: (files, revision) => mutate(() => replaceShoreline(files, revision)),
+    update: (files, revision) => mutate(() => updateShoreline(files, revision)),
     remove: (revision) => mutate(() => deleteShoreline(revision)),
   };
 }
@@ -68,7 +75,7 @@ export function ShorelineWarnings({ files }) {
 }
 
 export default function ShorelineManager({ store, onPreview, onCancelPreview, onSaved, onDeleted, onClose }) {
-  const { dataset, loading, busy, reload, replace, remove } = store;
+  const { dataset, loading, busy, reload, update, remove } = store;
   const [staged, setStaged] = useState(null);
   const [expectedRevision, setExpectedRevision] = useState(null);
   const [error, setError] = useState('');
@@ -85,11 +92,12 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
     setPreviewing(false);
     setReading(false);
     setConflict(false);
+    setExpectedRevision(null);
     if (inputRef.current) inputRef.current.value = '';
     onCancelPreview();
   }
   async function selectFiles(event) {
-    const selected = Array.from(event.target.files || []);
+    const selected = Array.from(event.target.files || []).slice(0, 1);
     if (!selected.length) return;
     clearStage();
     const seq = ++selectionSeq.current;
@@ -119,9 +127,9 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
   }
   async function save() {
     if (!staged || conflict) return;
-    if (!window.confirm('确认替换公共岸线及导入航线？所有用户将使用新数据，旧数据及未上传的航线将被清空，无法从应用恢复。')) return;
+    if (!window.confirm('确认上传并替换当前文件？其他已上传的岸线和航线将保留，所有用户都会使用新数据。')) return;
     try {
-      await replace(staged, expectedRevision);
+      await update(staged, expectedRevision);
       clearStage();
       setError('');
       onSaved();
@@ -140,7 +148,7 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
   return (
     <section className="shoreline-manager" aria-label="公共岸线管理" aria-busy={busy || reading}>
       <header className="shoreline-manager-heading">
-        <div><strong>公共岸线</strong><span>{loading ? '正在读取' : dataset ? `来源 ${dataset.files.shoreline.session_id}` : '暂无公共岸线'}</span></div>
+        <div><strong>公共岸线</strong><span>{loading ? '正在读取' : dataset ? `来源 ${getShorelineSession(dataset.files)}` : '暂无公共岸线'}</span></div>
         <div className="shoreline-icon-actions">
           <button type="button" title="重新加载当前数据" aria-label="重新加载当前数据" onClick={refresh} disabled={disabled}><RefreshCw size={17} /></button>
           <button type="button" title="关闭岸线管理" aria-label="关闭岸线管理" onClick={() => { clearStage(); onClose(); }} disabled={busy}><X size={18} /></button>
@@ -149,31 +157,41 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
       {dataset && <div className="shoreline-metadata">
         <span>更新于 {new Date(dataset.updatedAt).toLocaleString('zh-CN')}</span>
         <span>上传人 {dataset.uploadedBy.displayName}</span>
-        <span>岸线 {dataset.files.shoreline.point_count} 点</span>
+        <span>{dataset.files.shoreline ? `岸线 ${dataset.files.shoreline.point_count} 点` : '岸线未导入'}</span>
         <ShorelineWarnings files={dataset.files} />
       </div>}
       <div className="shoreline-file-toolbar">
         <label className={`button button-secondary shoreline-upload ${disabled ? 'shoreline-disabled' : ''}`}>
           <Upload size={16} aria-hidden="true" />{reading ? '校验中' : '选择 JSON 文件'}
-          <input ref={inputRef} type="file" accept=".json,application/json" multiple aria-label="上传岸线 JSON 文件" onChange={selectFiles} disabled={disabled} />
+          <input ref={inputRef} type="file" accept=".json,application/json" aria-label="上传岸线 JSON 文件" onChange={selectFiles} disabled={disabled} />
         </label>
-        <span className="shoreline-file-limit">岸线必传 · 航线可选 · 20 MiB</span>
+        <span className="shoreline-file-limit">每次上传一个文件 · 20 MiB</span>
         {dataset && <button type="button" className="button button-danger-soft" onClick={deleteCurrent} disabled={disabled || conflict}><Trash2 size={15} />删除公共岸线</button>}
       </div>
       <div className="shoreline-files" role="list" aria-label="岸线文件列表">
         {SHORELINE_FILE_TYPES.map(({ key, filename, label, required }) => {
-          const file = staged ? staged[key] : dataset?.files[key];
+          const uploaded = staged?.[key];
+          const current = dataset?.files[key];
+          const file = uploaded || current;
           return <div className="shoreline-file-row" role="listitem" key={key}>
             <div><strong>{label}{required && <small>必传</small>}</strong><span>{filename}</span></div>
-            <span className={file ? 'shoreline-file-valid' : ''}>{file ? `${staged ? '校验通过 · ' : ''}${file.point_count} 点` : staged ? '未上传，将清空' : '未导入'}</span>
+            <span className={file ? 'shoreline-file-valid' : ''}>{file
+              ? `${uploaded ? '本次上传 · 校验通过' : '保留现有'} · ${file.point_count} 点`
+              : '未导入'}</span>
           </div>;
         })}
       </div>
-      {staged && <div className="shoreline-staged-status"><span>待导入来源：{staged.shoreline.session_id}</span><ShorelineWarnings files={staged} /></div>}
+      {staged && <div className="shoreline-staged-status"><span>待导入来源：{getShorelineSession(staged)}</span><ShorelineWarnings files={staged} /></div>}
       {(error || store.error) && <div className="shoreline-error" role="alert">{error || store.error}</div>}
       {staged && <footer className="shoreline-manager-footer">
         <button type="button" className="button button-secondary" onClick={() => { clearStage(); setError(''); }} disabled={busy}>取消导入</button>
-        <button type="button" className="button button-secondary" onClick={() => { onPreview(staged); setPreviewing(true); }} disabled={disabled}><Eye size={16} />{previewing ? '重新预览' : '地图预览'}</button>
+        <button type="button" className="button button-secondary" onClick={() => {
+          try {
+            onPreview(mergeShorelineFiles(dataset?.files || {}, staged));
+            setPreviewing(true);
+            setError('');
+          } catch (failure) { setError(failure.message); }
+        }} disabled={disabled}><Eye size={16} />{previewing ? '重新预览' : '地图预览'}</button>
         <button type="button" className="button button-primary" onClick={save} disabled={disabled || conflict}><Save size={16} />{busy ? '保存中' : '确认替换'}</button>
       </footer>}
     </section>

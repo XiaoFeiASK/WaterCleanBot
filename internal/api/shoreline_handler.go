@@ -15,6 +15,7 @@ import (
 type ShorelineRepository interface {
 	Get(context.Context) (*shoreline.Dataset, error)
 	Replace(context.Context, *string, shoreline.Files, shoreline.Uploader) (*shoreline.Dataset, error)
+	Update(context.Context, *string, shoreline.Files, shoreline.Uploader) (*shoreline.Dataset, error)
 	Delete(context.Context, *string) error
 }
 
@@ -43,7 +44,7 @@ func ShorelineHandler(repository ShorelineRepository, authenticator shorelineAut
 		switch r.Method {
 		case http.MethodGet:
 			dataset, err = repository.Get(r.Context())
-		case http.MethodPut, http.MethodDelete:
+		case http.MethodPut, http.MethodPatch, http.MethodDelete:
 			var request struct {
 				ExpectedRevision *string         `json:"expectedRevision"`
 				Files            shoreline.Files `json:"files"`
@@ -78,11 +79,16 @@ func ShorelineHandler(repository ShorelineRepository, authenticator shorelineAut
 				var files shoreline.Files
 				files, err = shoreline.ValidateFiles(request.Files)
 				if err == nil {
-					dataset, err = repository.Replace(r.Context(), request.ExpectedRevision, files, shoreline.Uploader{ID: user.ID, DisplayName: user.DisplayName})
+					uploader := shoreline.Uploader{ID: user.ID, DisplayName: user.DisplayName}
+					if r.Method == http.MethodPatch {
+						dataset, err = repository.Update(r.Context(), request.ExpectedRevision, files, uploader)
+					} else {
+						dataset, err = repository.Replace(r.Context(), request.ExpectedRevision, files, uploader)
+					}
 				}
 			}
 		default:
-			w.Header().Set("Allow", "GET, PUT, DELETE")
+			w.Header().Set("Allow", "GET, PUT, PATCH, DELETE")
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}

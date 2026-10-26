@@ -2,10 +2,10 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePublicShoreline } from './ShorelineManager';
-import { deleteShoreline, fetchShoreline, replaceShoreline } from './shoreline-api';
+import { deleteShoreline, fetchShoreline, replaceShoreline, updateShoreline } from './shoreline-api';
 
 vi.mock('./shoreline-api', () => ({
-  fetchShoreline: vi.fn(), replaceShoreline: vi.fn(), deleteShoreline: vi.fn(),
+  fetchShoreline: vi.fn(), replaceShoreline: vi.fn(), updateShoreline: vi.fn(), deleteShoreline: vi.fn(),
 }));
 
 const oldDataset = {
@@ -56,6 +56,18 @@ describe('public shoreline official data', () => {
     expect(result.current.dataset).toEqual(oldDataset);
     expect(result.current.error).toBe('读取失败');
     expect(result.current.busy).toBe(false);
+  });
+
+  it('merges an independently uploaded file through PATCH', async () => {
+    fetchShoreline.mockResolvedValue(oldDataset);
+    const { result } = renderHook(() => usePublicShoreline());
+    await waitFor(() => expect(result.current.dataset).toEqual(oldDataset));
+    updateShoreline.mockResolvedValue(newDataset);
+
+    await act(async () => { await result.current.update({ center: { point_count: 3 } }, oldDataset.revision); });
+
+    expect(updateShoreline).toHaveBeenCalledWith({ center: { point_count: 3 } }, oldDataset.revision);
+    expect(result.current.dataset).toEqual(newDataset);
   });
 
   it('ignores a stale GET resolving after a successful replacement', async () => {

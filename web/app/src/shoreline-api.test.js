@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { deleteShoreline, fetchShoreline, replaceShoreline } from './shoreline-api';
+import { deleteShoreline, fetchShoreline, replaceShoreline, updateShoreline } from './shoreline-api';
 
 function response(payload, status = 200) {
   return {
@@ -47,6 +47,17 @@ describe('public shoreline API', () => {
     await expect(deleteShoreline('r2')).resolves.toBeNull();
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ expectedRevision: 'r2' });
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+  });
+
+  it('sends only the independently uploaded files through PATCH', async () => {
+    const dataset = { revision: 'r2', files: {} };
+    const fetchMock = vi.fn().mockResolvedValue(response({ dataset }));
+    vi.stubGlobal('fetch', fetchMock);
+    const files = { center: { session_id: 'bundle-a' } };
+
+    await expect(updateShoreline(files, 'r1')).resolves.toEqual(dataset);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'PATCH' });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ files, expectedRevision: 'r1' });
   });
 
   it('preserves conflict status and backend message for the manager', async () => {

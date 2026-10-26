@@ -8,7 +8,7 @@ import {
   createRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes, sendImportedRoute,
   fetchRobotTracks, subscribeRobotLocations,
 } from './api';
-import { fetchShoreline, replaceShoreline } from './shoreline-api';
+import { fetchShoreline, updateShoreline } from './shoreline-api';
 
 vi.mock('./api', async (original) => ({
   ...(await original()),
@@ -20,7 +20,7 @@ vi.mock('./api', async (original) => ({
   sendImportedRoute: vi.fn(),
   subscribeRobotLocations: vi.fn(),
 }));
-vi.mock('./shoreline-api', () => ({ fetchShoreline: vi.fn(), replaceShoreline: vi.fn() }));
+vi.mock('./shoreline-api', () => ({ fetchShoreline: vi.fn(), updateShoreline: vi.fn() }));
 vi.mock('./AuthContext', () => ({ useAuth: () => ({ user: { displayName: '测试', username: 'tester' }, signOut: vi.fn() }) }));
 
 let maps;
@@ -294,9 +294,11 @@ describe('imported route visibility', () => {
 
     await previewUpload();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    replaceShoreline.mockResolvedValue({ ...dataset, revision: 'revision-2' });
+    updateShoreline.mockResolvedValue({ ...dataset, revision: 'revision-2' });
     fireEvent.click(screen.getByRole('button', { name: '确认替换', exact: true }));
-    await waitFor(() => expect(replaceShoreline).toHaveBeenCalledExactlyOnceWith(dataset.files, dataset.revision));
+    await waitFor(() => expect(updateShoreline).toHaveBeenCalledExactlyOnceWith(
+      { shoreline: dataset.files.shoreline }, dataset.revision,
+    ));
     await waitFor(() => expect(importedMarkers()).toHaveLength(0));
     expect(activeLine('#38ef9a')).toBeDefined();
   });
