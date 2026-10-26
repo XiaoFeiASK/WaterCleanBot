@@ -282,7 +282,7 @@ describe('imported route visibility', () => {
       [JSON.stringify(data)], key === 'shoreline' ? 'shoreline_lonlat.json' : `${key}_waypoints_lonlat.json`, { type: 'application/json' },
     ));
     async function previewUpload() {
-      fireEvent.change(screen.getByLabelText('上传岸线 JSON 文件'), { target: { files } });
+      fireEvent.change(screen.getByLabelText('选择多个岸线 JSON 文件'), { target: { files } });
       fireEvent.click(await screen.findByRole('button', { name: '地图预览', exact: true }));
       await waitFor(() => expect(importedMarkers()).toHaveLength(6));
     }
@@ -297,7 +297,7 @@ describe('imported route visibility', () => {
     updateShoreline.mockResolvedValue({ ...dataset, revision: 'revision-2' });
     fireEvent.click(screen.getByRole('button', { name: '确认替换', exact: true }));
     await waitFor(() => expect(updateShoreline).toHaveBeenCalledExactlyOnceWith(
-      { shoreline: dataset.files.shoreline }, dataset.revision,
+      dataset.files, dataset.revision,
     ));
     await waitFor(() => expect(importedMarkers()).toHaveLength(0));
     expect(activeLine('#38ef9a')).toBeDefined();

@@ -61,7 +61,8 @@ function makeStore(overrides = {}) {
 
 function selectShorelineFile() {
   const file = new File(['{}'], 'shoreline_lonlat.json', { type: 'application/json' });
-  fireEvent.change(screen.getByLabelText('上传岸线 JSON 文件'), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText('选择多个岸线 JSON 文件'), { target: { files: [file] } });
+  return file;
 }
 
 afterEach(() => {
@@ -85,6 +86,40 @@ describe('public shoreline manager', () => {
     const missingOptionalFiles = await screen.findAllByText('未导入');
     expect(missingOptionalFiles).toHaveLength(3);
     expect(screen.getByText('shoreline_lonlat.json')).toBeTruthy();
+  });
+
+  it('supports selecting any number of files through the combined replacement entry', async () => {
+    const left = new File(['{}'], 'left_waypoints_lonlat.json', { type: 'application/json' });
+    const center = new File(['{}'], 'center_waypoints_lonlat.json', { type: 'application/json' });
+    readShorelineFiles.mockResolvedValueOnce({ left: shorelineFile('new-bundle', 121.6), center: shorelineFile('new-bundle', 121.7) });
+    render(<ShorelineManager store={makeStore()} onPreview={vi.fn()} onCancelPreview={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('选择多个岸线 JSON 文件'), { target: { files: [left, center] } });
+
+    await screen.findByText('待导入来源：new-bundle');
+    expect(readShorelineFiles).toHaveBeenCalledWith([left, center]);
+  });
+
+  it('provides a single replacement entry for each file type and keeps selectors enabled while busy', () => {
+    const store = makeStore({ busy: true, loading: true });
+    render(<ShorelineManager store={store} onPreview={vi.fn()} onCancelPreview={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText('选择多个岸线 JSON 文件')).not.toBeDisabled();
+    for (const label of ['岸线与桥孔', '左岸航线', '中心感知航线', '右岸航线']) {
+      expect(screen.getByLabelText(`单个替换${label}`)).not.toBeDisabled();
+    }
+  });
+
+  it('checks that a single replacement belongs to the selected row', async () => {
+    const left = new File(['{}'], 'left_waypoints_lonlat.json', { type: 'application/json' });
+    readShorelineFiles.mockResolvedValueOnce({ left: shorelineFile('new-bundle', 121.6) });
+    render(<ShorelineManager store={makeStore()} onPreview={vi.fn()} onCancelPreview={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('单个替换左岸航线'), { target: { files: [left] } });
+
+    await screen.findByText('待导入来源：new-bundle');
+    expect(readShorelineFiles).toHaveBeenCalledWith([left]);
+    expect(screen.getByText('本次上传 · 校验通过 · 2 点')).toBeTruthy();
   });
 
   it('previews a staged dataset and cancels it without replacing the current dataset', async () => {

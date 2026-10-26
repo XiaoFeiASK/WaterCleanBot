@@ -96,8 +96,9 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
     if (inputRef.current) inputRef.current.value = '';
     onCancelPreview();
   }
-  async function selectFiles(event) {
-    const selected = Array.from(event.target.files || []).slice(0, 1);
+  async function selectFiles(event, targetKey = null) {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = '';
     if (!selected.length) return;
     clearStage();
     const seq = ++selectionSeq.current;
@@ -107,6 +108,10 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
     try {
       const files = await readShorelineFiles(selected);
       if (seq !== selectionSeq.current) return;
+      if (targetKey && (Object.keys(files).length !== 1 || !files[targetKey])) {
+        const target = SHORELINE_FILE_TYPES.find(({ key }) => key === targetKey);
+        throw new Error(`单个替换请选择“${target?.filename || '对应类型'}”`);
+      }
       setStaged(files);
       setExpectedRevision(baseRevision);
     } catch (failure) {
@@ -161,11 +166,11 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
         <ShorelineWarnings files={dataset.files} />
       </div>}
       <div className="shoreline-file-toolbar">
-        <label className={`button button-secondary shoreline-upload ${disabled ? 'shoreline-disabled' : ''}`}>
-          <Upload size={16} aria-hidden="true" />{reading ? '校验中' : '选择 JSON 文件'}
-          <input ref={inputRef} type="file" accept=".json,application/json" aria-label="上传岸线 JSON 文件" onChange={selectFiles} disabled={disabled} />
+        <label className="button button-secondary shoreline-upload">
+          <Upload size={16} aria-hidden="true" />{reading ? '校验中' : '一起替换'}
+          <input ref={inputRef} type="file" multiple accept=".json,application/json" aria-label="选择多个岸线 JSON 文件" onChange={selectFiles} />
         </label>
-        <span className="shoreline-file-limit">每次上传一个文件 · 20 MiB</span>
+        <span className="shoreline-file-limit">可选择任意文件 · 单次总计 20 MiB</span>
         {dataset && <button type="button" className="button button-danger-soft" onClick={deleteCurrent} disabled={disabled || conflict}><Trash2 size={15} />删除公共岸线</button>}
       </div>
       <div className="shoreline-files" role="list" aria-label="岸线文件列表">
@@ -175,9 +180,15 @@ export default function ShorelineManager({ store, onPreview, onCancelPreview, on
           const file = uploaded || current;
           return <div className="shoreline-file-row" role="listitem" key={key}>
             <div><strong>{label}{required && <small>必传</small>}</strong><span>{filename}</span></div>
-            <span className={file ? 'shoreline-file-valid' : ''}>{file
-              ? `${uploaded ? '本次上传 · 校验通过' : '保留现有'} · ${file.point_count} 点`
-              : '未导入'}</span>
+            <div className="shoreline-file-row-actions">
+              <span className={file ? 'shoreline-file-valid' : ''}>{file
+                ? `${uploaded ? '本次上传 · 校验通过' : '保留现有'} · ${file.point_count} 点`
+                : '未导入'}</span>
+              <label className="button button-secondary shoreline-upload shoreline-row-upload" title={`单个替换${label}`}>
+                <Upload size={14} aria-hidden="true" />单个替换
+                <input type="file" accept=".json,application/json" aria-label={`单个替换${label}`} onChange={(event) => selectFiles(event, key)} />
+              </label>
+            </div>
           </div>;
         })}
       </div>

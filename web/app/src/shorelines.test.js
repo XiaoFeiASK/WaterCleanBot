@@ -106,6 +106,10 @@ describe('public shoreline validation', () => {
     await expect(readShorelineFiles([selectedFile('left_waypoints_lonlat.json', referenceDocument('left'))]))
       .resolves.toEqual({ left: referenceDocument('left') });
     await expect(readShorelineFiles([
+      selectedFile('left_waypoints_lonlat.json', referenceDocument('left')),
+      selectedFile('center_waypoints_lonlat.json', referenceDocument('center')),
+    ])).resolves.toEqual({ left: referenceDocument('left'), center: referenceDocument('center') });
+    await expect(readShorelineFiles([
       selectedFile('shoreline_lonlat.json', shorelineDocument()),
       selectedFile('shoreline_lonlat.json', shorelineDocument()),
     ])).rejects.toThrow(/重复文件类型/);
