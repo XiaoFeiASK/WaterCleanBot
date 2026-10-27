@@ -4,14 +4,49 @@ import './device-connection.css';
 
 const MQTT_POSITION_TIMEOUT_MS = 3000;
 
+const isPositionTime = (value) => Number.isFinite(value) && value > 0;
+
+// The first timestamp seen for a device (HTTP query or SSE snapshot) can only be
+// judged by its server receive time. Every later change is a fix this browser
+// has just received, so its window runs on the browser clock and server clock
+// skew cannot keep the lamp off.
+function firstSight(robotName, updatedAt) {
+  const valid = isPositionTime(updatedAt);
+  return {
+    robotName,
+    updatedAt,
+    notBefore: valid ? updatedAt : Infinity,
+    deadline: valid ? updatedAt + MQTT_POSITION_TIMEOUT_MS : 0,
+  };
+}
+
+function receivedByBrowser(robotName, updatedAt) {
+  if (!isPositionTime(updatedAt)) return firstSight(robotName, updatedAt);
+  return { robotName, updatedAt, notBefore: 0, deadline: Date.now() + MQTT_POSITION_TIMEOUT_MS };
+}
+
 // Status feedback also updates receivedAtMs; only the coordinate timestamp
 // can keep this indicator on, including when the vessel has not moved.
 export default function DeviceConnectionIndicator({ position }) {
-  const [now, setNow] = useState(Date.now);
+  const robotName = position?.robotName;
   const updatedAt = position?.positionUpdatedAtMs;
-  const hasPositionTime = Number.isFinite(updatedAt) && updatedAt > 0;
-  const age = now - updatedAt;
-  const online = hasCoordinates(position) && hasPositionTime && age >= 0 && age <= MQTT_POSITION_TIMEOUT_MS;
+  const [now, setNow] = useState(Date.now);
+  const [tracked, setTracked] = useState(() => firstSight(robotName, updatedAt));
+
+  // Adjust during render so a new fix never paints one frame as offline.
+  let fix = tracked;
+  if (fix.robotName !== robotName) {
+    fix = firstSight(robotName, updatedAt);
+    setTracked(fix);
+  } else if (!Object.is(fix.updatedAt, updatedAt)) {
+    // SSE snapshot replays and status feedback keep the same timestamp, so they do not get here.
+    // A timestamp that moves backwards is stale data, not a fix that just arrived.
+    const newer = isPositionTime(updatedAt) && (!isPositionTime(fix.updatedAt) || updatedAt > fix.updatedAt);
+    fix = newer ? receivedByBrowser(robotName, updatedAt) : firstSight(robotName, updatedAt);
+    setTracked(fix);
+  }
+  const { deadline, notBefore } = fix;
+  const online = hasCoordinates(position) && isPositionTime(updatedAt) && now >= notBefore && now <= deadline;
 
   useEffect(() => {
     let timer;
@@ -19,8 +54,8 @@ export default function DeviceConnectionIndicator({ position }) {
       window.clearTimeout(timer);
       const currentTime = Date.now();
       setNow(currentTime);
-      const remaining = updatedAt + MQTT_POSITION_TIMEOUT_MS - currentTime;
-      if (Number.isFinite(updatedAt) && updatedAt > 0 && remaining >= 0) {
+      const remaining = deadline - currentTime;
+      if (deadline > 0 && remaining >= 0) {
         // Exactly 3 seconds is still on; turn off once the deadline is exceeded.
         timer = window.setTimeout(refresh, Math.min(remaining + 1, 2147483647));
       }
@@ -33,7 +68,7 @@ export default function DeviceConnectionIndicator({ position }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [position?.robotName, updatedAt]);
+  }, [robotName, deadline]);
 
   const detail = online ? '设备在线' : '设备离线';
 

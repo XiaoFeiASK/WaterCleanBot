@@ -89,6 +89,49 @@ describe('MQTT coordinate connection indicator', () => {
     expect(status()).toHaveClass('device-connection--online');
   });
 
+  it.each([
+    ['ahead of', 5000],
+    ['behind', -10000],
+  ])('lights up for a new fix when the server clock is %s the browser clock', (_, skewMs) => {
+    const serverNow = () => Date.now() + skewMs;
+    const { rerender } = render(<DeviceConnectionIndicator position={position({ positionUpdatedAtMs: serverNow() })} />);
+    expect(status()).toHaveClass('device-connection--offline');
+    act(() => vi.advanceTimersByTime(1000));
+    rerender(<DeviceConnectionIndicator position={position({ positionUpdatedAtMs: serverNow() })} />);
+    expect(status()).toHaveClass('device-connection--online');
+    act(() => vi.advanceTimersByTime(3000));
+    expect(status()).toHaveClass('device-connection--online');
+    act(() => vi.advanceTimersByTime(1));
+    expect(status()).toHaveClass('device-connection--offline');
+  });
+
+  it('keeps the browser-time window when an SSE snapshot replays a skewed fix', () => {
+    const skewed = () => position({ positionUpdatedAtMs: Date.now() + 5000 });
+    const { rerender } = render(<DeviceConnectionIndicator position={skewed()} />);
+    act(() => vi.advanceTimersByTime(1000));
+    const fix = skewed();
+    rerender(<DeviceConnectionIndicator position={fix} />);
+    act(() => vi.advanceTimersByTime(2000));
+    rerender(<DeviceConnectionIndicator position={{ ...fix, receivedAtMs: Date.now() }} />);
+    act(() => vi.advanceTimersByTime(1001));
+    expect(status()).toHaveClass('device-connection--offline');
+  });
+
+  it('does not treat an older timestamp as a newly received fix', () => {
+    const { rerender } = render(<DeviceConnectionIndicator position={position()} />);
+    act(() => vi.advanceTimersByTime(4000));
+    expect(status()).toHaveClass('device-connection--offline');
+    rerender(<DeviceConnectionIndicator position={position({ positionUpdatedAtMs: Date.now() - 6000 })} />);
+    expect(status()).toHaveClass('device-connection--offline');
+  });
+
+  it('judges the first fix of a newly selected device by its own timestamp', () => {
+    const { rerender } = render(<DeviceConnectionIndicator position={position()} />);
+    act(() => vi.advanceTimersByTime(1000));
+    rerender(<DeviceConnectionIndicator position={position({ robotName: 'USV-002', positionUpdatedAtMs: Date.now() + 5000 })} />);
+    expect(status()).toHaveClass('device-connection--offline');
+  });
+
   it('rechecks when returning to a backgrounded page and cleans up its timer', () => {
     const { unmount } = render(<DeviceConnectionIndicator position={position()} />);
     vi.setSystemTime(new Date(Date.now() + 10000));
