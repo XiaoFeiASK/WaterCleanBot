@@ -256,7 +256,7 @@ DELETE /api/shoreline   # {"expectedRevision": "..."}
 
 WGS84 原始坐标仅在前端交给高德地图绘制前转换为 GCJ-02。各轮廓、分段及左右岸不会跨段连接或闭合；参考线按参考连接标志分段。“河道边界”仅显示岸线与桥孔；左岸、中心感知、右岸航线可独立查看、删除和手动下发。上传、预览和替换不会自动下发。
 
-导入航线下发接口为 `POST /api/robots/{robotName}/shoreline-routes/{routeKey}/send`，`routeKey` 为 `left`、`center` 或 `right`，请求体为 `{"expectedRevision":"当前版本"}`。后端校验登录态和版本，从公共数据库原始 JSON 生成 WGS84 路径点，复用 `[40,点数,lng,lat,speedKnots,...]` MQTT 协议。默认速度 2 m/s，协议换算为约 3.888 节，不使用旧感知航线接口的固定 2 节。未保存的预览不能下发；版本失效返回 409，点数不在 2–200 范围或包含断开的航段会拒绝下发，不会跨断点补线。部分结果或未核验数据下发前会提示确认，数据展示不构成通航核验。下发成功只表示 MQTT 发布成功，不代表艇端已执行。迁移 `00006_create_public_shoreline.sql` 会由后端启动时的 Goose 自动执行。
+导入航线下发接口为 `POST /api/robots/{robotName}/shoreline-routes/{routeKey}/send`，`routeKey` 为 `left`、`center` 或 `right`，请求体为 `{"expectedRevision":"当前版本"}`；需要逆转时追加 `"reverse":true`，按最后一点在前重新编号下发，不修改数据库中的原始航线。后端校验登录态和版本，从公共数据库原始 JSON 生成 WGS84 路径点，复用 `[40,点数,lng,lat,speedKnots,...]` MQTT 协议。默认速度 1 m/s，协议换算为约 1.944 节，不使用旧感知航线接口的固定 2 节。未保存的预览不能下发；版本失效返回 409，点数不在 2–200 范围或包含断开的航段会拒绝下发，不会跨断点补线。部分结果或未核验数据下发前会提示确认，数据展示不构成通航核验。下发成功只表示 MQTT 发布成功，不代表艇端已执行。迁移 `00006_create_public_shoreline.sql` 会由后端启动时的 Goose 自动执行。
 
 前端不再内置演示岸线或默认参考线。首次没有公共数据、删除成功后均显示空状态；取消预览恢复数据库中的正式图层，保存或删除失败时保留原数据。设备、轨迹和感知航线演示数据独立保留。
 

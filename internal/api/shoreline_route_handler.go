@@ -45,6 +45,7 @@ func SendShorelineRouteHandler(store *location.Store, repository ShorelineReposi
 		}
 		var request struct {
 			ExpectedRevision string `json:"expectedRevision"`
+			Reverse          bool   `json:"reverse"`
 		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, routeRequestMaxBytes))
 		decoder.DisallowUnknownFields()
@@ -75,6 +76,9 @@ func SendShorelineRouteHandler(store *location.Store, repository ShorelineReposi
 			}
 			return
 		}
+		if request.Reverse {
+			route = shoreline.ReverseRoute(route)
+		}
 		protocol, err := routes.BuildPathPointProtocol(route, routes.CoordinateSystemWGS84)
 		if err != nil {
 			authError(w, 400, "invalid_route", "航线数据无效，不能下发", nil)
@@ -100,6 +104,7 @@ func SendShorelineRouteHandler(store *location.Store, repository ShorelineReposi
 			"protocol": values, "pointCount": len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
 			"speedMetersPerSecond": shoreline.ImportedRouteSpeedMetersPerSecond,
+			"reversed":             request.Reverse,
 		})
 	}
 }

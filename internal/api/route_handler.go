@@ -156,6 +156,10 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			return
 		}
 
+		reversed := r.URL.Query().Get("reverse") == "true"
+		if reversed {
+			route = reverseRoutePoints(route)
+		}
 		protocol, err := routes.BuildPathPointProtocol(route, routes.CoordinateSystemWGS84)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
@@ -187,8 +191,21 @@ func SendRobotRouteHandler(store *location.Store, repository RouteRepository, pu
 			"protocol":             protocolValues,
 			"pointCount":           len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
+			"reversed":             reversed,
 		})
 	}
+}
+
+// reverseRoutePoints 按相反顺序重排航点，速度仍跟随各自的坐标。
+func reverseRoutePoints(route routes.Route) routes.Route {
+	points := make([]routes.RoutePoint, len(route.Points))
+	for index := range route.Points {
+		point := route.Points[len(route.Points)-1-index]
+		point.Seq = index + 1
+		points[index] = point
+	}
+	route.Points = points
+	return route
 }
 
 func routeStartPoint(store *location.Store, robotName string, coordinateSystem string) *routes.RoutePoint {

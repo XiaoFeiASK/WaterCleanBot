@@ -22,18 +22,34 @@ func TestNavigationRoutePreservesCoordinatesAndConvertsMetersPerSecondToKnots(t 
 			t.Fatalf("unexpected route: %+v", route)
 		}
 		for i, point := range route.Points {
-			if point.Seq != i+1 || math.Abs(point.SpeedKnots*0.514444-2) > 1e-9 {
+			if point.Seq != i+1 || math.Abs(point.SpeedKnots*0.514444-1) > 1e-9 {
 				t.Fatalf("unexpected point: %+v", point)
 			}
 		}
 		protocol, err := routes.BuildPathPointProtocol(route, routes.CoordinateSystemWGS84)
-		if err != nil || protocol != "[40,2,121.40000000,31.20000000,3.888,121.50000000,31.30000000,3.888]" {
+		if err != nil || protocol != "[40,2,121.40000000,31.20000000,1.944,121.50000000,31.30000000,1.944]" {
 			t.Fatalf("protocol=%s err=%v", protocol, err)
 		}
 	}
 	after, _ := json.Marshal(files)
 	if string(before) != string(after) {
 		t.Fatal("stored source was modified")
+	}
+}
+
+func TestReverseRouteMakesLastPointFirstWithoutMutatingSource(t *testing.T) {
+	route, err := NavigationRoute(fullTestFiles(), "center")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := append([]routes.RoutePoint(nil), route.Points...)
+	reversed := ReverseRoute(route)
+	if len(reversed.Points) != len(original) || reversed.Points[0].Lng != original[len(original)-1].Lng ||
+		reversed.Points[0].Lat != original[len(original)-1].Lat || reversed.Points[0].Seq != 1 {
+		t.Fatalf("unexpected reversed route: %+v", reversed.Points)
+	}
+	if route.Points[0].Lng != original[0].Lng || route.Points[0].Seq != 1 {
+		t.Fatal("source route was mutated")
 	}
 }
 

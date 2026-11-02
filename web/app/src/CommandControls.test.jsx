@@ -18,20 +18,28 @@ beforeEach(() => {
   vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
-const tracking = () => screen.getByRole('button', { name: /^(开始|停止)循迹$/ });
+const trackingStart = () => screen.getByRole('button', { name: '开始循迹' });
+const trackingStop = () => screen.getByRole('button', { name: '结束循迹' });
 
 describe('tracking button', () => {
-  it('starts and stops without a route or unlock condition', async () => {
+  it('shows separate start and stop actions and confirms each command', async () => {
     sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
     render(<TrackingButton deviceId="USV-001" />);
-    expect(tracking().disabled).toBe(false);
-    fireEvent.click(tracking());
-    await waitFor(() => expect(tracking().getAttribute('aria-label')).toBe('停止循迹'));
+    expect(trackingStart().disabled).toBe(false);
+    expect(trackingStop().disabled).toBe(false);
+    fireEvent.click(trackingStart());
+    expect(window.confirm).toHaveBeenCalledWith('确认开始循迹吗？');
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
     expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
       command: 'TRACKING', value: 1, values: { TRACKING: 1 }, ttlMs: 800,
     });
-    fireEvent.click(tracking());
-    await waitFor(() => expect(tracking().getAttribute('aria-label')).toBe('开始循迹'));
+    window.confirm.mockReturnValue(false);
+    fireEvent.click(trackingStop());
+    expect(sendRobotCommand).toHaveBeenCalledTimes(1);
+    window.confirm.mockReturnValue(true);
+    fireEvent.click(trackingStop());
+    expect(window.confirm).toHaveBeenCalledWith('确认结束循迹吗？');
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('false'));
     expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
       command: 'TRACKING', value: 0, values: { TRACKING: 0 }, ttlMs: 800,
     });
@@ -41,43 +49,42 @@ describe('tracking button', () => {
     const onToast = vi.fn();
     sendRobotCommand.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ protocol: [24, 1] });
     render(<TrackingButton deviceId="USV-001" onToast={onToast} />);
-    fireEvent.click(tracking());
+    fireEvent.click(trackingStart());
     await waitFor(() => expect(onToast).toHaveBeenCalledWith('下发失败'));
-    expect(tracking().getAttribute('aria-label')).toBe('开始循迹');
-    fireEvent.click(tracking());
-    await waitFor(() => expect(tracking().getAttribute('aria-label')).toBe('停止循迹'));
+    expect(trackingStart().getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(trackingStart());
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
   });
 
   it('ignores duplicate clicks and isolates an in-flight result from a different device', async () => {
     let resolve;
     sendRobotCommand.mockReturnValue(new Promise((done) => { resolve = done; }));
     const { rerender } = render(<TrackingButton deviceId="USV-001" />);
-    fireEvent.click(tracking());
-    fireEvent.click(tracking());
+    fireEvent.click(trackingStart());
+    fireEvent.click(trackingStop());
     expect(sendRobotCommand).toHaveBeenCalledTimes(1);
     rerender(<TrackingButton deviceId="USV-002" />);
     resolve({ protocol: [24, 1] });
-    await waitFor(() => expect(tracking().getAttribute('aria-busy')).toBe('false'));
-    expect(tracking().getAttribute('aria-label')).toBe('开始循迹');
+    await waitFor(() => expect(trackingStart().disabled).toBe(false));
+    expect(trackingStart().getAttribute('aria-pressed')).toBe('false');
     rerender(<TrackingButton deviceId="USV-001" />);
-    await waitFor(() => expect(tracking().getAttribute('aria-label')).toBe('停止循迹'));
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
   });
 
-  it('stays visible without a target and explains how to send', () => {
-    const onToast = vi.fn();
-    render(<TrackingButton onToast={onToast} />);
-    fireEvent.click(tracking());
+  it('keeps both actions visible but disabled without a target', () => {
+    render(<TrackingButton />);
+    expect(trackingStart().disabled).toBe(true);
+    expect(trackingStop().disabled).toBe(true);
     expect(sendRobotCommand).not.toHaveBeenCalled();
-    expect(onToast).toHaveBeenCalledWith('请先查询需要控制的设备');
   });
 
   it('does not publish or change the action when confirmation is cancelled', () => {
     window.confirm.mockReturnValue(false);
     render(<TrackingButton deviceId="USV-001" />);
-    fireEvent.click(tracking());
+    fireEvent.click(trackingStart());
     expect(sendRobotCommand).not.toHaveBeenCalled();
-    expect(tracking().getAttribute('aria-label')).toBe('开始循迹');
-    expect(tracking().disabled).toBe(false);
+    expect(trackingStart().getAttribute('aria-pressed')).toBe('false');
+    expect(trackingStart().disabled).toBe(false);
   });
 });
 

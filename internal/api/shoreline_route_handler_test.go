@@ -36,7 +36,7 @@ func TestSendShorelineRouteUsesPersistedWGS84AndFixedSpeed(t *testing.T) {
 	handler := SendShorelineRouteHandler(newPerceptionStore("USV-001"), repository, &fakeShorelineAuth{user: auth.User{ID: "user-1"}}, publisher, shorelineLogger())
 	response := httptest.NewRecorder()
 	handler(response, publicRouteRequest(`{"expectedRevision":"revision-1"}`, true))
-	if response.Code != http.StatusAccepted || publisher.payload != "[40,2,121.40000000,31.20000000,3.888,121.50000000,31.30000000,3.888]" {
+	if response.Code != http.StatusAccepted || publisher.payload != "[40,2,121.40000000,31.20000000,1.944,121.50000000,31.30000000,1.944]" {
 		t.Fatalf("status=%d payload=%s body=%s", response.Code, publisher.payload, response.Body)
 	}
 	var payload struct {
@@ -44,12 +44,33 @@ func TestSendShorelineRouteUsesPersistedWGS84AndFixedSpeed(t *testing.T) {
 		Revision             string  `json:"revision"`
 		CoordinateSystemSent string  `json:"coordinateSystemSent"`
 		SpeedMetersPerSecond float64 `json:"speedMetersPerSecond"`
+		Reversed             bool    `json:"reversed"`
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || payload.RouteID != "imported-center" || payload.Revision != "revision-1" || payload.CoordinateSystemSent != "WGS84" || payload.SpeedMetersPerSecond != 2 {
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || payload.RouteID != "imported-center" || payload.Revision != "revision-1" || payload.CoordinateSystemSent != "WGS84" || payload.SpeedMetersPerSecond != 1 || payload.Reversed {
 		t.Fatalf("response=%s err=%v", response.Body, err)
 	}
 	if repository.replaceCalls != 0 || repository.deleteCalls != 0 {
 		t.Fatal("dispatch changed persisted data")
+	}
+}
+
+func TestSendShorelineRouteReversesWhenRequestedWithoutSaving(t *testing.T) {
+	repository := &fakeShorelineRepository{dataset: publicRouteDataset()}
+	publisher := &fakeRoutePublisher{}
+	handler := SendShorelineRouteHandler(newPerceptionStore("USV-001"), repository, &fakeShorelineAuth{user: auth.User{ID: "user-1"}}, publisher, shorelineLogger())
+	response := httptest.NewRecorder()
+	handler(response, publicRouteRequest(`{"expectedRevision":"revision-1","reverse":true}`, true))
+	if response.Code != http.StatusAccepted || publisher.payload != "[40,2,121.50000000,31.30000000,1.944,121.40000000,31.20000000,1.944]" {
+		t.Fatalf("status=%d payload=%s body=%s", response.Code, publisher.payload, response.Body)
+	}
+	var payload struct {
+		Reversed bool `json:"reversed"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || !payload.Reversed {
+		t.Fatalf("response=%s err=%v", response.Body, err)
+	}
+	if repository.replaceCalls != 0 || repository.deleteCalls != 0 {
+		t.Fatal("reversed dispatch changed persisted data")
 	}
 }
 

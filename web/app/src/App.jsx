@@ -68,7 +68,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getShorelineSections, getShorelineSession, getShorelineWarnings, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -1393,6 +1393,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
   const [previewImportedRouteId, setPreviewImportedRouteId] = useState('');
+  const [reversedImportedRouteKey, setReversedImportedRouteKey] = useState('');
+  const [reversedRouteId, setReversedRouteId] = useState('');
   const [showShoreline, setShowShoreline] = useState(false);
   const shorelineStore = usePublicShoreline();
   const [showShorelineManager, setShowShorelineManager] = useState(false);
@@ -1404,8 +1406,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const importedRoutes = useMemo(() => getImportedRoutes(shorelineFiles), [shorelineFiles]);
   const savedImportedRoutes = useMemo(() => getImportedRoutes(shorelineStore.dataset?.files), [shorelineStore.dataset]);
   const visibleImportedRoutes = useMemo(() => importedRoutes.filter((route) =>
-    shorelinePreview || route.id === previewImportedRouteId),
-  [importedRoutes, shorelinePreview, previewImportedRouteId]);
+    shorelinePreview || route.id === previewImportedRouteId)
+    .map((route) => route.sourceKey === reversedImportedRouteKey ? reverseImportedRoute(route) : route),
+  [importedRoutes, shorelinePreview, previewImportedRouteId, reversedImportedRouteKey]);
   const hasShorelineLayer = (kind, side) => shorelineSections.some((section) => section.kind === kind && (side === undefined || section.side === side));
 
   function cancelShorelinePreview() {
@@ -1425,8 +1428,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setShorelineFitSeq((seq) => seq + 1);
   }
   const previewRoute = routes.find((route) => route.id === previewRouteId);
-  const previewRoutePoints = useMemo(() => getRouteMapPoints(previewRoute), [previewRoute]);
-  const activePreviewRoute = importedRoutes.find((route) => route.id === previewImportedRouteId) || previewRoute;
+  const previewRoutePoints = useMemo(() => {
+    const points = getRouteMapPoints(previewRoute);
+    return previewRoute && previewRoute.id === reversedRouteId ? [...points].reverse() : points;
+  }, [previewRoute, reversedRouteId]);
+  const previewImportedRoute = visibleImportedRoutes.find((route) => route.id === previewImportedRouteId);
+  const activePreviewRoute = previewImportedRoute || previewRoute;
   const draftRouteLength = getRouteLengthMeters(draftRoutePoints);
   const draftRouteDuration = getRouteDurationSeconds(draftRoutePoints);
   const isRouteBusy = Boolean(routeAction) || shorelineStore.busy;
@@ -1781,9 +1788,24 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setPendingRoutePoint(null);
     setPreviewImportedRouteId('');
     setPreviewRouteId(shouldHide ? '' : route.id);
+    if (shouldHide) setReversedRouteId('');
+    else if (reversedRouteId !== route.id) setReversedRouteId('');
     if (!shouldHide) {
       document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  function toggleRouteDirection(route) {
+    if (!route?.id) return;
+    const shouldReverse = reversedRouteId !== route.id;
+    setReversedRouteId(shouldReverse ? route.id : '');
+    if (!shouldReverse) return;
+    setPlanningMode(false);
+    setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
+    setPreviewImportedRouteId('');
+    setPreviewRouteId(route.id);
+    document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function toggleImportedRoutePreview(route) {
@@ -1793,11 +1815,27 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setPendingRoutePoint(null);
     setPreviewRouteId('');
     setPreviewImportedRouteId(shouldHide ? '' : route.id);
+    if (shouldHide) setReversedImportedRouteKey('');
     if (!shouldHide) {
       void shorelineStore.reload().catch(() => {});
       setShorelineFitSeq((seq) => seq + 1);
       document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  function toggleImportedRouteDirection(route) {
+    if (!route?.sourceKey) return;
+    const shouldReverse = reversedImportedRouteKey !== route.sourceKey;
+    setReversedImportedRouteKey(shouldReverse ? route.sourceKey : '');
+    if (!shouldReverse) return;
+    setPlanningMode(false);
+    setDraftRoutePoints([]);
+    setPendingRoutePoint(null);
+    setPreviewRouteId('');
+    setPreviewImportedRouteId(route.id);
+    void shorelineStore.reload().catch(() => {});
+    setShorelineFitSeq((seq) => seq + 1);
+    document.querySelector('.online-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function deleteImportedRoute(route) {
@@ -1840,16 +1878,19 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   async function sendRoute(route) {
     if (!routeDeviceId || !route || isRouteBusy) return;
     const dataset = shorelineStore.dataset;
+    const reverse = route.sourceKey
+      ? route.sourceKey === reversedImportedRouteKey
+      : route.id === reversedRouteId;
     if (route.sourceKey) {
       if (!dataset || shorelinePreview) return;
       const warnings = getShorelineWarnings({ [route.sourceKey]: dataset.files[route.sourceKey] });
-      if (!window.confirm(`确认向设备「${routeDeviceId}」下发「${route.name}」？\n默认速度为 2 m/s。${warnings.length ? `\n注意：${warnings.join('；')}。请确认航线安全后再下发。` : ''}`)) return;
+      if (!window.confirm(`确认向设备「${routeDeviceId}」下发「${route.name}」？\n${reverse ? '按逆转顺序（最后一点作为第一点）下发。\n' : ''}默认速度为 1 m/s。${warnings.length ? `\n注意：${warnings.join('；')}。请确认航线安全后再下发。` : ''}`)) return;
     }
     setRouteAction(`send:${route.id}`);
     try {
       const result = route.sourceKey
-        ? await sendImportedRoute(routeDeviceId, route.sourceKey, dataset.revision)
-        : await sendRobotRoute(routeDeviceId, route.id);
+        ? await sendImportedRoute(routeDeviceId, route.sourceKey, dataset.revision, reverse)
+        : await sendRobotRoute(routeDeviceId, route.id, reverse);
       onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(route.sourceKey ? error.message : getRouteErrorMessage(error));
@@ -1914,7 +1955,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               else { setShowShorelineManager(true); void shorelineStore.reload().catch(() => {}); }
             }} disabled={shorelineStore.busy}><Upload size={16} aria-hidden="true" />岸线管理</button>
             <button className="button button-secondary" type="button" onClick={() => sendRoute(activePreviewRoute)} disabled={!routeDeviceId || !activePreviewRoute || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${activePreviewRoute?.id}` ? '下发中' : '下发当前航线'}</button>
-            <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停止中' : '停止任务'}</button>
+            <button className="button button-danger-soft" type="button" onClick={stopTask} disabled={!routeDeviceId || isRouteBusy}>{routeAction === 'stop' ? '停船中' : '停船'}</button>
             <button className="button button-secondary" type="button" onClick={startRoutePlanning}>{planningMode ? '退出规划' : '规划航线'}</button>
           </div>
         </div>
@@ -2034,7 +2075,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             </div>
           )}
           {!planningMode && activePreviewRoute && (
-            <div className="route-preview-badge">正在查看 {activePreviewRoute.name || activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点</div>
+            <div className="route-preview-badge">正在查看 {activePreviewRoute.name || activePreviewRoute.id} · {formatRouteLength(activePreviewRoute.lengthMeters)} · {activePreviewRoute.points.length} 点{reversedImportedRouteKey === activePreviewRoute.sourceKey || reversedRouteId === activePreviewRoute.id ? ' · 已逆转' : ''}</div>
           )}
         </div>
 
@@ -2135,6 +2176,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
+                    <button type="button" aria-pressed={reversedImportedRouteKey === route.sourceKey} onClick={() => toggleImportedRouteDirection(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{reversedImportedRouteKey === route.sourceKey ? '取消逆转' : '逆转'}</button>
                     <button type="button" onClick={() => sendRoute(route)} disabled={!routeDeviceId || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
                     <button className="route-table-danger" type="button" onClick={() => deleteImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>
@@ -2148,6 +2190,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
                     <button type="button" onClick={() => toggleRoutePreview(route)}>{previewRouteId === route.id ? '取消查看' : '查看'}</button>
+                    <button type="button" aria-pressed={reversedRouteId === route.id} onClick={() => toggleRouteDirection(route)} disabled={isRouteBusy}>{reversedRouteId === route.id ? '取消逆转' : '逆转'}</button>
                     <button type="button" onClick={() => sendRoute(route)} disabled={isRouteBusy}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
                     <button className="route-table-danger" type="button" onClick={() => deleteRoute(route)} disabled={isRouteBusy}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
                   </td>

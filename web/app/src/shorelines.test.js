@@ -6,6 +6,7 @@ import {
   getShorelineWarnings,
   mergeShorelineFiles,
   readShorelineFiles,
+  reverseImportedRoute,
   validateShorelineFiles,
   withoutImportedRoute,
 } from './shorelines';
@@ -161,14 +162,14 @@ describe('public shoreline rendering', () => {
     expect(routes[0].segments[0][0]).toMatchObject({ seq: 1, pointId: 1 });
     expect(routes[0].lengthMeters).toBeGreaterThan(0);
     for (const route of routes) {
-      expect(route.speedMetersPerSecond).toBe(2);
-      expect(route.points.every((point) => point.speedMetersPerSecond === 2)).toBe(true);
-      expect(route.segments.flat().every((point) => point.speedMetersPerSecond === 2)).toBe(true);
-      expect(route.durationSeconds).toBe(Math.ceil(route.lengthMeters / 2));
+      expect(route.speedMetersPerSecond).toBe(1);
+      expect(route.points.every((point) => point.speedMetersPerSecond === 1)).toBe(true);
+      expect(route.segments.flat().every((point) => point.speedMetersPerSecond === 1)).toBe(true);
+      expect(route.durationSeconds).toBe(Math.ceil(route.lengthMeters));
     }
   });
 
-  it('estimates time at 2 m/s without counting disconnected gaps or changing the source JSON', () => {
+  it('estimates time at 1 m/s without counting disconnected gaps or changing the source JSON', () => {
     const files = fullFiles();
     const original = structuredClone(files);
     const route = files.center;
@@ -188,6 +189,14 @@ describe('public shoreline rendering', () => {
     expect(next).toEqual({ shoreline: files.shoreline, left: files.left, right: files.right });
     expect(files.center).toBeDefined();
     expect(() => withoutImportedRoute(files, 'shoreline')).toThrow(/只能删除导入的航线/);
+  });
+
+  it('reverses display order so the last point becomes the first without mutating the route', () => {
+    const route = getImportedRoutes(fullFiles())[1];
+    const reversed = reverseImportedRoute(route);
+    expect(reversed.points.map(({ lat, lng }) => [lat, lng])).toEqual([...route.points].reverse().map(({ lat, lng }) => [lat, lng]));
+    expect(reversed.segments.flat().map(({ seq }) => seq)).toEqual(reversed.segments.flat().map((_, index) => index + 1));
+    expect(route.segments.flat().map(({ seq }) => seq)[0]).toBe(1);
   });
 
   it('merges one uploaded file while retaining the other official files', () => {

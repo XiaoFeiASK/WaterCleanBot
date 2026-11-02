@@ -24,15 +24,14 @@ export function TrackingButton({ deviceId, onToast }) {
   const enabled = enabledByDevice[deviceId] === true;
   const busy = busyByDevice[deviceId] === true;
 
-  async function toggleTracking() {
+  async function sendTracking(value) {
     if (!deviceId) {
       onToast?.('请先查询需要控制的设备');
       return;
     }
     if (pendingTargets.current.has(deviceId)) return;
     const target = deviceId;
-    const value = enabled ? 0 : 1;
-    if (!confirmAction(`确认${value ? '开始' : '停止'}循迹吗？`)) return;
+    if (!confirmAction(`确认${value ? '开始' : '结束'}循迹吗？`)) return;
     pendingTargets.current.add(target);
     setBusyByDevice((current) => ({ ...current, [target]: true }));
     try {
@@ -43,7 +42,7 @@ export function TrackingButton({ deviceId, onToast }) {
         ttlMs: 800,
       });
       setEnabledByDevice((current) => ({ ...current, [target]: value === 1 }));
-      onToast?.(`${value ? '开始' : '停止'}循迹指令已发布 ${JSON.stringify(result.protocol)}`, 'success');
+      onToast?.(`${value ? '开始' : '结束'}循迹指令已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(getRemoteCommandErrorMessage(error));
     } finally {
@@ -53,25 +52,38 @@ export function TrackingButton({ deviceId, onToast }) {
   }
 
   return (
-    <button
-      className="tracking-map-button critical-control--power"
-      type="button"
-      aria-label={enabled ? '停止循迹' : '开始循迹'}
-      aria-busy={busy}
-      disabled={busy}
-      onClick={toggleTracking}
-      title={`${enabled ? '停止循迹 [24,0]' : '按航线开始循迹 [24,1]'}；已发布状态不代表设备反馈`}
-    >
+    <div className="tracking-map-button" role="group" aria-label="循迹控制">
       <span className="critical-control-icon" aria-hidden="true"><Route size={22} /></span>
       <span className="tracking-map-label">
         <strong>循迹控制</strong>
         <small>{busy ? '指令下发中…' : enabled ? '已发开始' : '航线循迹'}</small>
       </span>
-      <span className={`tracking-map-action ${enabled ? 'is-stop' : ''}`}>
-        {enabled ? <Square size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
-        {busy ? '下发中' : enabled ? '停止' : '开始'}
-      </span>
-    </button>
+      <div className="tracking-map-actions">
+        <button
+          className="tracking-map-action"
+          type="button"
+          aria-label="开始循迹"
+          title="按航线开始循迹 [24,1]；已发布状态不代表设备反馈"
+          aria-pressed={enabled}
+          disabled={!deviceId || busy}
+          onClick={() => sendTracking(1)}
+        >
+          <Play size={16} aria-hidden="true" />
+          开始
+        </button>
+        <button
+          className="tracking-map-action is-stop"
+          type="button"
+          aria-label="结束循迹"
+          title="结束循迹 [24,0]；已发布状态不代表设备反馈"
+          disabled={!deviceId || busy}
+          onClick={() => sendTracking(0)}
+        >
+          <Square size={16} aria-hidden="true" />
+          结束
+        </button>
+      </div>
+    </div>
   );
 }
 

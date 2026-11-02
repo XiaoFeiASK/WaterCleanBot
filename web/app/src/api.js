@@ -609,7 +609,7 @@ export async function deleteRobotRoute(deviceName, routeId, signal) {
   }
 }
 
-export async function sendRobotRoute(deviceName, routeId, signal) {
+export async function sendRobotRoute(deviceName, routeId, reverse = false, signal) {
   const robotName = getRobotNameForDevice(deviceName);
   if (!robotName || !routeId) throw createRouteError('INVALID_ROBOT_CODE');
 
@@ -619,7 +619,7 @@ export async function sendRobotRoute(deviceName, routeId, signal) {
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes/${encodeURIComponent(routeId)}/send`,
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes/${encodeURIComponent(routeId)}/send${reverse ? '?reverse=true' : ''}`,
       { method: 'POST', signal: requestSignal, cache: 'no-store' },
     );
 
@@ -686,7 +686,7 @@ export async function sendPerceptionRoute(deviceName, route, signal) {
   }
 }
 
-export async function sendImportedRoute(deviceName, routeKey, expectedRevision, signal) {
+export async function sendImportedRoute(deviceName, routeKey, expectedRevision, reverse = false, signal) {
   const robotName = getRobotNameForDevice(deviceName);
   if (!robotName || !['left', 'center', 'right'].includes(routeKey) || !expectedRevision) {
     throw createRouteError('INVALID_ROUTE');
@@ -702,7 +702,7 @@ export async function sendImportedRoute(deviceName, routeKey, expectedRevision, 
       {
         method: 'POST', credentials: 'include', cache: 'no-store', signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedRevision }),
+        body: JSON.stringify(reverse ? { expectedRevision, reverse: true } : { expectedRevision }),
       },
     );
     const payload = await parseJSONResponse(response, createRouteError);
@@ -714,7 +714,7 @@ export async function sendImportedRoute(deviceName, routeKey, expectedRevision, 
     }
     const result = validateRouteSendResponse(payload, robotName, `imported-${routeKey}`);
     if (result.revision !== expectedRevision || result.coordinateSystemSent !== 'WGS84'
-      || result.speedMetersPerSecond !== 2) throw createRouteError('REQUEST_FAILED');
+      || result.speedMetersPerSecond !== 1 || result.reversed !== reverse) throw createRouteError('REQUEST_FAILED');
     return result;
   } catch (error) {
     if (error.code || error.status) throw error;

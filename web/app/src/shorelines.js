@@ -1,7 +1,7 @@
 import { wgs84ToGcj02 } from './coordinates';
 
 export const SHORELINE_MAX_BYTES = 20 * 1024 * 1024;
-const IMPORTED_ROUTE_SPEED_METERS_PER_SECOND = 2;
+const IMPORTED_ROUTE_SPEED_METERS_PER_SECOND = 1;
 export const SHORELINE_FILE_TYPES = Object.freeze([
   { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔' },
   { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸航线' },
@@ -168,6 +168,18 @@ export function withoutImportedRoute(files, key) {
   if (!['left', 'center', 'right'].includes(key)) throw new Error('只能删除导入的航线文件');
   const { [key]: removed, ...remaining } = files;
   return remaining;
+}
+
+// 逆转只改变展示和下发顺序，最后一点成为新的第一点。
+export function reverseImportedRoute(route) {
+  let seq = 1;
+  const segments = [...(route.segments || [])].reverse().map((segment) =>
+    [...segment].reverse().map((point) => ({ ...point, seq: seq++ })));
+  return {
+    ...route,
+    points: [...(route.points || [])].reverse(),
+    segments,
+  };
 }
 
 export function getShorelineWarnings(files) {

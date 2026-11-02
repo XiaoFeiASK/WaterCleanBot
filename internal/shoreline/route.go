@@ -7,7 +7,7 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/routes"
 )
 
-const ImportedRouteSpeedMetersPerSecond = 2.0
+const ImportedRouteSpeedMetersPerSecond = 1.0
 
 var ErrRouteNotFound = errors.New("imported route not found")
 
@@ -53,4 +53,16 @@ func NavigationRoute(files Files, key string) (routes.Route, error) {
 		}
 	}
 	return routes.Route{ID: "imported-" + key, CoordinateSystem: routes.CoordinateSystemWGS84, Points: points}, nil
+}
+
+// ReverseRoute 返回点位顺序相反的副本，原航线数据保持不变。
+func ReverseRoute(route routes.Route) routes.Route {
+	points := make([]routes.RoutePoint, len(route.Points))
+	for index := range route.Points {
+		point := route.Points[len(route.Points)-1-index]
+		point.Seq = index + 1
+		points[index] = point
+	}
+	route.Points = points
+	return route
 }

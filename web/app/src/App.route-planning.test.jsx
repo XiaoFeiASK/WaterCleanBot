@@ -92,7 +92,7 @@ beforeEach(() => {
   fetchRobotLocation.mockResolvedValue(position);
   fetchRobotTracks.mockResolvedValue([]);
   fetchRobotRoutes.mockResolvedValue([]);
-  sendImportedRoute.mockResolvedValue({ protocol: [40, 2, 121.4, 31.2, 3.888, 121.5, 31.3, 3.888] });
+  sendImportedRoute.mockResolvedValue({ protocol: [40, 2, 121.4, 31.2, 1.944, 121.5, 31.3, 1.944] });
   fetchRobotCameras.mockResolvedValue([]);
   fetchShoreline.mockResolvedValue(null);
   window.AMap = {
@@ -239,7 +239,7 @@ describe('imported route visibility', () => {
 
   const routeRow = (name) => screen.getByText(name, { selector: 'strong' }).closest('tr');
 
-  it('toggles only boundaries and shows a single explicitly selected route independently at 2 m/s', async () => {
+  it('toggles only boundaries and shows a single explicitly selected route independently at 1 m/s', async () => {
     await openDataset();
     expect(importedMarkers()).toHaveLength(0);
     const boundaryButton = screen.getByRole('button', { name: '河道边界', exact: true });
@@ -248,7 +248,7 @@ describe('imported route visibility', () => {
     expect(importedMarkers()).toHaveLength(0);
     for (const name of ['左岸航线', '中心感知航线', '右岸航线']) {
       expect(within(routeRow(name)).getByRole('button', { name: '查看', exact: true })).toBeTruthy();
-      expect(routeRow(name).textContent).toContain('2 m/s');
+      expect(routeRow(name).textContent).toContain('1 m/s');
       expect(routeRow(name).textContent).not.toContain('暂无数据');
     }
     fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '查看', exact: true }));
@@ -307,7 +307,23 @@ describe('imported route visibility', () => {
     const dataset = await openDataset();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '下发', exact: true }));
-    await waitFor(() => expect(sendImportedRoute).toHaveBeenCalledExactlyOnceWith('USV-001', 'center', dataset.revision));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('默认速度为 2 m/s'));
+    await waitFor(() => expect(sendImportedRoute).toHaveBeenCalledExactlyOnceWith('USV-001', 'center', dataset.revision, false));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('默认速度为 1 m/s'));
+  });
+
+  it('dispatches the displayed route last point first after reversing it', async () => {
+    const dataset = await openDataset();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const row = routeRow('中心感知航线');
+    fireEvent.click(within(row).getByRole('button', { name: '逆转', exact: true }));
+    await waitFor(() => expect(within(row).getByRole('button', { name: '取消逆转', exact: true })).toBeTruthy());
+    expect(screen.getByText(/已逆转/)).toBeTruthy();
+    expect(importedMarkers().map((marker) => marker.options.title)).toEqual([
+      expect.stringContaining('航点 1（原始编号 2）'),
+      expect.stringContaining('航点 2（原始编号 1）'),
+    ]);
+    fireEvent.click(within(row).getByRole('button', { name: '下发', exact: true }));
+    await waitFor(() => expect(sendImportedRoute).toHaveBeenCalledExactlyOnceWith('USV-001', 'center', dataset.revision, true));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('按逆转顺序'));
   });
 });
