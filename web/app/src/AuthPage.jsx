@@ -22,7 +22,7 @@ export default function AuthPage({ mode }) {
     <p className="auth-step">{isRegister ? '建立你的工作账号' : '返回作业控制台'}</p><h2>{isRegister?'创建账号':'欢迎回来'}</h2><p className="auth-subtitle">{isRegister?'注册后即可进入水面机器人管理平台。':'使用用户名或邮箱继续管理你的水域。'}</p>
     {error&&<div className="auth-alert" role="alert">{error}</div>}
     <form className="auth-form" onSubmit={submit} noValidate>
-      {isRegister&&<><Field label="用户名" name="username" placeholder="4–32 位字母、数字或下划线" error={fields.username}/><Field label="显示名称" name="displayName" placeholder="例如：清洁调度员" error={fields.displayName}/><Field label="邮箱" name="email" type="email" autoComplete="email" placeholder="name@example.com" error={fields.email}/></>}
+      {isRegister&&<><Field label="用户名" name="username" placeholder="字母、数字或下划线，不限长度" error={fields.username}/><Field label="显示名称" name="displayName" placeholder="例如：清洁调度员" error={fields.displayName}/><Field label="邮箱" name="email" type="email" autoComplete="email" placeholder="name@example.com" error={fields.email}/></>}
       {!isRegister&&<Field label="用户名或邮箱" name="login" autoComplete="username" placeholder="输入用户名或邮箱" error={fields.login}/>} 
       <PasswordField label="密码" name="password" autoComplete={isRegister?'new-password':'current-password'} show={showPassword} setShow={setShowPassword} error={fields.password}/>
       {isRegister&&<PasswordField label="确认密码" name="confirmPassword" autoComplete="new-password" show={showConfirm} setShow={setShowConfirm} error={fields.confirmPassword}/>} 
@@ -34,4 +34,4 @@ export default function AuthPage({ mode }) {
   </div></section></main>
 }
 function Field({label,error,...props}){return <label className={`auth-field ${error?'has-error':''}`}><span>{label}</span><input required {...props}/>{error&&<small>{error}</small>}</label>}
-function PasswordField({label,name,show,setShow,error,autoComplete}){return <label className={`auth-field ${error?'has-error':''}`}><span>{label}</span><div className="password-input"><LockKeyhole size={17}/><input name={name} type={show?'text':'password'} required autoComplete={autoComplete} placeholder="至少 8 个字符"/><button type="button" onClick={()=>setShow(!show)} aria-label={show?'隐藏密码':'显示密码'}>{show?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>{error&&<small>{error}</small>}</label>}
+function PasswordField({label,name,show,setShow,error,autoComplete}){return <label className={`auth-field ${error?'has-error':''}`}><span>{label}</span><div className="password-input"><LockKeyhole size={17}/><input name={name} type={show?'text':'password'} required autoComplete={autoComplete} placeholder="输入密码，不限长度"/><button type="button" onClick={()=>setShow(!show)} aria-label={show?'隐藏密码':'显示密码'}>{show?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>{error&&<small>{error}</small>}</label>}

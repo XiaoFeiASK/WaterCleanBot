@@ -65,7 +65,7 @@ func stringsTrim(v string) string { return strings.TrimSpace(v) }
 func ValidateRegistration(username, name, email, password string) map[string]string {
 	f := map[string]string{}
 	if !ValidateUsername(username) {
-		f["username"] = "用户名需为 4–32 位字母、数字或下划线"
+		f["username"] = "用户名需由字母、数字或下划线组成"
 	}
 	if !ValidateDisplayName(name) {
 		f["displayName"] = "显示名称需为 2–40 个字符"
