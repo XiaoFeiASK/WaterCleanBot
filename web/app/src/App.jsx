@@ -254,6 +254,10 @@ function formatNumber(value, digits = 4) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '暂无数据';
 }
 
+function formatCoordinateNumber(value) {
+  return formatNumber(value, 1);
+}
+
 function formatBattery(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
 }
@@ -299,7 +303,7 @@ function formatSpeed(speed) {
 
 function formatCoordinates(position) {
   if (!hasCoordinates(position)) return '暂无数据';
-  return `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
+  return `${formatCoordinateNumber(position.lat)}, ${formatCoordinateNumber(position.lng)}`;
 }
 
 function getDistanceMeters(startPoint, endPoint) {
@@ -1041,11 +1045,11 @@ function FleetOverview({ positions, loading, error, onOpenDeviceDetail }) {
           >
             <div>
               <strong>{position.robotName}</strong>
-              <span>经纬度 {formatNumber(position.lng, 2)}, {formatNumber(position.lat, 2)}</span>
+              <span>经纬度 {formatCoordinateNumber(position.lng)}, {formatCoordinateNumber(position.lat)}</span>
             </div>
             <div className="fleet-device-meta">
               <span>电量 {formatBattery(position.battery)}</span>
-              <span>{typeof position.speed === 'number' ? `${position.speed} m/s` : '暂无速度'}</span>
+              <span>{typeof position.speed === 'number' ? formatSpeed(position.speed) : '暂无速度'}</span>
             </div>
           </button>
         ))}
@@ -1204,8 +1208,8 @@ export function FleetManagement({ fleetPositions, loading, error, onOpenDeviceDe
                     <td><strong>{device.robotName}</strong><span>{online ? '已纳入实时编队' : '待同步设备'}</span></td>
                     <td><span className={`fleet-state ${online ? 'fleet-state-online' : ''}`}>{!device.sourceTimestampMs ? '待接入' : online ? '在线' : '离线'}</span></td>
                     <td>{device.battery == null ? '--' : formatBattery(device.battery)}</td>
-                    <td>{typeof device.speed === 'number' ? `${device.speed} m/s` : '--'}</td>
-                    <td>{hasCoordinates(device) ? `${formatNumber(device.lng, 2)}, ${formatNumber(device.lat, 2)}` : '--'}</td>
+                    <td>{typeof device.speed === 'number' ? formatSpeed(device.speed) : '--'}</td>
+                    <td>{hasCoordinates(device) ? `${formatCoordinateNumber(device.lng)}, ${formatCoordinateNumber(device.lat)}` : '--'}</td>
                     <td>
                       <button type="button" onClick={() => onOpenDeviceDetail(device.robotName)}>详情</button>
                       <button className="fleet-table-danger fleet-delete-button" type="button" title={`删除 ${device.robotName}`} aria-label={`删除 ${device.robotName}`} disabled={Boolean(busy)} onClick={() => deleteDevice(device.robotName)}><Trash2 size={17} /></button>
@@ -2011,7 +2015,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           {planningMode && pendingRoutePoint && (
             <div className="route-point-confirm-card" role="dialog" aria-label="确认航点速度">
               <strong>确认航点 {draftRoutePoints.length + 1}</strong>
-              <span>经纬度 {pendingRoutePoint.lng.toFixed(8)}, {pendingRoutePoint.lat.toFixed(8)}</span>
+              <span>经纬度 {formatCoordinateNumber(pendingRoutePoint.lng)}, {formatCoordinateNumber(pendingRoutePoint.lat)}</span>
               <label>
                 到该点速度（节）
                 <input
@@ -2402,7 +2406,7 @@ function CameraPanel({ position, onToast }) {
         <div className="camera-noise-line" />
         <div className="camera-hud">
           <span><Compass size={14} />{typeof position?.heading === 'number' ? `${position.heading}°` : '暂无航向'}</span>
-          <span>{typeof position?.speed === 'number' ? `${position.speed} m/s` : '暂无速度'}</span>
+          <span>{typeof position?.speed === 'number' ? formatSpeed(position.speed) : '暂无速度'}</span>
           <span>{formatBattery(position?.battery)}</span>
         </div>
       </div>
