@@ -34,7 +34,7 @@ const position = {
   sourceTimestampMs: 1000, receivedAtMs: 1000,
 };
 const points = [
-  { lng: 121.41, lat: 31.21, speedKnots: 2 },
+  { lng: 121.41, lat: 31.21, speedKnots: 1 },
   { lng: 121.42, lat: 31.22, speedKnots: 3.5 },
   { lng: 121.43, lat: 31.23, speedKnots: 4 },
 ];
@@ -230,7 +230,9 @@ describe('planning state and persistence', () => {
     await waitFor(() => expect(maps.length).toBeGreaterThan(0));
     const map = maps.findLast((item) => item.listeners.get('click')?.size);
     act(() => map.emit('click', { lnglat: points[0] }));
-    fireEvent.click(await screen.findByRole('button', { name: '确认航点', exact: true }));
+    const firstPointDialog = await screen.findByRole('dialog', { name: '确认航点速度' });
+    expect(within(firstPointDialog).getByRole('spinbutton').value).toBe('1.0');
+    fireEvent.click(within(firstPointDialog).getByRole('button', { name: '确认航点', exact: true }));
     await waitFor(() => expect(activeMarkers()).toHaveLength(1));
     expect(activeLine()).toBeUndefined();
     expect(screen.getByText(/当前 1 个点，长度 0 m，预计 0分钟/)).toBeTruthy();

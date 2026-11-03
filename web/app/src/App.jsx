@@ -1393,7 +1393,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
-  const [pendingSpeedKnots, setPendingSpeedKnots] = useState('2.0');
+  const [pendingSpeedKnots, setPendingSpeedKnots] = useState('1.0');
   const [previewRouteId, setPreviewRouteId] = useState('');
   const [previewImportedRouteId, setPreviewImportedRouteId] = useState('');
   const [reversedImportedRouteKey, setReversedImportedRouteKey] = useState('');
@@ -1708,7 +1708,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   function addDraftRoutePoint(point) {
     if (!planningMode || isRouteBusy) return;
     setPendingRoutePoint(point);
-    setPendingSpeedKnots('2.0');
+    setPendingSpeedKnots('1.0');
   }
 
   const moveDraftRoutePoint = useCallback((index, point) => {
