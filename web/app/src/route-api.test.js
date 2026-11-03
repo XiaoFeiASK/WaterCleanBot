@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sendImportedRoute, sendPerceptionRoute } from './api';
+import { sendImportedRoute, sendPerceptionRoute, updateRobotRoute } from './api';
 
 const route = {
   coordinateSystem: 'WGS84',
@@ -65,6 +65,29 @@ describe('sendImportedRoute', () => {
     vi.stubGlobal('fetch', fetchMock);
     await sendImportedRoute('USV-001', 'center', 'revision-1', true);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ expectedRevision: 'revision-1', reverse: true });
+  });
+});
+
+describe('updateRobotRoute', () => {
+  it('replaces a saved route and returns the validated points', async () => {
+    const updated = {
+      id: 'R-001', robotName: 'USV-001', type: '折线', coordinateSystem: 'GCJ02',
+      lengthMeters: 120, durationSeconds: 80,
+      points: [
+        { seq: 1, lng: 121.4, lat: 31.2, speedKnots: 2 },
+        { seq: 2, lng: 121.5, lat: 31.3, speedKnots: 3 },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => updated });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateRobotRoute('USV-001', 'R-001', {
+      type: '折线', coordinateSystem: 'GCJ02', points: updated.points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
+    })).resolves.toEqual(updated);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/robots/USV-001/routes/R-001'),
+      expect.objectContaining({ method: 'PUT', body: expect.any(String) }),
+    );
   });
 });
 

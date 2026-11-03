@@ -583,6 +583,42 @@ export async function createRobotRoute(deviceName, routePayload, signal) {
   }
 }
 
+export async function updateRobotRoute(deviceName, routeId, routePayload, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !routeId) throw createRouteError('INVALID_ROBOT_CODE');
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/routes/${encodeURIComponent(routeId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(routePayload),
+        signal: requestSignal,
+        cache: 'no-store',
+      },
+    );
+
+    if (response.status === 400) throw createRouteError('INVALID_ROUTE');
+    if (response.status === 404) throw createRouteError('NOT_FOUND');
+    if (response.status >= 500) throw createRouteError('SERVER_ERROR');
+    if (!response.ok) throw createRouteError('REQUEST_FAILED');
+
+    const payload = await parseJSONResponse(response, createRouteError);
+    return validateRoutePayload(payload, robotName);
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function deleteRobotRoute(deviceName, routeId, signal) {
   const robotName = getRobotNameForDevice(deviceName);
   if (!robotName || !routeId) throw createRouteError('INVALID_ROBOT_CODE');

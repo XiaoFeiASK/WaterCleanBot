@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter } from 'react-router-dom';
 import App, { LocationMap } from './App';
 import {
-  createRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes, sendImportedRoute,
+  createRobotRoute, updateRobotRoute, fetchRobotCameras, fetchRobotLocation, fetchRobotRoutes, sendImportedRoute,
   fetchRobotTracks, subscribeRobotLocations,
 } from './api';
 import { fetchShoreline, updateShoreline } from './shoreline-api';
@@ -13,6 +13,7 @@ import { fetchShoreline, updateShoreline } from './shoreline-api';
 vi.mock('./api', async (original) => ({
   ...(await original()),
   createRobotRoute: vi.fn(),
+  updateRobotRoute: vi.fn(),
   fetchRobotCameras: vi.fn(),
   fetchRobotLocation: vi.fn(),
   fetchRobotRoutes: vi.fn(),
@@ -191,6 +192,35 @@ describe('route map editing', () => {
 });
 
 describe('planning state and persistence', () => {
+  it('edits and saves speeds for a previously saved route', async () => {
+    window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
+    const route = {
+      id: 'R-001', robotName: 'USV-001', type: '折线', coordinateSystem: 'GCJ02',
+      lengthMeters: 200, durationSeconds: 100,
+      points: [
+        { seq: 1, lng: 121.41, lat: 31.21, speedKnots: 2 },
+        { seq: 2, lng: 121.42, lat: 31.22, speedKnots: 3.5 },
+      ],
+    };
+    fetchRobotRoutes.mockResolvedValue([route]);
+    updateRobotRoute.mockImplementation(async (_robot, _id, payload) => ({ ...route, ...payload, points: payload.points.map((point, index) => ({ ...point, seq: index + 1 })) }));
+    render(<MemoryRouter><App /></MemoryRouter>);
+    await act(async () => streamHandlers.onSnapshot([position]));
+    const row = await screen.findByText('R-001', { selector: 'td' });
+    fireEvent.click(within(row.closest('tr')).getByRole('button', { name: '编辑', exact: true }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'R-001 航点 2 速度（节）' }), { target: { value: '4.2' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
+
+    await waitFor(() => expect(updateRobotRoute).toHaveBeenCalledWith('USV-001', 'R-001', {
+      type: '折线', coordinateSystem: 'GCJ02',
+      points: [
+        { lng: 121.41, lat: 31.21, speedKnots: 2 },
+        { lng: 121.42, lat: 31.22, speedKnots: 4.2 },
+      ],
+    }));
+    expect(screen.queryByRole('group', { name: '编辑R-001各航点速度' })).toBeNull();
+  });
+
   it('updates the summary after dragging and saves moved coordinates in the original order with original speeds', async () => {
     window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
     createRobotRoute.mockImplementation(async (_robot, route) => ({ ...route, id: 'new-route', name: '航线 1', lengthMeters: 200, durationSeconds: 100 }));

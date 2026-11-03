@@ -19,6 +19,7 @@ const routeRequestMaxBytes = 64 * 1024
 type RouteRepository interface {
 	ListRoutes(context.Context, string) ([]routes.Route, error)
 	CreateRoute(context.Context, string, routes.CreateRouteRequest, routes.RouteMetrics) (routes.Route, error)
+	UpdateRoute(context.Context, string, string, routes.CreateRouteRequest, routes.RouteMetrics) (routes.Route, bool, error)
 	GetRoute(context.Context, string, string) (routes.Route, bool, error)
 	DeleteRoute(context.Context, string, string) (bool, error)
 }
@@ -91,6 +92,51 @@ func CreateRobotRouteHandler(store *location.Store, repository RouteRepository, 
 		}
 
 		writeJSON(w, http.StatusCreated, route)
+	}
+}
+
+// UpdateRobotRouteHandler updates saved route points and their speeds.
+func UpdateRobotRouteHandler(store *location.Store, repository RouteRepository, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		robotName := r.PathValue("robotName")
+		routeID := r.PathValue("routeId")
+		if err := control.ValidateTarget(robotName); err != nil || routeID == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route target"})
+			return
+		}
+		if repository == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "route repository is unavailable"})
+			return
+		}
+
+		var request routes.CreateRouteRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, routeRequestMaxBytes))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+		normalizedRequest, err := routes.NormalizeCreateRouteRequest(request)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+			return
+		}
+		metrics := routes.CalculateMetrics(routeStartPoint(store, robotName, normalizedRequest.CoordinateSystem), normalizedRequest.Points)
+		route, updated, err := repository.UpdateRoute(r.Context(), robotName, routeID, normalizedRequest, metrics)
+		if err != nil {
+			if routes.IsValidationError(err) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route payload"})
+				return
+			}
+			log.Warn("update robot route failed", slog.String("robot_name", robotName), slog.String("route_id", routeID), slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update route failed"})
+			return
+		}
+		if !updated {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "route not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, route)
 	}
 }
 

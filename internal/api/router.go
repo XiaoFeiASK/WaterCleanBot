@@ -31,6 +31,7 @@ func NewRouter(store *location.Store, commandPublisher RemoteCommandPublisher, r
 	mux.HandleFunc("GET /api/robots/{robotName}/cameras", RobotCamerasHandler(cameraStreams))
 	mux.HandleFunc("GET /api/robots/{robotName}/routes", RobotRoutesHandler(routeRepository, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/routes", CreateRobotRouteHandler(store, routeRepository, log))
+	mux.HandleFunc("PUT /api/robots/{robotName}/routes/{routeId}", UpdateRobotRouteHandler(store, routeRepository, log))
 	mux.HandleFunc("DELETE /api/robots/{robotName}/routes/{routeId}", DeleteRobotRouteHandler(routeRepository, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/routes/{routeId}/send", SendRobotRouteHandler(store, routeRepository, routePublisher, log))
 	mux.HandleFunc("POST /api/robots/{robotName}/perception-route/send", SendPerceptionRouteHandler(store, routePublisher, log))

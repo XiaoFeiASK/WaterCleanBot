@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import Hls from 'hls.js';
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import {
   createRobotRoute,
+  updateRobotRoute,
   createRobotTrack,
   createRobot,
   deleteRobotTrack,
@@ -255,7 +256,7 @@ function formatNumber(value, digits = 4) {
 }
 
 function formatCoordinateNumber(value) {
-  return formatNumber(value, 1);
+  return formatNumber(value, 4);
 }
 
 function formatBattery(value) {
@@ -754,7 +755,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
               const marker = new AMap.Marker({
                 map: mapRef.current, position: [point.lng, point.lat],
                 content: createRoutePointContent(point.seq - 1, false, route.sourceKey === 'center' ? 'perception' : route.sourceKey),
-                offset: new AMap.Pixel(-12, -12), draggable: false,
+                offset: new AMap.Pixel(-8, -8), draggable: false,
                 title: `${route.name} · 航点 ${point.seq}（原始编号 ${point.pointId}）`, zIndex: 130,
               });
               perceptionPointMarkersRef.current.push(marker);
@@ -789,7 +790,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
               map: mapRef.current,
               position: [point.lng, point.lat],
               content: createRoutePointContent(index, false, 'perception', point.bridgeId > 0),
-              offset: new AMap.Pixel(-12, -12),
+              offset: new AMap.Pixel(-8, -8),
               zIndex: 130,
             });
             perceptionPointMarkersRef.current.push(pointMarker);
@@ -833,7 +834,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
         map,
         position: [point.lng, point.lat],
         content: createRoutePointContent(index, planningMode, 'standard', false, isPending),
-        offset: new AMap.Pixel(-12, -12),
+        offset: new AMap.Pixel(-8, -8),
         draggable,
         bubble: false,
         cursor: draggable ? 'move' : 'pointer',
@@ -1387,6 +1388,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [routesLoading, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState('');
   const [routeAction, setRouteAction] = useState('');
+  const [editingRouteId, setEditingRouteId] = useState('');
+  const [editedRouteSpeeds, setEditedRouteSpeeds] = useState([]);
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
@@ -1770,6 +1773,39 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       setPlanningMode(false);
       setDraftRoutePoints([]);
       onToast?.('航线已保存到数据库', 'success');
+    } catch (error) {
+      onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
+  function startEditingRoute(route) {
+    setEditingRouteId(route.id);
+    setEditedRouteSpeeds(route.points.map((point) => String(point.speedKnots)));
+  }
+
+  async function saveEditedRoute(route) {
+    if (!routeDeviceId || isRouteBusy) return;
+    const points = route.points.map((point, index) => ({
+      ...point,
+      speedKnots: Number(editedRouteSpeeds[index]),
+    }));
+    if (points.some(({ speedKnots }) => !Number.isFinite(speedKnots) || speedKnots <= 0 || speedKnots > 100)) {
+      onToast?.('请输入 0-100 节之间的航点速度');
+      return;
+    }
+
+    setRouteAction(`edit:${route.id}`);
+    try {
+      const updatedRoute = await updateRobotRoute(routeDeviceId, route.id, {
+        type: route.type,
+        coordinateSystem: route.coordinateSystem,
+        points: points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
+      });
+      setRoutes((currentRoutes) => currentRoutes.map((current) => current.id === route.id ? updatedRoute : current));
+      setEditingRouteId('');
+      onToast?.('航线速度已更新', 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
     } finally {
@@ -2183,18 +2219,42 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 </tr>
               ))}
               {!routesLoading && !routesError && routes.map((route) => (
-                <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''} key={route.id}>
-                  <td>{route.id}</td>
-                  <td><span className="route-type-badge route-type-standard">{route.type || '普通航线'}</span></td>
-                  <td>{formatRouteLength(route.lengthMeters)}</td>
-                  <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
-                  <td>
-                    <button type="button" onClick={() => toggleRoutePreview(route)}>{previewRouteId === route.id ? '取消查看' : '查看'}</button>
-                    <button type="button" aria-pressed={reversedRouteId === route.id} onClick={() => toggleRouteDirection(route)} disabled={isRouteBusy}>{reversedRouteId === route.id ? '取消逆转' : '逆转'}</button>
-                    <button type="button" onClick={() => sendRoute(route)} disabled={isRouteBusy}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
-                    <button className="route-table-danger" type="button" onClick={() => deleteRoute(route)} disabled={isRouteBusy}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
-                  </td>
-                </tr>
+                <Fragment key={route.id}>
+                  <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''}>
+                    <td>{route.id}</td>
+                    <td><span className="route-type-badge route-type-standard">{route.type || '普通航线'}</span></td>
+                    <td>{formatRouteLength(route.lengthMeters)}</td>
+                    <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
+                    <td>
+                      <button type="button" onClick={() => toggleRoutePreview(route)}>{previewRouteId === route.id ? '取消查看' : '查看'}</button>
+                      <button type="button" aria-pressed={reversedRouteId === route.id} onClick={() => toggleRouteDirection(route)} disabled={isRouteBusy}>{reversedRouteId === route.id ? '取消逆转' : '逆转'}</button>
+                      <button type="button" onClick={() => startEditingRoute(route)} disabled={isRouteBusy}>编辑</button>
+                      <button type="button" onClick={() => sendRoute(route)} disabled={isRouteBusy}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
+                      <button className="route-table-danger" type="button" onClick={() => deleteRoute(route)} disabled={isRouteBusy}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
+                    </td>
+                  </tr>
+                  {editingRouteId === route.id && (
+                    <tr className="route-speed-editor-row">
+                      <td colSpan="5">
+                        <fieldset className="route-speed-editor" aria-label={`编辑${route.id}各航点速度`}>
+                          <legend>{route.id} 航点速度（节）</legend>
+                          <div className="route-speed-editor-points">
+                            {route.points.map((point, index) => (
+                              <label key={point.seq}>
+                                <span>航点 {point.seq}</span>
+                                <input aria-label={`${route.id} 航点 ${point.seq} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                              </label>
+                            ))}
+                          </div>
+                          <div className="route-speed-editor-actions">
+                            <button type="button" onClick={() => setEditingRouteId('')} disabled={isRouteBusy}>取消</button>
+                            <button type="button" onClick={() => saveEditedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存速度'}</button>
+                          </div>
+                        </fieldset>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

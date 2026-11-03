@@ -154,6 +154,64 @@ func (r *Repository) CreateRoute(ctx context.Context, robotName string, request 
 	return route, nil
 }
 
+// UpdateRoute replaces the points and recalculated metrics of an existing route.
+func (r *Repository) UpdateRoute(ctx context.Context, robotName string, routeCode string, request CreateRouteRequest, metrics RouteMetrics) (Route, bool, error) {
+	normalizedRequest, err := NormalizeCreateRouteRequest(request)
+	if err != nil {
+		return Route{}, false, err
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return Route{}, false, err
+	}
+	defer tx.Rollback()
+
+	var route Route
+	err = tx.QueryRowContext(queryCtx, `
+		UPDATE planned_routes
+		SET route_type = $3, coordinate_system = $4, length_meters = $5,
+		    duration_seconds = $6, updated_at = now()
+		WHERE robot_name = $1 AND route_code = $2
+		RETURNING id, route_code, robot_name, route_type, coordinate_system, length_meters, duration_seconds, created_at, updated_at
+	`, robotName, routeCode, normalizedRequest.Type, normalizedRequest.CoordinateSystem, metrics.LengthMeters, metrics.DurationSeconds).Scan(
+		&route.DBID,
+		&route.ID,
+		&route.RobotName,
+		&route.Type,
+		&route.CoordinateSystem,
+		&route.LengthMeters,
+		&route.DurationSeconds,
+		&route.CreatedAt,
+		&route.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return Route{}, false, nil
+	}
+	if err != nil {
+		return Route{}, false, err
+	}
+	if _, err := tx.ExecContext(queryCtx, `DELETE FROM planned_route_points WHERE route_id = $1`, route.DBID); err != nil {
+		return Route{}, false, err
+	}
+	for _, point := range normalizedRequest.Points {
+		if _, err := tx.ExecContext(queryCtx, `
+			INSERT INTO planned_route_points (route_id, point_seq, lng, lat, speed_knots)
+			VALUES ($1, $2, $3, $4, $5)
+		`, route.DBID, point.Seq, point.Lng, point.Lat, point.SpeedKnots); err != nil {
+			return Route{}, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Route{}, false, err
+	}
+	route.Points = normalizedRequest.Points
+	return route, true, nil
+}
+
 // DeleteRoute 删除指定航线和级联路径点。
 func (r *Repository) DeleteRoute(ctx context.Context, robotName string, routeCode string) (bool, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
