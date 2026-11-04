@@ -37,6 +37,29 @@ func TestNavigationRoutePreservesCoordinatesAndConvertsMetersPerSecondToKnots(t 
 	}
 }
 
+func TestNavigationRouteUsesStoredPointSpeeds(t *testing.T) {
+	files := fullTestFiles()
+	files.Center = raw(strings.Replace(
+		strings.Replace(string(files.Center), `"reference_can_connect_previous":false`, `"reference_can_connect_previous":false,"speed_knots":2.5`, 1),
+		`"reference_can_connect_previous":true`, `"reference_can_connect_previous":true,"speed_knots":4`, 1,
+	))
+	route, err := NavigationRoute(files, "center")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.Points[0].SpeedKnots != 2.5 || route.Points[1].SpeedKnots != 4 {
+		t.Fatalf("unexpected speeds: %+v", route.Points)
+	}
+}
+
+func TestValidateFilesRejectsInvalidStoredSpeed(t *testing.T) {
+	files := fullTestFiles()
+	files.Left = raw(strings.Replace(string(files.Left), `"reference_can_connect_previous":false`, `"reference_can_connect_previous":false,"speed_knots":0`, 1))
+	if _, err := ValidateFiles(files); err == nil || !strings.Contains(err.Error(), "航点速度") {
+		t.Fatalf("expected speed validation error, got %v", err)
+	}
+}
+
 func TestReverseRouteMakesLastPointFirstWithoutMutatingSource(t *testing.T) {
 	route, err := NavigationRoute(fullTestFiles(), "center")
 	if err != nil {

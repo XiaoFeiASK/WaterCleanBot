@@ -32,7 +32,7 @@ describe('sendImportedRoute', () => {
   it('sends only route identity and expected public revision', async () => {
     const fetchMock = vi.fn().mockResolvedValue(publishedResponse({
       routeId: 'imported-center', revision: 'revision-1',
-      speedMetersPerSecond: 1, coordinateSystemSent: 'WGS84',
+      speedKnots: 1.944, coordinateSystemSent: 'WGS84',
       reversed: false,
     }));
     vi.stubGlobal('fetch', fetchMock);
@@ -45,7 +45,7 @@ describe('sendImportedRoute', () => {
         body: JSON.stringify({ expectedRevision: 'revision-1' }),
       }),
     );
-    expect(result.speedMetersPerSecond).toBe(1);
+    expect(result.speedKnots).toBe(1.944);
   });
 
   it('rejects bad keys, missing revisions, and stale versions without accepting a response', async () => {
@@ -60,7 +60,7 @@ describe('sendImportedRoute', () => {
   it('requests reversed dispatch without changing the saved route', async () => {
     const fetchMock = vi.fn().mockResolvedValue(publishedResponse({
       routeId: 'imported-center', revision: 'revision-1',
-      speedMetersPerSecond: 1, reversed: true,
+      speedKnots: 1.944, reversed: true,
     }));
     vi.stubGlobal('fetch', fetchMock);
     await sendImportedRoute('USV-001', 'center', 'revision-1', true);

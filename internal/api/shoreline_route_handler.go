@@ -103,7 +103,7 @@ func SendShorelineRouteHandler(store *location.Store, repository ShorelineReposi
 			"routeId": route.ID, "revision": dataset.Revision,
 			"protocol": values, "pointCount": len(route.Points),
 			"coordinateSystemSent": routes.CoordinateSystemWGS84,
-			"speedMetersPerSecond": shoreline.ImportedRouteSpeedMetersPerSecond,
+			"speedKnots":           route.Points[0].SpeedKnots,
 			"reversed":             request.Reverse,
 		})
 	}

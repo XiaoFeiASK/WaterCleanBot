@@ -9,6 +9,7 @@ import {
   readShorelineFiles,
   reverseImportedRoute,
   validateShorelineFiles,
+  withImportedRouteSpeeds,
   withoutImportedRoute,
 } from './shorelines';
 
@@ -163,11 +164,27 @@ describe('public shoreline rendering', () => {
     expect(routes[0].segments[0][0]).toMatchObject({ seq: 1, pointId: 1 });
     expect(routes[0].lengthMeters).toBeGreaterThan(0);
     for (const route of routes) {
-      expect(route.speedMetersPerSecond).toBe(1);
-      expect(route.points.every((point) => point.speedMetersPerSecond === 1)).toBe(true);
-      expect(route.segments.flat().every((point) => point.speedMetersPerSecond === 1)).toBe(true);
+      expect(route.speedMetersPerSecond).toBeCloseTo(1, 2);
+      expect(route.points.every((point) => Math.abs(point.speedMetersPerSecond - 1) < 1e-6)).toBe(true);
+      expect(route.segments.flat().every((point) => Math.abs(point.speedMetersPerSecond - 1) < 1e-6)).toBe(true);
       expect(route.durationSeconds).toBe(Math.ceil(route.lengthMeters));
     }
+  });
+
+  it('uses persisted per-point speeds and preserves all route metadata when editing', () => {
+    const files = fullFiles();
+    const edited = withImportedRouteSpeeds(files, 'left', [2.5, 4, 3, 5]);
+    expect(edited.left.points.map((point) => point.speed_knots)).toEqual([2.5, 4, 3, 5]);
+    expect(edited.left.points[0]).toMatchObject({
+      point_id: files.left.points[0].point_id,
+      reference_segment_id: files.left.points[0].reference_segment_id,
+      side: files.left.points[0].side,
+      map_section: files.left.points[0].map_section,
+    });
+    expect(edited.center).toBe(files.center);
+    const route = getImportedRoutes(edited).find(({ sourceKey }) => sourceKey === 'left');
+    expect(route.points.map((point) => point.speedKnots)).toEqual([2.5, 4, 3, 5]);
+    expect(route.points[0].speedMetersPerSecond).toBeCloseTo(2.5 * 0.514444, 6);
   });
 
   it('estimates time at 1 m/s without counting disconnected gaps or changing the source JSON', () => {

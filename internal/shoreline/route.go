@@ -7,7 +7,10 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/routes"
 )
 
-const ImportedRouteSpeedMetersPerSecond = 1.0
+const (
+	ImportedRouteSpeedMetersPerSecond = 1.0
+	ImportedRouteSpeedKnots           = ImportedRouteSpeedMetersPerSecond / 0.514444
+)
 
 var ErrRouteNotFound = errors.New("imported route not found")
 
@@ -47,9 +50,13 @@ func NavigationRoute(files Files, key string) (routes.Route, error) {
 				return routes.Route{}, &ValidationError{Message: "航线包含断开的航段，不能整条下发，请在外部工具中调整为连续航线后重新上传"}
 			}
 		}
+		speedKnots := ImportedRouteSpeedKnots
+		if p.SpeedKnots != nil {
+			speedKnots = *p.SpeedKnots
+		}
 		points[index] = routes.RoutePoint{
 			Seq: index + 1, Lng: *p.Longitude, Lat: *p.Latitude,
-			SpeedKnots: ImportedRouteSpeedMetersPerSecond / 0.514444,
+			SpeedKnots: speedKnots,
 		}
 	}
 	return routes.Route{ID: "imported-" + key, CoordinateSystem: routes.CoordinateSystemWGS84, Points: points}, nil

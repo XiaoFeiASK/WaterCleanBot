@@ -50,11 +50,12 @@ func (p coordinate) valid() bool {
 
 type point struct {
 	coordinate
-	ID               *int  `json:"point_id"`
-	ReferenceSegment *int  `json:"reference_segment_id"`
-	ReferenceConnect *bool `json:"reference_can_connect_previous"`
-	MapSection       *int  `json:"map_section"`
-	Side             *int  `json:"side"`
+	ID               *int     `json:"point_id"`
+	ReferenceSegment *int     `json:"reference_segment_id"`
+	ReferenceConnect *bool    `json:"reference_can_connect_previous"`
+	MapSection       *int     `json:"map_section"`
+	Side             *int     `json:"side"`
+	SpeedKnots       *float64 `json:"speed_knots"`
 }
 
 type section struct {
@@ -177,6 +178,9 @@ func ValidateFiles(files Files) (Files, error) {
 				}
 				if entry.name != "center" && (p.MapSection == nil || *p.MapSection <= 0 || p.Side == nil || *p.Side != *doc.Side) {
 					return invalid("近岸参考点章节或侧别错误")
+				}
+				if p.SpeedKnots != nil && (*p.SpeedKnots <= 0 || *p.SpeedKnots > 100 || math.IsNaN(*p.SpeedKnots) || math.IsInf(*p.SpeedKnots, 0)) {
+					return invalid("航点速度必须大于 0 且不超过 100 节")
 				}
 				lastID = *p.ID
 			}

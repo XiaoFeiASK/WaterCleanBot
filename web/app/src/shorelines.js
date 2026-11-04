@@ -2,6 +2,8 @@ import { wgs84ToGcj02 } from './coordinates';
 
 export const SHORELINE_MAX_BYTES = 20 * 1024 * 1024;
 const IMPORTED_ROUTE_SPEED_METERS_PER_SECOND = 1;
+const METERS_PER_SECOND_PER_KNOT = 0.514444;
+const IMPORTED_ROUTE_SPEED_KNOTS = IMPORTED_ROUTE_SPEED_METERS_PER_SECOND / METERS_PER_SECOND_PER_KNOT;
 export const SHORELINE_FILE_TYPES = Object.freeze([
   { key: 'shoreline', filename: 'shoreline_lonlat.json', label: '岸线与桥孔' },
   { key: 'left', filename: 'left_waypoints_lonlat.json', label: '左岸航线' },
@@ -147,12 +149,25 @@ export function getImportedRoutes(files) {
       const document = files[key];
       const segments = [];
       let previous;
+      let durationSeconds = 0;
       const points = document.points.map((point, index) => {
         if (!previous || point.reference_can_connect_previous !== true
           || point.reference_segment_id !== previous.reference_segment_id
           || (key !== 'center' && point.map_section !== previous.map_section)) segments.push([]);
-        const position = { lng: point.longitude_deg, lat: point.latitude_deg, speedMetersPerSecond: IMPORTED_ROUTE_SPEED_METERS_PER_SECOND };
-        const mapped = { ...wgs84ToGcj02(position), speedMetersPerSecond: position.speedMetersPerSecond, seq: index + 1, pointId: point.point_id };
+        const speedKnots = Number.isFinite(point.speed_knots) && point.speed_knots > 0
+          ? point.speed_knots
+          : IMPORTED_ROUTE_SPEED_KNOTS;
+        const speedMetersPerSecond = speedKnots * METERS_PER_SECOND_PER_KNOT;
+        const position = { lng: point.longitude_deg, lat: point.latitude_deg, speedKnots, speedMetersPerSecond };
+        const mapped = { ...wgs84ToGcj02(position), speedKnots, speedMetersPerSecond, seq: index + 1, pointId: point.point_id };
+        if (previous && point.reference_can_connect_previous === true
+          && point.reference_segment_id === previous.reference_segment_id
+          && (key === 'center' || point.map_section === previous.map_section)) {
+          durationSeconds += distanceMeters(
+            { lng: previous.longitude_deg, lat: previous.latitude_deg },
+            position,
+          ) / speedMetersPerSecond;
+        }
         segments.at(-1).push(mapped);
         previous = point;
         return position;
@@ -171,16 +186,46 @@ export function getImportedRoutes(files) {
         type: key === 'center' ? ROUTE_TYPE_LABELS.centerline : ROUTE_TYPE_LABELS.shoreline, coordinateSystem: 'WGS84',
         color: key === 'center' ? '#ffc928' : key === 'left' ? '#ff963b' : '#36c7f4',
         points, segments, lengthMeters,
-        speedMetersPerSecond: IMPORTED_ROUTE_SPEED_METERS_PER_SECOND,
-        durationSeconds: Math.ceil(lengthMeters / IMPORTED_ROUTE_SPEED_METERS_PER_SECOND),
+        speedMetersPerSecond: points.length > 0
+          ? points.reduce((sum, point) => sum + point.speedMetersPerSecond, 0) / points.length
+          : IMPORTED_ROUTE_SPEED_METERS_PER_SECOND,
+        durationSeconds: Math.ceil(durationSeconds),
       };
     });
+}
+
+function distanceMeters(start, end) {
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const deltaLat = radians(end.lat - start.lat);
+  const deltaLng = radians(end.lng - start.lng);
+  const startLat = radians(start.lat);
+  const endLat = radians(end.lat);
+  const haversine = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, haversine)));
 }
 
 export function withoutImportedRoute(files, key) {
   if (!['left', 'center', 'right'].includes(key)) throw new Error('只能删除导入的航线文件');
   const { [key]: removed, ...remaining } = files;
   return remaining;
+}
+
+// 只更新公共航线点的速度字段，保留编号、连接关系、侧别和测绘元数据。
+export function withImportedRouteSpeeds(files, key, speeds) {
+  if (!['left', 'center', 'right'].includes(key)) throw new Error('只能编辑导入的航线文件');
+  const document = files?.[key];
+  if (!document?.points?.length || speeds.length !== document.points.length) throw new Error('公共航线数据已变化，请重新加载');
+  return {
+    ...files,
+    [key]: {
+      ...document,
+      points: document.points.map((point, index) => ({
+        ...point,
+        speed_knots: speeds[index],
+      })),
+    },
+  };
 }
 
 // 逆转只改变展示和下发顺序，最后一点成为新的第一点。

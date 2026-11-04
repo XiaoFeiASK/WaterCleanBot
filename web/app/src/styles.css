@@ -1791,7 +1791,7 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 470px;
+  width: auto;
   max-width: calc(100% - 36px);
   min-height: 72px;
   padding: 12px;
@@ -1811,7 +1811,6 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 .tracking-map-label { min-width: 0; flex: 1; display: grid; gap: 5px; }
 .tracking-map-label strong { font-size: 15px; font-weight: 700; }
 .tracking-map-label small { color: var(--muted); font-size: 11px; letter-spacing: 0; }
-.tracking-map-route { width: 132px; min-height: 38px; padding: 0 7px; border: 1px solid #bfcecf; border-radius: 6px; color: var(--ink); background: #f8fbfa; font-size: 11px; }
 .tracking-map-actions { display: inline-flex; flex-shrink: 0; gap: 6px; }
 .tracking-map-action {
   display: inline-flex;
@@ -1866,7 +1865,6 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
     padding: 9px 11px;
     max-width: calc(100% - 20px);
   }
-  .tracking-map-route { flex: 1 1 108px; width: auto; }
   .tracking-map-actions { margin-left: auto; }
 }
 

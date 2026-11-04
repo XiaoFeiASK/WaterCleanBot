@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,7 @@ func publicRouteRequest(body string, loggedIn bool) *http.Request {
 	return r
 }
 
-func TestSendShorelineRouteUsesPersistedWGS84AndFixedSpeed(t *testing.T) {
+func TestSendShorelineRouteUsesPersistedWGS84AndPerPointSpeed(t *testing.T) {
 	repository := &fakeShorelineRepository{dataset: publicRouteDataset()}
 	publisher := &fakeRoutePublisher{}
 	handler := SendShorelineRouteHandler(newPerceptionStore("USV-001"), repository, &fakeShorelineAuth{user: auth.User{ID: "user-1"}}, publisher, shorelineLogger())
@@ -43,14 +44,30 @@ func TestSendShorelineRouteUsesPersistedWGS84AndFixedSpeed(t *testing.T) {
 		RouteID              string  `json:"routeId"`
 		Revision             string  `json:"revision"`
 		CoordinateSystemSent string  `json:"coordinateSystemSent"`
-		SpeedMetersPerSecond float64 `json:"speedMetersPerSecond"`
+		SpeedKnots           float64 `json:"speedKnots"`
 		Reversed             bool    `json:"reversed"`
 	}
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || payload.RouteID != "imported-center" || payload.Revision != "revision-1" || payload.CoordinateSystemSent != "WGS84" || payload.SpeedMetersPerSecond != 1 || payload.Reversed {
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || payload.RouteID != "imported-center" || payload.Revision != "revision-1" || payload.CoordinateSystemSent != "WGS84" || math.Abs(payload.SpeedKnots-1.944) > 1e-3 || payload.Reversed {
 		t.Fatalf("response=%s err=%v", response.Body, err)
 	}
 	if repository.replaceCalls != 0 || repository.deleteCalls != 0 {
 		t.Fatal("dispatch changed persisted data")
+	}
+}
+
+func TestSendShorelineRouteUsesEditedPointSpeeds(t *testing.T) {
+	dataset := publicRouteDataset()
+	dataset.Files.Center = json.RawMessage(strings.Replace(
+		strings.Replace(string(dataset.Files.Center), `"reference_can_connect_previous":false`, `"reference_can_connect_previous":false,"speed_knots":2.5`, 1),
+		`"reference_can_connect_previous":true`, `"reference_can_connect_previous":true,"speed_knots":4`, 1,
+	))
+	publisher := &fakeRoutePublisher{}
+	response := httptest.NewRecorder()
+	SendShorelineRouteHandler(newPerceptionStore("USV-001"), &fakeShorelineRepository{dataset: dataset}, &fakeShorelineAuth{}, publisher, shorelineLogger())(
+		response, publicRouteRequest(`{"expectedRevision":"revision-1"}`, true),
+	)
+	if response.Code != http.StatusAccepted || publisher.payload != "[40,2,121.40000000,31.20000000,2.5,121.50000000,31.30000000,4]" {
+		t.Fatalf("status=%d payload=%s body=%s", response.Code, publisher.payload, response.Body)
 	}
 }
 

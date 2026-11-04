@@ -22,19 +22,20 @@ beforeEach(() => {
 
 const trackingStart = () => screen.getByRole('button', { name: '开始循迹' });
 const trackingStop = () => screen.getByRole('button', { name: '结束循迹' });
-const testRoute = { key: 'planned:route-1', name: '20261104-120000.000000' };
+const testRoute = { key: 'planned:route-1', name: '2026-11-04-12-00' };
 const renderTracking = (props = {}) => render(
-  <TrackingButton deviceId="USV-001" routes={[testRoute]} selectedRouteKey={testRoute.key} {...props} />,
+  <TrackingButton deviceId="USV-001" route={testRoute} {...props} />,
 );
 
 describe('tracking button', () => {
   it('shows separate start and stop actions and confirms each command', async () => {
     sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
-    renderTracking();
+    const { rerender } = renderTracking();
+    expect(screen.queryByRole('combobox', { name: '循迹航线' })).toBeNull();
     expect(trackingStart().disabled).toBe(false);
     expect(trackingStop().disabled).toBe(false);
     fireEvent.click(trackingStart());
-    expect(window.confirm).toHaveBeenCalledWith('确认开始「20261104-120000.000000」循迹吗？');
+    expect(window.confirm).toHaveBeenCalledWith('确认开始循迹吗？');
     await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
     expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
       command: 'TRACKING', value: 1, values: { TRACKING: 1 }, ttlMs: 800,
@@ -44,7 +45,7 @@ describe('tracking button', () => {
     expect(sendRobotCommand).toHaveBeenCalledTimes(1);
     window.confirm.mockReturnValue(true);
     fireEvent.click(trackingStop());
-    expect(window.confirm).toHaveBeenCalledWith('确认结束「20261104-120000.000000」循迹吗？');
+    expect(window.confirm).toHaveBeenCalledWith('确认结束循迹吗？');
     await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('false'));
     expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
       command: 'TRACKING', value: 0, values: { TRACKING: 0 }, ttlMs: 800,
@@ -53,11 +54,13 @@ describe('tracking button', () => {
 
   it('does not change state on failure and allows retry', async () => {
     const onToast = vi.fn();
+    const onTrackingStatsChange = vi.fn().mockResolvedValue({ routeKey: testRoute.key, trackingActive: true });
     sendRobotCommand.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ protocol: [24, 1] });
-    renderTracking({ onToast });
+    renderTracking({ onToast, onTrackingStatsChange });
     fireEvent.click(trackingStart());
     await waitFor(() => expect(onToast).toHaveBeenCalledWith('下发失败'));
     expect(trackingStart().getAttribute('aria-pressed')).toBe('false');
+    expect(onTrackingStatsChange.mock.calls.map(([action]) => action)).toEqual(['start', 'cancel']);
     fireEvent.click(trackingStart());
     await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
   });
@@ -67,14 +70,14 @@ describe('tracking button', () => {
     sendRobotCommand.mockReturnValue(new Promise((done) => { resolve = done; }));
     const { rerender } = renderTracking();
     fireEvent.click(trackingStart());
-    await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledOnce());
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenCalled());
     fireEvent.click(trackingStop());
     expect(sendRobotCommand).toHaveBeenCalledTimes(1);
-    rerender(<TrackingButton deviceId="USV-002" routes={[testRoute]} selectedRouteKey={testRoute.key} />);
+    rerender(<TrackingButton deviceId="USV-002" route={testRoute} />);
     resolve({ protocol: [24, 1] });
     await waitFor(() => expect(trackingStart().disabled).toBe(false));
     expect(trackingStart().getAttribute('aria-pressed')).toBe('false');
-    rerender(<TrackingButton deviceId="USV-001" routes={[testRoute]} selectedRouteKey={testRoute.key} />);
+    rerender(<TrackingButton deviceId="USV-001" route={testRoute} />);
     await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
   });
 
@@ -94,20 +97,24 @@ describe('tracking button', () => {
     expect(trackingStart().disabled).toBe(false);
   });
 
-  it('requires a concrete route before publishing and records one cycle on start', async () => {
+  it('has no route selector and records the dispatched route on start', async () => {
     const onTrackingStatsChange = vi.fn().mockResolvedValue({ routeKey: testRoute.key, trackingActive: true });
     sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
     renderTracking({ onTrackingStatsChange });
-    expect(screen.getByRole('option', { name: testRoute.name })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: '循迹航线' })).toBeNull();
     expect(screen.getByText('点击循环一次')).toBeTruthy();
     fireEvent.click(trackingStart());
     await waitFor(() => expect(onTrackingStatsChange).toHaveBeenCalledWith('start', testRoute));
   });
 
-  it('does not publish without a selected route', () => {
-    render(<TrackingButton deviceId="USV-001" />);
-    expect(trackingStart().disabled).toBe(true);
-    expect(trackingStop().disabled).toBe(true);
+  it('blocks start without a dispatched route while keeping end available', () => {
+    const onToast = vi.fn();
+    render(<TrackingButton deviceId="USV-001" onToast={onToast} />);
+    expect(trackingStart().disabled).toBe(false);
+    expect(trackingStop().disabled).toBe(false);
+    fireEvent.click(trackingStart());
+    expect(onToast).toHaveBeenCalledWith('请先下发一条航线，再开始循迹');
+    expect(window.confirm).not.toHaveBeenCalled();
   });
 
   it('rolls back the battery baseline when the tracking publish fails', async () => {

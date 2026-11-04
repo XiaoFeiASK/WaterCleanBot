@@ -72,7 +72,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withImportedRouteSpeeds, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -282,6 +282,25 @@ function formatRouteDurationSeconds(durationSeconds) {
   if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds)) return '暂无数据';
   const minutes = Math.max(0, Math.ceil(durationSeconds / 60));
   return `${minutes}分钟`;
+}
+
+export function formatRouteCreatedAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date).filter(({ type }) => type !== 'literal').map(({ type, value: part }) => [type, part]));
+  return `${parts.year}-${parts.month}-${parts.day}-${parts.hour}-${parts.minute}`;
+}
+
+function getRouteDisplayName(route) {
+  return formatRouteCreatedAt(route?.createdAt) || route?.id || '';
 }
 
 function formatTrackTime(value) {
@@ -1416,7 +1435,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [editedRouteSpeeds, setEditedRouteSpeeds] = useState([]);
   const [bulkRouteSpeed, setBulkRouteSpeed] = useState('1.0');
   const [trackingStats, setTrackingStats] = useState({});
-  const [trackingRouteKey, setTrackingRouteKey] = useState('');
+  const [lastDispatchedRoute, setLastDispatchedRoute] = useState(null);
+  const [activeTrackingRoute, setActiveTrackingRoute] = useState(null);
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
@@ -1435,10 +1455,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const shorelineSections = useMemo(() => getShorelineSections(shorelineFiles), [shorelineFiles]);
   const importedRoutes = useMemo(() => getImportedRoutes(shorelineFiles), [shorelineFiles]);
   const savedImportedRoutes = useMemo(() => getImportedRoutes(shorelineStore.dataset?.files), [shorelineStore.dataset]);
-  const trackingRoutes = useMemo(() => [
-    ...routes.map((route) => ({ key: `planned:${route.id}`, id: route.id, source: 'planned', name: route.id })),
-    ...savedImportedRoutes.map((route) => ({ key: `public:${route.sourceKey}`, id: route.sourceKey, source: 'public', name: route.name })),
-  ], [routes, savedImportedRoutes]);
   const visibleImportedRoutes = useMemo(() => importedRoutes.filter((route) =>
     shorelinePreview || route.id === previewImportedRouteId)
     .map((route) => route.sourceKey === reversedImportedRouteKey ? reverseImportedRoute(route) : route),
@@ -1603,13 +1619,15 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     return () => controller.abort();
   }, [routeDeviceId, isDemoTestDevice]);
 
-  useEffect(() => {
-    setTrackingRouteKey((current) => trackingRoutes.some((route) => route.key === current) ? current : trackingRoutes[0]?.key || '');
-  }, [trackingRoutes]);
-
   async function changeTrackingStats(action, route) {
+    if (!route) {
+      onToast?.(action === 'start' ? '请先下发一条航线，再开始循迹' : '当前没有已绑定的循迹航线');
+      throw new Error('missing route binding');
+    }
     const stat = await updateRouteTracking(routeDeviceId, action, route.key, route.name);
     setTrackingStats((current) => ({ ...current, [route.key]: stat }));
+    if (action === 'start') setActiveTrackingRoute(route);
+    if (action === 'end' || action === 'cancel') setActiveTrackingRoute(null);
     return stat;
   }
 
@@ -1841,16 +1859,29 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setBulkRouteSpeed(String(route.points[0]?.speedKnots ?? '1.0'));
   }
 
+  function startEditingImportedRoute(route) {
+    setEditingRouteId(route.id);
+    setEditedRouteSpeeds(route.points.map((point) => String(point.speedKnots)));
+    setBulkRouteSpeed(String(route.points[0]?.speedKnots ?? '1.0'));
+  }
+
+  function validateEditedRouteSpeeds() {
+    const speeds = editedRouteSpeeds.map(Number);
+    if (speeds.some((speed) => !Number.isFinite(speed) || speed <= 0 || speed > 100)) {
+      onToast?.('请输入 0-100 节之间的航点速度');
+      return null;
+    }
+    return speeds;
+  }
+
   async function saveEditedRoute(route) {
     if (!routeDeviceId || isRouteBusy) return;
+    const speeds = validateEditedRouteSpeeds();
+    if (!speeds) return;
     const points = route.points.map((point, index) => ({
       ...point,
-      speedKnots: Number(editedRouteSpeeds[index]),
+      speedKnots: speeds[index],
     }));
-    if (points.some(({ speedKnots }) => !Number.isFinite(speedKnots) || speedKnots <= 0 || speedKnots > 100)) {
-      onToast?.('请输入 0-100 节之间的航点速度');
-      return;
-    }
 
     setRouteAction(`edit:${route.id}`);
     try {
@@ -1864,6 +1895,30 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       onToast?.('航线速度已更新', 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
+    } finally {
+      setRouteAction('');
+    }
+  }
+
+  async function saveEditedImportedRoute(route) {
+    const dataset = shorelineStore.dataset;
+    if (!dataset || isRouteBusy || shorelinePreview) return;
+    const speeds = validateEditedRouteSpeeds();
+    if (!speeds) return;
+
+    setRouteAction(`edit:${route.id}`);
+    try {
+      const files = withImportedRouteSpeeds(dataset.files, route.sourceKey, speeds);
+      await shorelineStore.update({ [route.sourceKey]: files[route.sourceKey] }, dataset.revision);
+      setEditingRouteId('');
+      onToast?.(`${route.name}速度已更新，公共修改已保存`, 'success');
+    } catch (error) {
+      if (error.status === 409) {
+        void shorelineStore.reload().catch(() => {});
+        onToast?.('公共航线已被其他用户更新，请重新加载后再编辑');
+      } else {
+        onToast?.(error.message);
+      }
     } finally {
       setRouteAction('');
     }
@@ -1968,21 +2023,41 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   }
 
   async function sendRoute(route) {
-    if (!routeDeviceId || !route || isRouteBusy) return;
+    if (!routeDeviceId || !route) return;
+    if (routeAction) return;
     const dataset = shorelineStore.dataset;
     const reverse = route.sourceKey
       ? route.sourceKey === reversedImportedRouteKey
       : route.id === reversedRouteId;
+    const firstPointSpeed = route.points?.[0]?.speedKnots;
+    const speedText = Number.isFinite(firstPointSpeed) ? `${firstPointSpeed.toFixed(1).replace(/\.0$/, '')} 节` : '航线设置的逐点速度';
     if (route.sourceKey) {
       if (!dataset || shorelinePreview) return;
       const warnings = getShorelineWarnings({ [route.sourceKey]: dataset.files[route.sourceKey] });
-      if (!window.confirm(`确认向设备「${routeDeviceId}」下发「${route.name}」？\n${reverse ? '按逆转顺序（最后一点作为第一点）下发。\n' : ''}默认速度为 1 m/s。${warnings.length ? `\n注意：${warnings.join('；')}。请确认航线安全后再下发。` : ''}`)) return;
+      if (!window.confirm(`确认向设备「${routeDeviceId}」下发「${route.name}」？\n${reverse ? '按逆转顺序（最后一点作为第一点）下发。\n' : ''}各航点速度按航线保存值下发，首点 ${speedText}。${warnings.length ? `\n注意：${warnings.join('；')}。请确认航线安全后再下发。` : ''}`)) return;
     }
     setRouteAction(`send:${route.id}`);
     try {
       const result = route.sourceKey
-        ? await sendImportedRoute(routeDeviceId, route.sourceKey, dataset.revision, reverse)
+        ? await sendImportedRoute(routeDeviceId, route.sourceKey, dataset?.revision, reverse)
         : await sendRobotRoute(routeDeviceId, route.id, reverse);
+      setLastDispatchedRoute(route.sourceKey ? {
+        key: `public:${route.sourceKey}`,
+        name: route.name,
+        source: 'public',
+        sourceKey: route.sourceKey,
+        id: route.sourceKey,
+        revision: shorelineStore.dataset?.revision || dataset?.revision,
+        points: route.points.map((point) => ({ lng: point.lng, lat: point.lat, speedKnots: point.speedKnots })),
+      } : {
+        key: `planned:${route.id}`,
+        name: getRouteDisplayName(route),
+        source: 'planned',
+        id: route.id,
+        createdAt: route.createdAt,
+        revision: route.updatedAt,
+        points: route.points.map((point) => ({ lng: point.lng, lat: point.lat, speedKnots: point.speedKnots })),
+      });
       onToast?.(`已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       onToast?.(route.sourceKey ? error.message : getRouteErrorMessage(error));
@@ -2003,6 +2078,27 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     } finally {
       setRouteAction('');
     }
+  }
+
+  function sameRouteVersion(route, current) {
+    if (!route || !current) return false;
+    if (route.key !== `public:${current.sourceKey}`) return false;
+    return route.source === 'public'
+      ? route.revision === shorelineStore.dataset?.revision
+      : true;
+  }
+
+  function resolveTrackingRoute() {
+    if (!routeDeviceId || routeDeviceId !== position?.robotName) return null;
+    if (activeTrackingRoute) return activeTrackingRoute;
+    const route = lastDispatchedRoute;
+    if (!route) return null;
+    if (route.source === 'planned') return { ...route, name: getRouteDisplayName({ createdAt: route.createdAt, id: route.id }) };
+    if (route.source === 'public') {
+      const current = savedImportedRoutes.find((item) => item.sourceKey === route.sourceKey);
+      return sameRouteVersion(route, current) ? route : null;
+    }
+    return null;
   }
 
   return (
@@ -2092,9 +2188,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
           />
           <TrackingButton
             deviceId={routeDeviceId}
-            routes={trackingRoutes}
-            selectedRouteKey={trackingRouteKey}
-            onSelectedRouteChange={setTrackingRouteKey}
+            route={resolveTrackingRoute()}
             onTrackingStatsChange={changeTrackingStats}
             onToast={onToast}
           />
@@ -2268,24 +2362,60 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <tr><td className="route-table-empty" colSpan="6">暂无已保存航线</td></tr>
               )}
               {savedImportedRoutes.map((route) => (
-                <tr key={route.id} className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
-                  <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · {route.speedMetersPerSecond} m/s · 公共</small></td>
-                  <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{getRouteTypeLabel(route.type)}</span></td>
-                  <td>{formatRouteLength(route.lengthMeters)}</td>
-                  <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
-                  <td>{formatRouteBattery(trackingStats[`public:${route.sourceKey}`]?.batteryConsumedPercent)}</td>
-                  <td>
-                    <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
-                    <button type="button" aria-pressed={reversedImportedRouteKey === route.sourceKey} onClick={() => toggleImportedRouteDirection(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{reversedImportedRouteKey === route.sourceKey ? '取消逆转' : '逆转'}</button>
-                    <button type="button" onClick={() => sendRoute(route)} disabled={!routeDeviceId || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
-                    <button className="route-table-danger" type="button" onClick={() => deleteImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
-                  </td>
-                </tr>
+                <Fragment key={route.id}>
+                  <tr className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
+                    <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · 平均 {route.speedMetersPerSecond.toFixed(1)} m/s · 公共</small></td>
+                    <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{getRouteTypeLabel(route.type)}</span></td>
+                    <td>{formatRouteLength(route.lengthMeters)}</td>
+                    <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
+                    <td>{formatRouteBattery(trackingStats[`public:${route.sourceKey}`]?.batteryConsumedPercent)}</td>
+                    <td>
+                      <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
+                      <button type="button" aria-pressed={reversedImportedRouteKey === route.sourceKey} onClick={() => toggleImportedRouteDirection(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{reversedImportedRouteKey === route.sourceKey ? '取消逆转' : '逆转'}</button>
+                      <button type="button" onClick={() => startEditingImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>编辑</button>
+                      <button type="button" onClick={() => sendRoute(route)} disabled={!routeDeviceId || isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `send:${route.id}` ? '下发中' : '下发'}</button>
+                      <button className="route-table-danger" type="button" onClick={() => deleteImportedRoute(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{routeAction === `delete:${route.id}` ? '删除中' : '删除'}</button>
+                    </td>
+                  </tr>
+                  {editingRouteId === route.id && (
+                    <tr className="route-speed-editor-row">
+                      <td colSpan="6">
+                        <fieldset className="route-speed-editor" aria-label={`编辑${route.name}各航点速度`}>
+                          <legend>{route.name} 航点速度（节，公共保存）</legend>
+                          <div className="route-speed-editor-points">
+                            {route.points.map((point, index) => (
+                              <label key={`${route.sourceKey}-${point.pointId ?? index}`}>
+                                <span>航点 {index + 1}</span>
+                                <input aria-label={`${route.name} 航点 ${index + 1} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                              </label>
+                            ))}
+                          </div>
+                          <div className="route-speed-editor-actions">
+                            <label className="route-bulk-speed">
+                              <span>统一速度（节）</span>
+                              <input aria-label={`${route.name} 一键替换速度（节）`} type="number" min="0.1" max="100" step="0.1" value={bulkRouteSpeed} onChange={(event) => setBulkRouteSpeed(event.target.value)} />
+                              <button type="button" onClick={() => {
+                                const speed = Number(bulkRouteSpeed);
+                                if (!Number.isFinite(speed) || speed <= 0 || speed > 100) {
+                                  onToast?.('请输入 0-100 节之间的航点速度');
+                                  return;
+                                }
+                                setEditedRouteSpeeds(route.points.map(() => String(speed)));
+                              }}>一键更换</button>
+                            </label>
+                            <button type="button" onClick={() => setEditingRouteId('')} disabled={isRouteBusy}>取消</button>
+                            <button type="button" onClick={() => saveEditedImportedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存速度'}</button>
+                          </div>
+                        </fieldset>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
               {!routesLoading && !routesError && routes.map((route) => (
                 <Fragment key={route.id}>
                   <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''}>
-                    <td>{route.id}</td>
+                    <td>{getRouteDisplayName(route)}</td>
                     <td><span className="route-type-badge route-type-standard">{getRouteTypeLabel(route.type)}</span></td>
                     <td>{formatRouteLength(route.lengthMeters)}</td>
                     <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
@@ -2301,20 +2431,20 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   {editingRouteId === route.id && (
                     <tr className="route-speed-editor-row">
                       <td colSpan="6">
-                        <fieldset className="route-speed-editor" aria-label={`编辑${route.id}各航点速度`}>
-                          <legend>{route.id} 航点速度（节）</legend>
+                        <fieldset className="route-speed-editor" aria-label={`编辑${getRouteDisplayName(route)}各航点速度`}>
+                          <legend>{getRouteDisplayName(route)} 航点速度（节）</legend>
                           <div className="route-speed-editor-points">
                             {route.points.map((point, index) => (
                               <label key={point.seq}>
                                 <span>航点 {point.seq}</span>
-                                <input aria-label={`${route.id} 航点 ${point.seq} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                                <input aria-label={`${getRouteDisplayName(route)} 航点 ${point.seq} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
                               </label>
                             ))}
                           </div>
                           <div className="route-speed-editor-actions">
                             <label className="route-bulk-speed">
                               <span>统一速度（节）</span>
-                              <input aria-label={`${route.id} 一键替换速度（节）`} type="number" min="0.1" max="100" step="0.1" value={bulkRouteSpeed} onChange={(event) => setBulkRouteSpeed(event.target.value)} />
+                              <input aria-label={`${getRouteDisplayName(route)} 一键替换速度（节）`} type="number" min="0.1" max="100" step="0.1" value={bulkRouteSpeed} onChange={(event) => setBulkRouteSpeed(event.target.value)} />
                               <button type="button" onClick={() => {
                                 const speed = Number(bulkRouteSpeed);
                                 if (!Number.isFinite(speed) || speed <= 0 || speed > 100) {

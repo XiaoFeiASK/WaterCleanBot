@@ -830,7 +830,8 @@ export async function sendImportedRoute(deviceName, routeKey, expectedRevision, 
     }
     const result = validateRouteSendResponse(payload, robotName, `imported-${routeKey}`);
     if (result.revision !== expectedRevision || result.coordinateSystemSent !== 'WGS84'
-      || result.speedMetersPerSecond !== 1 || result.reversed !== reverse) throw createRouteError('REQUEST_FAILED');
+      || !isNumber(result.speedKnots) || result.speedKnots <= 0 || result.speedKnots > 100
+      || result.reversed !== reverse) throw createRouteError('REQUEST_FAILED');
     return result;
   } catch (error) {
     if (error.code || error.status) throw error;
