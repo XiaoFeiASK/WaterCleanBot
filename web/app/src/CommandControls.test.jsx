@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { DockEjectButton, formatTrackingDuration, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { sendRobotCommand } from './api';
 
 vi.mock('./api', () => ({
@@ -28,6 +28,11 @@ const renderTracking = (props = {}) => render(
 );
 
 describe('tracking button', () => {
+  it('formats the server-recorded tracking duration in hours, minutes, and seconds', () => {
+    expect(formatTrackingDuration('2026-11-04T04:00:00.000Z', '2026-11-04T05:02:03.400Z')).toBe('1时2分3秒');
+    expect(formatTrackingDuration('invalid', '2026-11-04T05:02:03.400Z')).toBe('');
+  });
+
   it('shows separate start and stop actions and confirms each command', async () => {
     sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
     const { rerender } = renderTracking();
@@ -102,7 +107,8 @@ describe('tracking button', () => {
     sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
     renderTracking({ onTrackingStatsChange });
     expect(screen.queryByRole('combobox', { name: '循迹航线' })).toBeNull();
-    expect(screen.getByText('点击循环一次')).toBeTruthy();
+    expect(screen.queryByText('点击循环一次')).toBeNull();
+    expect(screen.getByText('循迹控制').parentElement.querySelector('small')).toBeNull();
     fireEvent.click(trackingStart());
     await waitFor(() => expect(onTrackingStatsChange).toHaveBeenCalledWith('start', testRoute));
   });
@@ -127,6 +133,64 @@ describe('tracking button', () => {
     expect(sendRobotCommand).toHaveBeenCalledOnce();
   });
 
+  it('shows a prominent completion result from the server battery difference after ending', async () => {
+    const onTrackingStatsChange = vi.fn()
+      .mockResolvedValueOnce({
+        routeKey: testRoute.key,
+        routeName: testRoute.name,
+        trackingActive: true,
+        batteryConsumedPercent: null,
+        startedAt: '2026-11-04T04:00:00.000Z',
+        updatedAt: '2026-11-04T04:00:00.000Z',
+      })
+      .mockResolvedValueOnce({
+        routeKey: testRoute.key,
+        routeName: testRoute.name,
+        trackingActive: false,
+        batteryConsumedPercent: 4.2,
+        startedAt: '2026-11-04T04:00:00.000Z',
+        endedAt: '2026-11-04T05:02:03.000Z',
+        updatedAt: '2026-11-04T05:02:03.000Z',
+      });
+    sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
+    const onToast = vi.fn();
+    renderTracking({ onTrackingStatsChange, onToast });
+    fireEvent.click(trackingStart());
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
+    expect(screen.queryByRole('dialog', { name: '本次循迹结果' })).toBeNull();
+
+    fireEvent.click(trackingStop());
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith(
+      `结束循迹指令已发布 ${JSON.stringify([24, 1])}`,
+      'success',
+    ));
+    const dialog = await screen.findByRole('dialog', { name: '本次循迹结果' });
+    expect(dialog.textContent.replace(/\s+/g, '')).toContain('本次循迹耗时1时2分3秒，损耗电量🔋为4.2%！');
+    expect(dialog.textContent).toContain(`绑定航线 · ${testRoute.name}`);
+    fireEvent.click(within(dialog).getByRole('button', { name: '知道了' }));
+    expect(screen.queryByRole('dialog', { name: '本次循迹结果' })).toBeNull();
+  });
+
+  it('does not show a completion result when the stop command cannot be published', async () => {
+    const onTrackingStatsChange = vi.fn().mockImplementation(async (_robot, action) => ({
+      routeKey: testRoute.key,
+      routeName: testRoute.name,
+      trackingActive: action === 'start',
+      batteryConsumedPercent: action === 'end' ? 4.2 : null,
+      startedAt: '2026-11-04T04:00:00.000Z',
+      endedAt: action === 'end' ? '2026-11-04T05:02:03.000Z' : null,
+      updatedAt: '2026-11-04T05:02:03.000Z',
+    }));
+    sendRobotCommand.mockResolvedValueOnce({ protocol: [24, 1] }).mockRejectedValueOnce(new Error('offline'));
+    const onToast = vi.fn();
+    renderTracking({ onTrackingStatsChange, onToast });
+    fireEvent.click(trackingStart());
+    await waitFor(() => expect(trackingStart().getAttribute('aria-pressed')).toBe('true'));
+    fireEvent.click(trackingStop());
+    await waitFor(() => expect(onToast).toHaveBeenCalledWith('下发失败'));
+    expect(screen.queryByRole('dialog', { name: '本次循迹结果' })).toBeNull();
+  });
+
   it('does not publish when battery telemetry is unavailable', async () => {
     const onToast = vi.fn();
     const onTrackingStatsChange = vi.fn().mockRejectedValue(Object.assign(new Error('missing battery'), {
@@ -141,6 +205,13 @@ describe('tracking button', () => {
 });
 
 describe('dock eject action', () => {
+  it('shows one-shot guidance without a current-state label', () => {
+    render(<DockEjectButton deviceId="USV-001" />);
+    const button = screen.getByRole('button', { name: /船坞释放/ });
+    expect(within(button).getByText('点击循环一次')).toBeTruthy();
+    expect(within(button).queryByText('当前状态')).toBeNull();
+  });
+
   it('sends a parameterless action each time, not a persistent toggle', async () => {
     const onToast = vi.fn();
     sendRobotCommand.mockResolvedValue({ protocol: [234, 1, 235], protocolHex: '[EA 01 EB]' });
