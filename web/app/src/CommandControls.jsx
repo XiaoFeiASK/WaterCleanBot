@@ -8,10 +8,7 @@ function confirmAction(message) {
 
 export function requestRemoteSwitchConfirmation(command, nextValue) {
   if (command.cmd === 'OPERATING_MODE') {
-    return confirmAction(`确认切换运行模式为“${nextValue ? command.onText : command.offText}”吗？`);
-  }
-  if (command.cmd === 'PADDLE_POWER') {
-    return confirmAction(`确认将明轮电源“${nextValue ? command.onText : command.offText}”吗？`);
+    return confirmAction(`确认切换控制状态为“${nextValue === 1 ? command.onText : command.offText}”吗？`);
   }
   return true;
 }
@@ -126,7 +123,7 @@ export function DockEjectButton({ deviceId, onToast }) {
     >
       <span className="critical-control-copy">
         <span className="critical-control-icon" aria-hidden="true"><Anchor size={22} /></span>
-        <span><strong>船坞释放</strong><small>{busy ? '指令下发中…' : '点击执行一次'}</small></span>
+        <span><strong>船坞释放</strong><small>当前状态</small></span>
       </span>
       <span className={`dock-eject-indicator ${indicatorActive ? 'is-active' : ''}`} title={indicatorActive ? '指示灯已点亮，剩余 10 秒' : '待机'} aria-label={indicatorActive ? '船坞释放指示灯已点亮' : '船坞释放指示灯待机'} />
       <span className="switch-state dock-eject-action">{busy ? '下发中' : '释放'}<ArrowUpRight size={16} aria-hidden="true" /></span>

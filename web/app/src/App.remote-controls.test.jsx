@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
+import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { RemoteControlPanel } from './App';
 import { sendRobotCommand } from './api';
 
@@ -132,5 +133,68 @@ describe('independent throttle stop controls', () => {
     await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledWith('USV-001', expect.objectContaining({
       command: 'THROTTLE_L', value: 55,
     })));
+  });
+});
+
+describe('actuator state labels and control mode', () => {
+  it('labels every actuator card with its current state and toggles paddle power without confirmation', async () => {
+    render(<RemoteControlPanel position={{ robotName: 'USV-001' }} />);
+
+    for (const label of ['控制状态', '明轮电源', '船坞释放', '翻盖电缸', '推出电缸', '传送带', '左滚刷', '右滚刷', '垃圾清理']) {
+      expect(control(label)).toHaveTextContent('当前状态');
+    }
+
+    fireEvent.click(control('明轮电源'));
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledWith('USV-001', expect.objectContaining({
+      command: 'PADDLE_POWER',
+      value: 1,
+    })));
+    expect(window.confirm).not.toHaveBeenCalled();
+
+    fireEvent.click(control('明轮电源'));
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', expect.objectContaining({
+      command: 'PADDLE_POWER',
+      value: 0,
+    })));
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('shows each actuator with its current state instead of an instruction', () => {
+    render(<RemoteControlPanel position={{ robotName: 'USV-001' }} />);
+    for (const label of ['明轮电源', '船坞释放', '翻盖电缸', '推出电缸', '传送带', '左滚刷', '右滚刷', '垃圾清理']) {
+      expect(within(control(label)).getByText('当前状态')).toBeTruthy();
+      expect(within(control(label)).queryByText('点击执行一次')).toBeNull();
+      expect(within(control(label)).queryByText('点击切换')).toBeNull();
+    }
+  });
+
+  it('shows the reported control state and toggles between protocol values 1 and 2', async () => {
+    const { rerender } = render(<RemoteControlPanel position={{ robotName: 'USV-001', controlMode: 1 }} />);
+    expect(control('控制状态')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(control('控制状态')).getByText('网页端')).toBeTruthy();
+
+    rerender(<RemoteControlPanel position={{ robotName: 'USV-001', controlMode: 2 }} />);
+    expect(control('控制状态')).toHaveAttribute('aria-pressed', 'false');
+    expect(within(control('控制状态')).getByText('应用端')).toBeTruthy();
+
+    fireEvent.click(control('控制状态'));
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledWith('USV-001', expect.objectContaining({
+      command: 'OPERATING_MODE',
+      value: 1,
+      values: expect.objectContaining({ OPERATING_MODE: 1 }),
+    })));
+
+    fireEvent.click(control('控制状态'));
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', expect.objectContaining({
+      command: 'OPERATING_MODE',
+      value: 2,
+      values: expect.objectContaining({ OPERATING_MODE: 2 }),
+    })));
+  });
+
+  it('waits for feedback instead of assuming a control state without a report', () => {
+    render(<RemoteControlPanel position={{ robotName: 'USV-001' }} />);
+    expect(within(control('控制状态')).getByText('等待反馈')).toBeTruthy();
+    expect(control('控制状态')).toHaveAttribute('aria-pressed', 'false');
   });
 });

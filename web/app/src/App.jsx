@@ -85,7 +85,7 @@ const MAP_BOAT_FOCUS_ZOOM = 17;
 const DEMO_TEST_TRACKS = Object.freeze([DEMO_TEST_TRACK]);
 const DEMO_TEST_POINTS_BY_ID = Object.freeze({ [DEMO_TEST_TRACK.id]: DEMO_TEST_TRACK_POINTS });
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
-const CONTROL_MODE_LABELS = Object.freeze({ 0: '界面手动', 1: '界面自主', 2: '遥控器手动' });
+const CONTROL_MODE_LABELS = Object.freeze({ 1: '网页端', 2: '应用端' });
 const DEVICE_FEEDBACK_CACHE_PREFIX = 'watercleanbot.deviceFeedback.';
 
 function readDeviceFeedbackCache(robotName) {
@@ -150,7 +150,7 @@ const REMOTE_SWITCH_COMMANDS = Object.freeze([
 ]);
 
 const CRITICAL_SWITCH_COMMANDS = Object.freeze([
-  { cmd: 'OPERATING_MODE', label: '运行模式', onText: '网页端', offText: '应用端', icon: ShipWheel, tone: 'mode' },
+  { cmd: 'OPERATING_MODE', label: '控制状态', onText: '网页端', offText: '应用端', icon: ShipWheel, tone: 'mode' },
   { cmd: 'PADDLE_POWER', label: '明轮电源', onText: '上电', offText: '断电', icon: Power, tone: 'power' },
 ]);
 
@@ -538,24 +538,6 @@ function getAverage(values) {
   const validValues = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
   if (!validValues.length) return null;
   return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
-}
-
-function StatusBadge({ position, loading }) {
-  if (loading) return <span className="status-badge status-pending">读取中</span>;
-  if (!position) return <span className="status-badge status-empty">未查询</span>;
-  if (!position.sourceTimestampMs) return <span className="status-badge status-pending">待接入</span>;
-  if (position.heartbeatStatus === 'offline') {
-    return <span className="status-badge status-warning"><span className="status-dot" />心跳异常</span>;
-  }
-  if (position.heartbeatStatus === 'online') {
-    return <span className="status-badge status-online"><span className="status-dot" />在线</span>;
-  }
-  return (
-    <span className="status-badge status-online">
-      <span className="status-dot" />
-      位置已获取
-    </span>
-  );
 }
 
 export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = EMPTY_MAP_SECTIONS, importedRoutes = EMPTY_MAP_SECTIONS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove }) {
@@ -1281,7 +1263,7 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
           <p className="eyebrow">设备详情</p>
           <h2>{position?.robotName || deviceId || '未选择设备'}</h2>
         </div>
-        <StatusBadge position={position} loading={loading} />
+        <DeviceConnectionIndicator position={position} />
       </div>
 
       <form className="location-query" onSubmit={onSubmit}>
@@ -1992,7 +1974,6 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               <p className="eyebrow">在线地图</p>
               <h3>在线地图 - {deviceName}</h3>
             </div>
-            <DeviceConnectionIndicator position={position} />
           </div>
           <div className="online-map-actions" aria-label="航线任务操作">
             <button
@@ -2586,8 +2567,11 @@ export function RemoteControlPanel({ position, onToast }) {
         DISC_CYLINDER: position.actuators.discCylinder ?? current.DISC_CYLINDER,
         HATCH_CYLINDER: position.actuators.hatchCylinder ?? current.HATCH_CYLINDER,
       } : {}),
+      ...(position.controlMode === 1 || position.controlMode === 2
+        ? { OPERATING_MODE: position.controlMode }
+        : {}),
     }));
-  }, [position?.actuators]);
+  }, [position?.actuators, position?.controlMode]);
 
   async function submitRemoteCommand(cmd, value, label, valueText, nextValues) {
     if (!hasRemoteTarget) return false;
@@ -2622,7 +2606,10 @@ export function RemoteControlPanel({ position, onToast }) {
   }
 
   async function toggleSwitch(command) {
-    const nextValue = values[command.cmd] ? 0 : 1;
+    const currentValue = values[command.cmd];
+    const nextValue = command.cmd === 'OPERATING_MODE'
+      ? currentValue === 1 ? 2 : 1
+      : currentValue ? 0 : 1;
     if (command.cmd === 'DISC_CYLINDER' && nextValue === 1 && values.HATCH_CYLINDER !== 1) {
       onToast?.('翻盖开关未开启');
       return;
@@ -2704,7 +2691,11 @@ export function RemoteControlPanel({ position, onToast }) {
             </div>
             <div className="critical-controls" aria-label="关键控制">
               {CRITICAL_SWITCH_COMMANDS.map((command) => {
-                const enabled = values[command.cmd] === 1;
+                const currentValue = values[command.cmd];
+                const enabled = currentValue === 1;
+                const stateText = command.cmd === 'OPERATING_MODE' && currentValue !== 1 && currentValue !== 2
+                  ? '等待反馈'
+                  : enabled ? command.onText : command.offText;
                 const ControlIcon = command.icon;
                 return (
                   <button
@@ -2717,9 +2708,9 @@ export function RemoteControlPanel({ position, onToast }) {
                   >
                     <span className="critical-control-copy">
                       <span className="critical-control-icon" aria-hidden="true"><ControlIcon size={22} /></span>
-                      <span><strong>{command.label}</strong><small>{command.cmd === 'OPERATING_MODE' ? '当前模式' : '电源状态'}</small></span>
+                      <span><strong>{command.label}</strong><small>当前状态</small></span>
                     </span>
-                    <span className="switch-state">{enabled ? command.onText : command.offText}</span>
+                    <span className="switch-state">{stateText}</span>
                   </button>
                 );
               })}
@@ -2737,7 +2728,7 @@ export function RemoteControlPanel({ position, onToast }) {
                     disabled={!hasRemoteTarget}
                     aria-pressed={enabled}
                   >
-                    <span><strong>{command.label}</strong><small>点击切换</small></span>
+                    <span><strong>{command.label}</strong><small>当前状态</small></span>
                     <span className="switch-state">{enabled ? command.onText : command.offText}</span>
                   </button>
                 );

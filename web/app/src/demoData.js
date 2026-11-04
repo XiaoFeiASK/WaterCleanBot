@@ -230,7 +230,7 @@ export const DEMO_TEST_POSITION = Object.freeze({
   "status": 1,
   "sourceTimestampMs": 1760300000000,
   "receivedAtMs": 1760300000000,
-  "controlMode": 0,
+  "controlMode": 1,
   "deviceStatusOk": true,
   "distanceKm": 0.42,
   "lastDistanceKm": 0.42,

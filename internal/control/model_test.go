@@ -115,3 +115,12 @@ func TestBuildRemoteCommandRequiresTurnOffValuesToBeZero(t *testing.T) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
 }
+
+func TestBuildRemoteCommandAcceptsOnlyWebOrAppControlMode(t *testing.T) {
+	for value, wantValid := range map[int]bool{0: false, 1: true, 2: true, 3: false} {
+		_, err := BuildRemoteCommand("USV-001", 1, protocolRequest("OPERATING_MODE", value))
+		if gotValid := err == nil && !IsValidationError(err); gotValid != wantValid {
+			t.Fatalf("OPERATING_MODE %d valid = %v, want %v (err = %v)", value, gotValid, wantValid, err)
+		}
+	}
+}

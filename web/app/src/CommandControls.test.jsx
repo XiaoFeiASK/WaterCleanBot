@@ -128,13 +128,28 @@ describe('dock eject action', () => {
 });
 
 describe('critical switch confirmation', () => {
-  it('requires confirmation before powering the paddle wheel', () => {
+  it('does not interrupt paddle power changes with a confirmation dialog', () => {
     window.confirm.mockReturnValue(false);
-    const accepted = requestRemoteSwitchConfirmation(
+    const powerOff = requestRemoteSwitchConfirmation(
+      { cmd: 'PADDLE_POWER', onText: '上电', offText: '断电' },
+      0,
+    );
+    const powerOn = requestRemoteSwitchConfirmation(
       { cmd: 'PADDLE_POWER', onText: '上电', offText: '断电' },
       1,
     );
+    expect(powerOff).toBe(true);
+    expect(powerOn).toBe(true);
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('confirms the control state using its web and app labels', () => {
+    window.confirm.mockReturnValue(false);
+    const accepted = requestRemoteSwitchConfirmation(
+      { cmd: 'OPERATING_MODE', onText: '网页端', offText: '应用端' },
+      2,
+    );
     expect(accepted).toBe(false);
-    expect(window.confirm).toHaveBeenCalledWith('确认将明轮电源“上电”吗？');
+    expect(window.confirm).toHaveBeenCalledWith('确认切换控制状态为“应用端”吗？');
   });
 });

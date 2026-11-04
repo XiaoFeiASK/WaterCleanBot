@@ -14,10 +14,10 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px 10px 12px;
+  gap: 9px;
+  padding: 8px 15px 8px 11px;
   border: 1px solid #efbbbb;
-  border-radius: 14px;
+  border-radius: 999px;
   background: linear-gradient(135deg, #fff8f7, #fcecec);
   box-shadow: 0 3px 12px rgba(170, 52, 52, .07);
 }
@@ -31,16 +31,16 @@
 .device-connection-lamp {
   position: relative;
   display: grid;
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
   place-items: center;
   border-radius: 50%;
   background: var(--lamp-halo);
 }
 .device-connection-lamp > span {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
   border: 2px solid rgba(255, 255, 255, .9);
   border-radius: 50%;
   background: var(--lamp-color);
@@ -54,11 +54,9 @@
   border-radius: 50%;
   animation: mqtt-lamp-pulse 2s ease-out infinite;
 }
-.device-connection-copy { display: grid; gap: 3px; }
-.device-connection-copy strong { color: #a92e35; font-size: 16px; font-weight: 800; line-height: 1.2; }
-.device-connection-copy small { color: #91525a; font-size: 11px; line-height: 1.4; }
+.device-connection-copy { display: grid; }
+.device-connection-copy strong { color: #a92e35; font-size: 13px; font-weight: 800; line-height: 1.2; }
 .device-connection--online .device-connection-copy strong { color: #077353; }
-.device-connection--online .device-connection-copy small { color: #367c69; }
 @keyframes mqtt-lamp-pulse {
   from { transform: scale(.8); opacity: .6; }
   to { transform: scale(1.4); opacity: 0; }
@@ -68,5 +66,5 @@
 }
 @media (max-width: 760px) {
   .online-map-toolbar > .online-map-heading { flex-basis: auto; width: 100%; gap: 12px; justify-content: space-between; }
-  .device-connection { padding: 8px 12px; gap: 8px; }
+  .device-connection { padding: 7px 13px 7px 9px; gap: 8px; }
 }

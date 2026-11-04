@@ -21,7 +21,8 @@ func TestIFCC2IIPCommandEncoding(t *testing.T) {
 		expected DeviceCommandPayload
 	}{
 		{name: "heartbeat", request: RemoteCommandRequest{Command: "HEARTBEAT"}, expected: DeviceCommandPayload{17}},
-		{name: "autonomous mode", request: protocolRequest("OPERATING_MODE", 1), expected: DeviceCommandPayload{20, 1}},
+		{name: "web control mode", request: protocolRequest("OPERATING_MODE", 1), expected: DeviceCommandPayload{20, 1}},
+		{name: "app control mode", request: protocolRequest("OPERATING_MODE", 2), expected: DeviceCommandPayload{20, 2}},
 		{name: "stop", request: RemoteCommandRequest{Command: "STOP"}, expected: DeviceCommandPayload{23}},
 		{name: "tracking start", request: protocolRequest("TRACKING", 1), expected: DeviceCommandPayload{24, 1}},
 		{name: "tracking stop", request: protocolRequest("TRACKING", 0), expected: DeviceCommandPayload{24, 0}},

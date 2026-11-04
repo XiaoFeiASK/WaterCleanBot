@@ -30,7 +30,7 @@ var commandRanges = map[string]struct{ min, max int }{
 	"CONVEYOR":       {0, 1},
 	"BRUSH_L":        {0, 1},
 	"BRUSH_R":        {0, 1},
-	"OPERATING_MODE": {0, 1},
+	"OPERATING_MODE": {1, 2},
 	"CLEANING":       {0, 1},
 	"TRACKING":       {0, 1},
 	"PADDLE_POWER":   {0, 1},
@@ -211,7 +211,11 @@ func normalizeValues(values map[string]int) (map[string]int, error) {
 
 	normalized := make(map[string]int, len(commandRanges))
 	for command, commandRange := range commandRanges {
-		value := values[command]
+		value, provided := values[command]
+		if !provided {
+			normalized[command] = 0
+			continue
+		}
 		if value < commandRange.min || value > commandRange.max {
 			return nil, fmt.Errorf("values.%s out of range", command)
 		}

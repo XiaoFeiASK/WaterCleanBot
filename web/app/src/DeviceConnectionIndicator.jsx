@@ -70,22 +70,17 @@ export default function DeviceConnectionIndicator({ position }) {
     };
   }, [robotName, deadline]);
 
-  const detail = online ? '设备在线' : '设备离线';
-
   return (
     <div
       className={`device-connection device-connection--${online ? 'online' : 'offline'}`}
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      aria-label="设备运行状态"
-      title="设备运行状态"
+      aria-label="设备状态"
+      title="设备状态"
     >
       <span className="device-connection-lamp" aria-hidden="true"><span /></span>
-      <span className="device-connection-copy">
-        <strong>{online ? '开机' : '关机'}</strong>
-        <small>{detail}</small>
-      </span>
+      <span className="device-connection-copy"><strong>{online ? '在线' : '离线'}</strong></span>
     </div>
   );
 }
