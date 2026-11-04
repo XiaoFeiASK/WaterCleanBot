@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS planned_routes (
   id BIGSERIAL PRIMARY KEY,
   robot_name TEXT NOT NULL,
   route_code TEXT NOT NULL,
-  route_type TEXT NOT NULL DEFAULT '折线',
+  route_type TEXT NOT NULL DEFAULT '自定航线',
   coordinate_system TEXT NOT NULL DEFAULT 'GCJ02',
   length_meters DOUBLE PRECISION NOT NULL DEFAULT 0,
   duration_seconds INTEGER NOT NULL DEFAULT 0,

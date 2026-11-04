@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getImportedRoutes,
+  getRouteTypeLabel,
   getShorelineSections,
   getShorelineSession,
   getShorelineWarnings,
@@ -151,9 +152,9 @@ describe('public shoreline rendering', () => {
   it('turns the three waypoint files into separately styled routes with numbered, disconnected segments', () => {
     const routes = getImportedRoutes(fullFiles());
     expect(routes.map(({ sourceKey, type, color }) => [sourceKey, type, color])).toEqual([
-      ['left', '规划航线', '#ff963b'],
-      ['center', '感知航线', '#ffc928'],
-      ['right', '规划航线', '#36c7f4'],
+      ['left', '智能岸线', '#ff963b'],
+      ['center', '智能中线', '#ffc928'],
+      ['right', '智能岸线', '#36c7f4'],
     ]);
     expect(routes.map(({ segments }) => segments.map((segment) => segment.length))).toEqual([
       [2, 1, 1], [2, 1, 1], [2, 1, 1],
@@ -215,5 +216,13 @@ describe('public shoreline rendering', () => {
       shoreline: shorelineDocument({ state: 'partial', geographic_accuracy_verified: false }),
       center: referenceDocument('center', { navigation_valid: false }),
     })).toEqual(['包含部分结果', '测绘精度未独立验证', '参考线未全部通过通行核验']);
+  });
+
+  it('maps legacy route types and unknown custom routes to the current names', () => {
+    expect(['折线', '普通航线', '自定航线', undefined].map(getRouteTypeLabel)).toEqual([
+      '自定航线', '自定航线', '自定航线', '自定航线',
+    ]);
+    expect(getRouteTypeLabel('规划航线')).toBe('智能岸线');
+    expect(getRouteTypeLabel('感知航线')).toBe('智能中线');
   });
 });

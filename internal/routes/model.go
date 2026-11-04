@@ -18,7 +18,7 @@ const (
 	CoordinateSystemGCJ02 = "GCJ02"
 	CoordinateSystemWGS84 = "WGS84"
 
-	DefaultRouteType = "折线"
+	DefaultRouteType = "自定航线"
 	MinRoutePoints   = 2
 	MaxRoutePoints   = 200
 	MaxSpeedKnots    = 100

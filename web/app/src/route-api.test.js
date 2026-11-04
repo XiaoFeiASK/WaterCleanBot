@@ -71,7 +71,7 @@ describe('sendImportedRoute', () => {
 describe('updateRobotRoute', () => {
   it('replaces a saved route and returns the validated points', async () => {
     const updated = {
-      id: 'R-001', robotName: 'USV-001', type: '折线', coordinateSystem: 'GCJ02',
+      id: 'R-001', robotName: 'USV-001', type: '自定航线', coordinateSystem: 'GCJ02',
       lengthMeters: 120, durationSeconds: 80,
       points: [
         { seq: 1, lng: 121.4, lat: 31.2, speedKnots: 2 },
@@ -82,7 +82,7 @@ describe('updateRobotRoute', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(updateRobotRoute('USV-001', 'R-001', {
-      type: '折线', coordinateSystem: 'GCJ02', points: updated.points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
+      type: '自定航线', coordinateSystem: 'GCJ02', points: updated.points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
     })).resolves.toEqual(updated);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/robots/USV-001/routes/R-001'),

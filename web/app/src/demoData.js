@@ -1,7 +1,7 @@
 // 保留设备、轨迹与感知航线演示数据；公共岸线由数据库提供。
 export const DEMO_PERCEPTION_ROUTE = Object.freeze({
   "id": "P-001",
-  "type": "感知航线",
+  "type": "智能中线",
   "source": "perception",
   "coordinateSystem": "WGS84",
   "sessionId": "offline_local_loop_20261009_v6_1",

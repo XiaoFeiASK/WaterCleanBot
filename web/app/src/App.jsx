@@ -70,7 +70,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -1779,7 +1779,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setRouteAction('save');
     try {
       const route = await createRobotRoute(routeDeviceId, {
-        type: '折线',
+        type: '自定航线',
         coordinateSystem: 'GCJ02',
         points: draftRoutePoints.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
       });
@@ -1815,7 +1815,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     setRouteAction(`edit:${route.id}`);
     try {
       const updatedRoute = await updateRobotRoute(routeDeviceId, route.id, {
-        type: route.type,
+        type: getRouteTypeLabel(route.type),
         coordinateSystem: route.coordinateSystem,
         points: points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
       });
@@ -2222,7 +2222,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
               {savedImportedRoutes.map((route) => (
                 <tr key={route.id} className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
                   <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · {route.speedMetersPerSecond} m/s · 公共</small></td>
-                  <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{route.type}</span></td>
+                  <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{getRouteTypeLabel(route.type)}</span></td>
                   <td>{formatRouteLength(route.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                   <td>
@@ -2237,7 +2237,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <Fragment key={route.id}>
                   <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''}>
                     <td>{route.id}</td>
-                    <td><span className="route-type-badge route-type-standard">{route.type || '普通航线'}</span></td>
+                    <td><span className="route-type-badge route-type-standard">{getRouteTypeLabel(route.type)}</span></td>
                     <td>{formatRouteLength(route.lengthMeters)}</td>
                     <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                     <td>

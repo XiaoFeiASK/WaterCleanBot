@@ -9,6 +9,19 @@ export const SHORELINE_FILE_TYPES = Object.freeze([
   { key: 'right', filename: 'right_waypoints_lonlat.json', label: '右岸航线' },
 ]);
 
+export const ROUTE_TYPE_LABELS = Object.freeze({
+  shoreline: '智能岸线',
+  centerline: '智能中线',
+  custom: '自定航线',
+  legacy: '自定航线',
+});
+
+export function getRouteTypeLabel(value) {
+  if (value === ROUTE_TYPE_LABELS.shoreline || value === '规划航线') return ROUTE_TYPE_LABELS.shoreline;
+  if (value === ROUTE_TYPE_LABELS.centerline || value === '感知航线') return ROUTE_TYPE_LABELS.centerline;
+  return ROUTE_TYPE_LABELS.custom;
+}
+
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -155,7 +168,7 @@ export function getImportedRoutes(files) {
       }, 0), 0);
       return {
         id: `imported-${key}`, sourceKey: key, filename, name: label,
-        type: key === 'center' ? '感知航线' : '规划航线', coordinateSystem: 'WGS84',
+        type: key === 'center' ? ROUTE_TYPE_LABELS.centerline : ROUTE_TYPE_LABELS.shoreline, coordinateSystem: 'WGS84',
         color: key === 'center' ? '#ffc928' : key === 'left' ? '#ff963b' : '#36c7f4',
         points, segments, lengthMeters,
         speedMetersPerSecond: IMPORTED_ROUTE_SPEED_METERS_PER_SECOND,

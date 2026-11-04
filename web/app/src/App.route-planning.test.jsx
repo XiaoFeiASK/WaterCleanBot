@@ -206,13 +206,14 @@ describe('planning state and persistence', () => {
     updateRobotRoute.mockImplementation(async (_robot, _id, payload) => ({ ...route, ...payload, points: payload.points.map((point, index) => ({ ...point, seq: index + 1 })) }));
     render(<MemoryRouter><App /></MemoryRouter>);
     await act(async () => streamHandlers.onSnapshot([position]));
-    const row = await screen.findByText('R-001', { selector: 'td' });
+    const row = await screen.findByText('自定航线', { selector: '.route-type-badge' });
+    expect(screen.getByText('R-001', { selector: 'td' })).toBeTruthy();
     fireEvent.click(within(row.closest('tr')).getByRole('button', { name: '编辑', exact: true }));
     fireEvent.change(screen.getByRole('spinbutton', { name: 'R-001 航点 2 速度（节）' }), { target: { value: '4.2' } });
     fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
 
     await waitFor(() => expect(updateRobotRoute).toHaveBeenCalledWith('USV-001', 'R-001', {
-      type: '折线', coordinateSystem: 'GCJ02',
+      type: '自定航线', coordinateSystem: 'GCJ02',
       points: [
         { lng: 121.41, lat: 31.21, speedKnots: 2 },
         { lng: 121.42, lat: 31.22, speedKnots: 4.2 },
@@ -249,7 +250,7 @@ describe('planning state and persistence', () => {
     expect(screen.getByText(/点击地图添加航点/).textContent).not.toBe(oldSummary);
     fireEvent.click(screen.getByRole('button', { name: '保存航线' }));
     await waitFor(() => expect(createRobotRoute).toHaveBeenCalledExactlyOnceWith('USV-001', {
-      type: '折线', coordinateSystem: 'GCJ02',
+      type: '自定航线', coordinateSystem: 'GCJ02',
       points: [{ ...points[0], ...moved }, points[1]],
     }));
     await waitFor(() => expect(activeLine('#0b7a6f')?.options.path).toEqual(pathOf([moved, points[1]])));
