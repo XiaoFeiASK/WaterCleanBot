@@ -14,24 +14,32 @@ export function requestRemoteSwitchConfirmation(command, nextValue) {
 }
 
 // State describes published commands, not device ACKs. Keep each target independent.
-export function TrackingButton({ deviceId, onToast }) {
+export function TrackingButton({ deviceId, routes = [], selectedRouteKey, onSelectedRouteChange, onTrackingStatsChange, onToast }) {
   const [enabledByDevice, setEnabledByDevice] = useState({});
   const [busyByDevice, setBusyByDevice] = useState({});
   const pendingTargets = useRef(new Set());
   const enabled = enabledByDevice[deviceId] === true;
   const busy = busyByDevice[deviceId] === true;
+  const selectedRoute = routes.find((route) => route.key === selectedRouteKey);
 
   async function sendTracking(value) {
     if (!deviceId) {
       onToast?.('请先查询需要控制的设备');
       return;
     }
+    if (!selectedRoute) {
+      onToast?.('请先选择循迹航线');
+      return;
+    }
     if (pendingTargets.current.has(deviceId)) return;
     const target = deviceId;
-    if (!confirmAction(`确认${value ? '开始' : '结束'}循迹吗？`)) return;
+    if (!confirmAction(`确认${value ? '开始' : '结束'}「${selectedRoute.name}」循迹吗？`)) return;
+    let statsUpdated = false;
     pendingTargets.current.add(target);
     setBusyByDevice((current) => ({ ...current, [target]: true }));
     try {
+      await onTrackingStatsChange?.(value ? 'start' : 'end', selectedRoute);
+      statsUpdated = true;
       const result = await sendRobotCommand(target, {
         command: 'TRACKING',
         value,
@@ -41,6 +49,13 @@ export function TrackingButton({ deviceId, onToast }) {
       setEnabledByDevice((current) => ({ ...current, [target]: value === 1 }));
       onToast?.(`${value ? '开始' : '结束'}循迹指令已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
+      if (statsUpdated) {
+        try {
+          await onTrackingStatsChange?.('cancel', selectedRoute);
+        } catch {
+          // 保留最初的指令下发错误，便于用户判断是否需要重试。
+        }
+      }
       onToast?.(getRemoteCommandErrorMessage(error));
     } finally {
       pendingTargets.current.delete(target);
@@ -53,8 +68,18 @@ export function TrackingButton({ deviceId, onToast }) {
       <span className="critical-control-icon" aria-hidden="true"><Route size={22} /></span>
       <span className="tracking-map-label">
         <strong>循迹控制</strong>
-        <small>{busy ? '指令下发中…' : enabled ? '已发开始' : '航线循迹'}</small>
+        <small>{busy ? '指令下发中…' : '点击循环一次'}</small>
       </span>
+      <select
+        className="tracking-map-route"
+        aria-label="循迹航线"
+        value={selectedRouteKey || ''}
+        onChange={(event) => onSelectedRouteChange?.(event.target.value)}
+        disabled={busy || enabled || routes.length === 0}
+      >
+        <option value="">选择航线</option>
+        {routes.map((route) => <option key={route.key} value={route.key}>{route.name}</option>)}
+      </select>
       <div className="tracking-map-actions">
         <button
           className="tracking-map-action"
@@ -62,7 +87,7 @@ export function TrackingButton({ deviceId, onToast }) {
           aria-label="开始循迹"
           title="按航线开始循迹 [24,1]；已发布状态不代表设备反馈"
           aria-pressed={enabled}
-          disabled={!deviceId || busy}
+          disabled={!deviceId || !selectedRoute || busy}
           onClick={() => sendTracking(1)}
         >
           <Play size={16} aria-hidden="true" />
@@ -73,7 +98,7 @@ export function TrackingButton({ deviceId, onToast }) {
           type="button"
           aria-label="结束循迹"
           title="结束循迹 [24,0]；已发布状态不代表设备反馈"
-          disabled={!deviceId || busy}
+          disabled={!deviceId || !selectedRoute || busy}
           onClick={() => sendTracking(0)}
         >
           <Square size={16} aria-hidden="true" />

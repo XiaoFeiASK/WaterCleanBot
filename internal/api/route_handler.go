@@ -22,6 +22,10 @@ type RouteRepository interface {
 	UpdateRoute(context.Context, string, string, routes.CreateRouteRequest, routes.RouteMetrics) (routes.Route, bool, error)
 	GetRoute(context.Context, string, string) (routes.Route, bool, error)
 	DeleteRoute(context.Context, string, string) (bool, error)
+	ListTrackingStats(context.Context, string) (map[string]routes.RouteTrackingStat, error)
+	StartTracking(context.Context, string, string, string, float64) (routes.RouteTrackingStat, error)
+	CancelTracking(context.Context, string, string) (routes.RouteTrackingStat, error)
+	EndTracking(context.Context, string, string, float64) (routes.RouteTrackingStat, bool, error)
 }
 
 // RoutePublisher 是航线下发需要的最小 MQTT 发布能力。
@@ -49,6 +53,87 @@ func RobotRoutesHandler(repository RouteRepository, log *slog.Logger) http.Handl
 			return
 		}
 		writeJSON(w, http.StatusOK, routesList)
+	}
+}
+
+// RobotRouteTrackingStatsHandler 返回各航线最近一次实测耗电。
+func RobotRouteTrackingStatsHandler(repository RouteRepository, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		robotName := r.PathValue("robotName")
+		if err := control.ValidateTarget(robotName); err != nil || repository == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route tracking target"})
+			return
+		}
+		stats, err := repository.ListTrackingStats(r.Context(), robotName)
+		if err != nil {
+			log.Warn("list robot route tracking stats failed", slog.String("robot_name", robotName), slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list tracking stats failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, stats)
+	}
+}
+
+type routeTrackingRequest struct {
+	Action    string `json:"action"`
+	RouteKey  string `json:"routeKey"`
+	RouteName string `json:"routeName"`
+}
+
+// RobotRouteTrackingHandler 在循迹开始和结束时读取真实电量遥测。
+func RobotRouteTrackingHandler(store *location.Store, repository RouteRepository, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		robotName := r.PathValue("robotName")
+		if err := control.ValidateTarget(robotName); err != nil || repository == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route tracking target"})
+			return
+		}
+		if store == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "location store is unavailable"})
+			return
+		}
+		var request routeTrackingRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil ||
+			(request.Action != "start" && request.Action != "end" && request.Action != "cancel") ||
+			request.RouteKey == "" || (request.Action != "cancel" && request.RouteName == "") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route tracking payload"})
+			return
+		}
+		position, ok := store.Get(robotName)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "robot not found"})
+			return
+		}
+		if position.Battery == nil {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "current battery is unavailable"})
+			return
+		}
+		var stat routes.RouteTrackingStat
+		var err error
+		if request.Action == "start" {
+			stat, err = repository.StartTracking(r.Context(), robotName, request.RouteKey, request.RouteName, *position.Battery)
+		} else if request.Action == "cancel" {
+			stat, err = repository.CancelTracking(r.Context(), robotName, request.RouteKey)
+		} else {
+			var found bool
+			stat, found, err = repository.EndTracking(r.Context(), robotName, request.RouteKey, *position.Battery)
+			if err == nil && !found {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "route tracking session not found"})
+				return
+			}
+		}
+		if err != nil {
+			if routes.IsValidationError(err) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid route tracking payload"})
+				return
+			}
+			log.Warn("update robot route tracking failed", slog.String("robot_name", robotName), slog.String("route_key", request.RouteKey), slog.Any("error", err))
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update tracking stats failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, stat)
 	}
 }
 

@@ -141,7 +141,7 @@ describe('actuator state labels and control mode', () => {
     render(<RemoteControlPanel position={{ robotName: 'USV-001' }} />);
 
     for (const label of ['控制状态', '明轮电源', '船坞释放', '翻盖电缸', '推出电缸', '传送带', '左滚刷', '右滚刷', '垃圾清理']) {
-      expect(control(label)).toHaveTextContent('当前状态');
+      expect(control(label)).toHaveTextContent(label === '控制状态' ? '当前模式' : '当前状态');
     }
 
     fireEvent.click(control('明轮电源'));

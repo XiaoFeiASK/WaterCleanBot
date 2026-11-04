@@ -80,6 +80,17 @@ type RouteMetrics struct {
 	DurationSeconds int
 }
 
+// RouteTrackingStat 保存某一设备、某一航线最近一次循迹的真实电量消耗。
+type RouteTrackingStat struct {
+	RouteKey               string   `json:"routeKey"`
+	RouteName              string   `json:"routeName"`
+	BatteryConsumedPercent *float64 `json:"batteryConsumedPercent"`
+	TrackingActive         bool     `json:"trackingActive"`
+	StartedAt              *string  `json:"startedAt,omitempty"`
+	EndedAt                *string  `json:"endedAt,omitempty"`
+	UpdatedAt              string   `json:"updatedAt"`
+}
+
 // NormalizeCreateRouteRequest 校验并标准化前端提交的航线。
 func NormalizeCreateRouteRequest(request CreateRouteRequest) (CreateRouteRequest, error) {
 	routeType := strings.TrimSpace(request.Type)

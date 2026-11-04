@@ -54,10 +54,12 @@ import {
   getRouteErrorMessage,
   getTrackErrorMessage,
   fetchRobotRoutes,
+  fetchRouteTrackingStats,
   sendRobotRoute,
   sendImportedRoute,
   sendRobotCommand,
   subscribeRobotLocations,
+  updateRouteTracking,
 } from './api';
 import { wgs84ToGcj02 } from './coordinates';
 import {
@@ -263,6 +265,12 @@ function formatCoordinateNumber(value) {
 
 function formatBattery(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '暂无数据';
+}
+
+function formatRouteBattery(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? `${value.toFixed(1).replace(/\.0$/, '')}%`
+    : '暂无数据';
 }
 
 function formatRouteLength(lengthMeters) {
@@ -1406,6 +1414,9 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [routeAction, setRouteAction] = useState('');
   const [editingRouteId, setEditingRouteId] = useState('');
   const [editedRouteSpeeds, setEditedRouteSpeeds] = useState([]);
+  const [bulkRouteSpeed, setBulkRouteSpeed] = useState('1.0');
+  const [trackingStats, setTrackingStats] = useState({});
+  const [trackingRouteKey, setTrackingRouteKey] = useState('');
   const [planningMode, setPlanningMode] = useState(false);
   const [draftRoutePoints, setDraftRoutePoints] = useState([]);
   const [pendingRoutePoint, setPendingRoutePoint] = useState(null);
@@ -1424,6 +1435,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const shorelineSections = useMemo(() => getShorelineSections(shorelineFiles), [shorelineFiles]);
   const importedRoutes = useMemo(() => getImportedRoutes(shorelineFiles), [shorelineFiles]);
   const savedImportedRoutes = useMemo(() => getImportedRoutes(shorelineStore.dataset?.files), [shorelineStore.dataset]);
+  const trackingRoutes = useMemo(() => [
+    ...routes.map((route) => ({ key: `planned:${route.id}`, id: route.id, source: 'planned', name: route.id })),
+    ...savedImportedRoutes.map((route) => ({ key: `public:${route.sourceKey}`, id: route.sourceKey, source: 'public', name: route.name })),
+  ], [routes, savedImportedRoutes]);
   const visibleImportedRoutes = useMemo(() => importedRoutes.filter((route) =>
     shorelinePreview || route.id === previewImportedRouteId)
     .map((route) => route.sourceKey === reversedImportedRouteKey ? reverseImportedRoute(route) : route),
@@ -1573,6 +1588,30 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
       controller.abort();
     };
   }, [routeDeviceId, isDemoTestDevice]);
+
+  useEffect(() => {
+    if (!routeDeviceId || isDemoTestDevice) {
+      setTrackingStats({});
+      return undefined;
+    }
+    const controller = new AbortController();
+    fetchRouteTrackingStats(routeDeviceId, controller.signal)
+      .then((stats) => setTrackingStats(Object.fromEntries(stats.map((stat) => [stat.routeKey, stat]))))
+      .catch((error) => {
+        if (error.name !== 'AbortError') onToast?.(getRouteErrorMessage(error));
+      });
+    return () => controller.abort();
+  }, [routeDeviceId, isDemoTestDevice]);
+
+  useEffect(() => {
+    setTrackingRouteKey((current) => trackingRoutes.some((route) => route.key === current) ? current : trackingRoutes[0]?.key || '');
+  }, [trackingRoutes]);
+
+  async function changeTrackingStats(action, route) {
+    const stat = await updateRouteTracking(routeDeviceId, action, route.key, route.name);
+    setTrackingStats((current) => ({ ...current, [route.key]: stat }));
+    return stat;
+  }
 
   function toggleTrackSelection(trackID) {
     setSelectedTrackIds((current) => (
@@ -1799,6 +1838,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   function startEditingRoute(route) {
     setEditingRouteId(route.id);
     setEditedRouteSpeeds(route.points.map((point) => String(point.speedKnots)));
+    setBulkRouteSpeed(String(route.points[0]?.speedKnots ?? '1.0'));
   }
 
   async function saveEditedRoute(route) {
@@ -2050,7 +2090,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             onMapPoint={addDraftRoutePoint}
             onRoutePointMove={isRouteBusy ? undefined : moveDraftRoutePoint}
           />
-          <TrackingButton deviceId={routeDeviceId} onToast={onToast} />
+          <TrackingButton
+            deviceId={routeDeviceId}
+            routes={trackingRoutes}
+            selectedRouteKey={trackingRouteKey}
+            onSelectedRouteChange={setTrackingRouteKey}
+            onTrackingStatsChange={changeTrackingStats}
+            onToast={onToast}
+          />
           <div className="map-layer-legend" aria-label="地图图层图例">
             {trackLines.map((trackLine) => (
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
@@ -2206,18 +2253,19 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <th>类型</th>
                 <th>长度</th>
                 <th>预计耗时</th>
+                <th>预计耗电</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {routesLoading && (
-                <tr><td className="route-table-empty" colSpan="5">正在读取数据库航线...</td></tr>
+                <tr><td className="route-table-empty" colSpan="6">正在读取数据库航线...</td></tr>
               )}
               {!routesLoading && routesError && (
-                <tr><td className="route-table-empty route-table-error" colSpan="5">{routesError}</td></tr>
+                <tr><td className="route-table-empty route-table-error" colSpan="6">{routesError}</td></tr>
               )}
               {!routesLoading && !routesError && !routes.length && !savedImportedRoutes.length && (
-                <tr><td className="route-table-empty" colSpan="5">暂无已保存航线</td></tr>
+                <tr><td className="route-table-empty" colSpan="6">暂无已保存航线</td></tr>
               )}
               {savedImportedRoutes.map((route) => (
                 <tr key={route.id} className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
@@ -2225,6 +2273,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{getRouteTypeLabel(route.type)}</span></td>
                   <td>{formatRouteLength(route.lengthMeters)}</td>
                   <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
+                  <td>{formatRouteBattery(trackingStats[`public:${route.sourceKey}`]?.batteryConsumedPercent)}</td>
                   <td>
                     <button type="button" onClick={() => toggleImportedRoutePreview(route)} disabled={Boolean(shorelinePreview)}>{visibleImportedRoutes.some((item) => item.id === route.id) ? '取消查看' : '查看'}</button>
                     <button type="button" aria-pressed={reversedImportedRouteKey === route.sourceKey} onClick={() => toggleImportedRouteDirection(route)} disabled={isRouteBusy || Boolean(shorelinePreview)}>{reversedImportedRouteKey === route.sourceKey ? '取消逆转' : '逆转'}</button>
@@ -2240,6 +2289,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                     <td><span className="route-type-badge route-type-standard">{getRouteTypeLabel(route.type)}</span></td>
                     <td>{formatRouteLength(route.lengthMeters)}</td>
                     <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
+                    <td>{formatRouteBattery(trackingStats[`planned:${route.id}`]?.batteryConsumedPercent)}</td>
                     <td>
                       <button type="button" onClick={() => toggleRoutePreview(route)}>{previewRouteId === route.id ? '取消查看' : '查看'}</button>
                       <button type="button" aria-pressed={reversedRouteId === route.id} onClick={() => toggleRouteDirection(route)} disabled={isRouteBusy}>{reversedRouteId === route.id ? '取消逆转' : '逆转'}</button>
@@ -2250,7 +2300,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                   </tr>
                   {editingRouteId === route.id && (
                     <tr className="route-speed-editor-row">
-                      <td colSpan="5">
+                      <td colSpan="6">
                         <fieldset className="route-speed-editor" aria-label={`编辑${route.id}各航点速度`}>
                           <legend>{route.id} 航点速度（节）</legend>
                           <div className="route-speed-editor-points">
@@ -2262,6 +2312,18 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                             ))}
                           </div>
                           <div className="route-speed-editor-actions">
+                            <label className="route-bulk-speed">
+                              <span>统一速度（节）</span>
+                              <input aria-label={`${route.id} 一键替换速度（节）`} type="number" min="0.1" max="100" step="0.1" value={bulkRouteSpeed} onChange={(event) => setBulkRouteSpeed(event.target.value)} />
+                              <button type="button" onClick={() => {
+                                const speed = Number(bulkRouteSpeed);
+                                if (!Number.isFinite(speed) || speed <= 0 || speed > 100) {
+                                  onToast?.('请输入 0-100 节之间的航点速度');
+                                  return;
+                                }
+                                setEditedRouteSpeeds(route.points.map(() => String(speed)));
+                              }}>一键更换</button>
+                            </label>
                             <button type="button" onClick={() => setEditingRouteId('')} disabled={isRouteBusy}>取消</button>
                             <button type="button" onClick={() => saveEditedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存速度'}</button>
                           </div>
@@ -2708,7 +2770,7 @@ export function RemoteControlPanel({ position, onToast }) {
                   >
                     <span className="critical-control-copy">
                       <span className="critical-control-icon" aria-hidden="true"><ControlIcon size={22} /></span>
-                      <span><strong>{command.label}</strong><small>当前状态</small></span>
+                      <span><strong>{command.label}</strong><small>{command.cmd === 'OPERATING_MODE' ? '当前模式' : '当前状态'}</small></span>
                     </span>
                     <span className="switch-state">{stateText}</span>
                   </button>

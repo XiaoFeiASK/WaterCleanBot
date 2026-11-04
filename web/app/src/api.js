@@ -20,6 +20,7 @@ export const REMOTE_COMMAND_ERROR_MESSAGES = Object.freeze({
   INVALID_COMMAND: '遥控指令参数无效',
   NOT_FOUND: '未找到该机器人位置，暂不能下发',
   PUBLISH_FAILED: '遥控指令下发失败，请检查 MQTT 服务',
+  BATTERY_UNAVAILABLE: '设备当前电量数据不可用，暂时无法记录耗电',
   REQUEST_FAILED: '遥控指令请求失败，请检查服务是否正常',
   SERVER_ERROR: '服务器异常，请稍后重试',
 });
@@ -328,6 +329,85 @@ function validateRoutePayload(payload, expectedRobotName) {
     ...payload,
     points: payload.points.map((point, index) => validateRoutePointPayload(point, index)),
   };
+}
+
+function validateTrackingStatsResponse(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw createRouteError('REQUEST_FAILED');
+  }
+  return Object.values(payload).map((stat) => {
+    if (
+      !stat || typeof stat !== 'object' ||
+      typeof stat.routeKey !== 'string' || !stat.routeKey ||
+      typeof stat.routeName !== 'string' || !stat.routeName ||
+      (stat.batteryConsumedPercent !== null && !isNumber(stat.batteryConsumedPercent)) ||
+      typeof stat.trackingActive !== 'boolean' ||
+      typeof stat.updatedAt !== 'string'
+    ) {
+      throw createRouteError('REQUEST_FAILED');
+    }
+    return stat;
+  });
+}
+
+export async function fetchRouteTrackingStats(deviceName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName) throw createRouteError('INVALID_ROBOT_CODE');
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/route-tracking-stats`,
+      { signal: signal || controller.signal, cache: 'no-store' },
+    );
+    if (!response.ok) throw createRouteError(response.status >= 500 ? 'SERVER_ERROR' : 'REQUEST_FAILED');
+    return validateTrackingStatsResponse(await parseJSONResponse(response, createRouteError));
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function updateRouteTracking(deviceName, action, routeKey, routeName, signal) {
+  const robotName = getRobotNameForDevice(deviceName);
+  if (!robotName || !routeKey || !['start', 'end', 'cancel'].includes(action) || (action !== 'cancel' && !routeName)) {
+    throw createRouteError('INVALID_ROUTE');
+  }
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/robots/${encodeURIComponent(robotName)}/route-tracking`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, routeKey, routeName }),
+        signal: signal || controller.signal,
+        cache: 'no-store',
+      },
+    );
+    if (response.status === 409) {
+      const error = new Error('设备当前电量数据不可用，暂时无法记录耗电');
+      error.code = 'BATTERY_UNAVAILABLE';
+      error.status = 409;
+      throw error;
+    }
+    if (!response.ok) throw createRouteError(response.status >= 500 ? 'SERVER_ERROR' : 'REQUEST_FAILED');
+    const stat = await parseJSONResponse(response, createRouteError);
+    if (!stat || typeof stat.routeKey !== 'string' || typeof stat.trackingActive !== 'boolean') {
+      throw createRouteError('REQUEST_FAILED');
+    }
+    return stat;
+  } catch (error) {
+    if (error.code) throw error;
+    if (error.name === 'AbortError') throw createRouteError('REQUEST_FAILED');
+    throw createRouteError('REQUEST_FAILED');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function validateRouteSendResponse(payload, expectedRobotName, expectedRouteId) {

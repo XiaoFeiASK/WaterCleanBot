@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_planned_route_points_route_id_seq
   ON planned_route_points (route_id, point_seq);
 
 COMMENT ON TABLE planned_routes IS '规划航线主表：保存每台无人艇的真实航线记录。';
-COMMENT ON COLUMN planned_routes.route_code IS '前端展示的航线编号，例如 R-001。';
+COMMENT ON COLUMN planned_routes.route_code IS '前端展示的航线编号，新航线使用上海本地时间戳，例如 20261104-153000.123456。';
 COMMENT ON COLUMN planned_routes.coordinate_system IS '路径点坐标系：前端高德地图点默认为 GCJ02，下发艇端时可转换为 WGS84。';
 COMMENT ON TABLE planned_route_points IS '规划航线路径点表：按 point_seq 保存经度、纬度和到该点速度。';
 COMMENT ON COLUMN planned_route_points.speed_knots IS '到该点的速度，单位节。';

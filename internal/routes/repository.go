@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,24 @@ CREATE INDEX IF NOT EXISTS idx_planned_routes_robot_name_route_code
   ON planned_routes (robot_name, route_code);
 CREATE INDEX IF NOT EXISTS idx_planned_route_points_route_id_seq
   ON planned_route_points (route_id, point_seq);
+
+CREATE TABLE IF NOT EXISTS robot_route_tracking_stats (
+  robot_name TEXT NOT NULL,
+  route_key TEXT NOT NULL,
+  route_name TEXT NOT NULL,
+  battery_consumed_percent DOUBLE PRECISION,
+  battery_start_percent DOUBLE PRECISION,
+  tracking_active BOOLEAN NOT NULL DEFAULT false,
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (robot_name, route_key),
+  CONSTRAINT robot_route_tracking_stats_battery_check
+    CHECK (battery_consumed_percent IS NULL OR battery_consumed_percent >= 0),
+  CONSTRAINT robot_route_tracking_stats_start_battery_check
+    CHECK (battery_start_percent IS NULL OR battery_start_percent BETWEEN 0 AND 100)
+);
 `
 
 // Repository 负责规划航线持久化。
@@ -217,7 +236,13 @@ func (r *Repository) DeleteRoute(ctx context.Context, robotName string, routeCod
 	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
 	defer cancel()
 
-	result, err := r.db.ExecContext(queryCtx, `
+	tx, err := r.db.BeginTx(queryCtx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(queryCtx, `
 		DELETE FROM planned_routes
 		WHERE robot_name = $1 AND route_code = $2
 	`, robotName, routeCode)
@@ -229,19 +254,222 @@ func (r *Repository) DeleteRoute(ctx context.Context, robotName string, routeCod
 	if err != nil {
 		return false, err
 	}
-	return rowsAffected > 0, nil
+	if rowsAffected == 0 {
+		return false, nil
+	}
+	if _, err := tx.ExecContext(queryCtx, `
+		DELETE FROM robot_route_tracking_stats
+		WHERE robot_name = $1 AND route_key = $2
+	`, robotName, "planned:"+routeCode); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ListTrackingStats returns persisted battery measurements keyed by route.
+func (r *Repository) ListTrackingStats(ctx context.Context, robotName string) (map[string]RouteTrackingStat, error) {
+	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
+	defer cancel()
+	rows, err := r.db.QueryContext(queryCtx, `
+		SELECT route_key, route_name, battery_consumed_percent, tracking_active,
+			started_at, ended_at, updated_at
+		FROM robot_route_tracking_stats
+		WHERE robot_name = $1
+	`, robotName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make(map[string]RouteTrackingStat)
+	for rows.Next() {
+		var stat RouteTrackingStat
+		var startedAt, endedAt sql.NullTime
+		if err := rows.Scan(
+			&stat.RouteKey,
+			&stat.RouteName,
+			&stat.BatteryConsumedPercent,
+			&stat.TrackingActive,
+			&startedAt,
+			&endedAt,
+			&stat.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if startedAt.Valid {
+			value := startedAt.Time.UTC().Format(time.RFC3339Nano)
+			stat.StartedAt = &value
+		}
+		if endedAt.Valid {
+			value := endedAt.Time.UTC().Format(time.RFC3339Nano)
+			stat.EndedAt = &value
+		}
+		stats[stat.RouteKey] = stat
+	}
+	return stats, rows.Err()
+}
+
+// StartTracking records the real battery reading when route tracking starts.
+func (r *Repository) StartTracking(ctx context.Context, robotName, routeKey, routeName string, battery float64) (RouteTrackingStat, error) {
+	routeKey = strings.TrimSpace(routeKey)
+	routeName = strings.TrimSpace(routeName)
+	if routeKey == "" || routeName == "" {
+		return RouteTrackingStat{}, ValidationError{Err: fmt.Errorf("route key and name are required")}
+	}
+	if battery < 0 || battery > 100 {
+		return RouteTrackingStat{}, ValidationError{Err: fmt.Errorf("battery out of range")}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
+	defer cancel()
+	var stat RouteTrackingStat
+	var startedAt, endedAt sql.NullTime
+	if err := r.db.QueryRowContext(queryCtx, `
+		INSERT INTO robot_route_tracking_stats (
+			robot_name, route_key, route_name, battery_consumed_percent,
+			battery_start_percent, tracking_active, started_at, ended_at, updated_at
+		)
+		VALUES ($1, $2, $3, NULL, $4, true, now(), NULL, now())
+		ON CONFLICT (robot_name, route_key) DO UPDATE SET
+			route_name = EXCLUDED.route_name,
+			battery_start_percent = EXCLUDED.battery_start_percent,
+			tracking_active = true,
+			started_at = now(),
+			ended_at = NULL,
+			updated_at = now()
+		RETURNING route_key, route_name, battery_consumed_percent, tracking_active,
+			started_at, ended_at, updated_at
+	`, robotName, routeKey, routeName, battery).Scan(
+		&stat.RouteKey,
+		&stat.RouteName,
+		&stat.BatteryConsumedPercent,
+		&stat.TrackingActive,
+		&startedAt,
+		&endedAt,
+		&stat.UpdatedAt,
+	); err != nil {
+		return RouteTrackingStat{}, err
+	}
+	if startedAt.Valid {
+		value := startedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.StartedAt = &value
+	}
+	if endedAt.Valid {
+		value := endedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.EndedAt = &value
+	}
+	return stat, nil
+}
+
+// CancelTracking 清除未能成功下发所留下的电量基线。
+func (r *Repository) CancelTracking(ctx context.Context, robotName, routeKey string) (RouteTrackingStat, error) {
+	routeKey = strings.TrimSpace(routeKey)
+	if routeKey == "" {
+		return RouteTrackingStat{}, ValidationError{Err: fmt.Errorf("route key is required")}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
+	defer cancel()
+	var stat RouteTrackingStat
+	var startedAt, endedAt sql.NullTime
+	if err := r.db.QueryRowContext(queryCtx, `
+		UPDATE robot_route_tracking_stats
+		SET tracking_active = false, battery_start_percent = NULL, updated_at = now()
+		WHERE robot_name = $1 AND route_key = $2
+		RETURNING route_key, route_name, battery_consumed_percent, tracking_active,
+			started_at, ended_at, updated_at
+	`, robotName, routeKey).Scan(
+		&stat.RouteKey,
+		&stat.RouteName,
+		&stat.BatteryConsumedPercent,
+		&stat.TrackingActive,
+		&startedAt,
+		&endedAt,
+		&stat.UpdatedAt,
+	); err != nil {
+		return RouteTrackingStat{}, err
+	}
+	if startedAt.Valid {
+		value := startedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.StartedAt = &value
+	}
+	if endedAt.Valid {
+		value := endedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.EndedAt = &value
+	}
+	return stat, nil
+}
+
+// EndTracking 用后端保存的起始电量与当前读取的真实电量作差，并覆盖上次结果。
+func (r *Repository) EndTracking(ctx context.Context, robotName, routeKey string, battery float64) (RouteTrackingStat, bool, error) {
+	routeKey = strings.TrimSpace(routeKey)
+	if routeKey == "" {
+		return RouteTrackingStat{}, false, ValidationError{Err: fmt.Errorf("route key is required")}
+	}
+	if battery < 0 || battery > 100 {
+		return RouteTrackingStat{}, false, ValidationError{Err: fmt.Errorf("battery out of range")}
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, routeQueryTimeout)
+	defer cancel()
+	var stat RouteTrackingStat
+	var startedAt, endedAt sql.NullTime
+	err := r.db.QueryRowContext(queryCtx, `
+		UPDATE robot_route_tracking_stats
+		SET battery_consumed_percent = CASE
+				WHEN battery_start_percent IS NULL THEN NULL
+				ELSE GREATEST(0, battery_start_percent - $3)
+			END,
+			tracking_active = false,
+			ended_at = now(),
+			updated_at = now()
+		WHERE robot_name = $1 AND route_key = $2
+		RETURNING route_key, route_name, battery_consumed_percent, tracking_active,
+			started_at, ended_at, updated_at
+	`, robotName, routeKey, battery).Scan(
+		&stat.RouteKey,
+		&stat.RouteName,
+		&stat.BatteryConsumedPercent,
+		&stat.TrackingActive,
+		&startedAt,
+		&endedAt,
+		&stat.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return RouteTrackingStat{}, false, nil
+	}
+	if err != nil {
+		return RouteTrackingStat{}, false, err
+	}
+	if startedAt.Valid {
+		value := startedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.StartedAt = &value
+	}
+	if endedAt.Valid {
+		value := endedAt.Time.UTC().Format(time.RFC3339Nano)
+		stat.EndedAt = &value
+	}
+	return stat, true, nil
 }
 
 func nextRouteCode(ctx context.Context, tx *sql.Tx, robotName string) (string, error) {
-	var maxRouteNumber int
-	if err := tx.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(CAST(SUBSTRING(route_code FROM 3) AS INTEGER)), 0)
-		FROM planned_routes
-		WHERE robot_name = $1 AND route_code ~ '^R-[0-9]+$'
-	`, robotName).Scan(&maxRouteNumber); err != nil {
-		return "", err
+	location := time.FixedZone("Asia/Shanghai", 8*60*60)
+	now := time.Now().In(location)
+	for attempt := 0; attempt < 100; attempt++ {
+		candidate := now.Add(-time.Duration(attempt) * time.Microsecond).Format("20060102-150405.000000")
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM planned_routes WHERE robot_name = $1 AND route_code = $2
+			)
+		`, robotName, candidate).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
 	}
-	return fmt.Sprintf("R-%03d", maxRouteNumber+1), nil
+	return "", fmt.Errorf("could not allocate a unique route timestamp")
 }
 
 func (r *Repository) queryRoutes(ctx context.Context, robotName string, routeCode string) ([]Route, error) {
