@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { LocationMap } from './App';
+import { wgs84ToGcj02 } from './coordinates';
 
 let maps;
 let lines;
@@ -22,6 +23,8 @@ beforeEach(() => {
         this.options = options;
         this.setFitView = vi.fn();
         this.setCenter = vi.fn();
+        this.setZoom = vi.fn();
+        this.setZoomAndCenter = vi.fn();
         this.resize = vi.fn();
         this.destroy = vi.fn();
         maps.push(this);
@@ -89,5 +92,17 @@ describe('public shoreline map lifecycle', () => {
     expect(lines[4].options.strokeColor).toBe('#e5484d');
     expect(maps[0].destroy).not.toHaveBeenCalled();
     expect(screen.getByLabelText('机器人实时位置地图')).toBeTruthy();
+  });
+
+  it('centers the boat and applies the focus zoom from one locate click', async () => {
+    const position = { robotName: 'test-device', lng: 121.4, lat: 31.2 };
+    render(<LocationMap {...defaults} showShoreline={false} position={position} />);
+    await waitFor(() => expect(maps).toHaveLength(1));
+
+    screen.getByRole('button', { name: '定位到小船' }).click();
+
+    const focused = wgs84ToGcj02(position);
+    expect(maps[0].setZoomAndCenter).toHaveBeenCalledWith(17, [focused.lng, focused.lat], false, 320);
+    expect(maps[0].setFitView).not.toHaveBeenCalled();
   });
 });

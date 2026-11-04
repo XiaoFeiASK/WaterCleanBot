@@ -1756,6 +1756,30 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 
 .online-map-frame .route-planning-toolbar { bottom: 18px; }
 
+.map-locate-boat {
+  position: absolute;
+  right: 18px;
+  bottom: 104px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(11,34,39,.62);
+  box-shadow: 0 8px 22px rgba(6,22,26,.3);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.map-locate-boat:hover { border-color: rgba(255,255,255,.78); background: rgba(8,31,36,.82); transform: translateY(-1px); }
+.map-locate-boat:active { transform: scale(.95); }
+.map-locate-boat:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.map-locate-boat svg { transform: translate(-1px, 1px); }
+
 .tracking-map-button {
   position: absolute;
   right: 18px;
@@ -1828,6 +1852,7 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
 }
 
 @media (max-width: 760px) {
+  .map-locate-boat { right: 10px; bottom: 96px; width: 44px; height: 44px; }
   .tracking-map-button {
     right: 10px;
     bottom: 10px;

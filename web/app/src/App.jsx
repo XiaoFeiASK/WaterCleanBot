@@ -16,6 +16,7 @@ import {
   List,
   MapPinned,
   Menu,
+  Navigation,
   PanelLeftClose,
   Plus,
   Power,
@@ -80,6 +81,7 @@ function confirmAction(message) {
 const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = 'USV-001';
+const MAP_BOAT_FOCUS_ZOOM = 17;
 const DEMO_TEST_TRACKS = Object.freeze([DEMO_TEST_TRACK]);
 const DEMO_TEST_POINTS_BY_ID = Object.freeze({ [DEMO_TEST_TRACK.id]: DEMO_TEST_TRACK_POINTS });
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
@@ -570,6 +572,20 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
   const fittedShorelineSeqRef = useRef(null);
   const [mapError, setMapError] = useState('');
   const [routeMap, setRouteMap] = useState(null);
+  const hasBoatPosition = hasCoordinates(position);
+
+  const focusBoat = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !hasBoatPosition) return;
+    const mapPosition = wgs84ToGcj02(position);
+    const nextPosition = [mapPosition.lng, mapPosition.lat];
+    if (typeof map.setZoomAndCenter === 'function') {
+      map.setZoomAndCenter(MAP_BOAT_FOCUS_ZOOM, nextPosition, false, 320);
+      return;
+    }
+    map.setZoom?.(MAP_BOAT_FOCUS_ZOOM);
+    map.setCenter?.(nextPosition);
+  }, [hasBoatPosition, position]);
 
   useEffect(() => () => {
     safelyRemoveMarker(markerRef.current);
@@ -873,7 +889,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
     };
   }, [routeMap, planningMode, draftRoutePoints, pendingRoutePoint, previewRoutePoints, onRoutePointMove]);
 
-  if (!hasCoordinates(position) && !(showShoreline && shorelineSections.length) && !importedRoutes.length) {
+  if (!hasBoatPosition && !(showShoreline && shorelineSections.length) && !importedRoutes.length) {
     return (
       <div className="map-empty">
         <MapPinned size={28} strokeWidth={1.5} />
@@ -892,7 +908,25 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
     );
   }
 
-  return <div ref={mapNode} className="location-map" aria-label="机器人实时位置地图" />;
+  return (
+    <>
+      <div ref={mapNode} className="location-map" aria-label="机器人实时位置地图" />
+      {hasBoatPosition && (
+        <button
+          className="map-locate-boat"
+          type="button"
+          aria-label="定位到小船"
+          title="定位到小船并放大"
+          onClick={(event) => {
+            event.stopPropagation();
+            focusBoat();
+          }}
+        >
+          <Navigation size={22} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      )}
+    </>
+  );
 }
 
 function FleetMap({ positions, onOpenDeviceDetail }) {
