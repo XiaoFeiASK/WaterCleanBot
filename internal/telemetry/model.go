@@ -36,6 +36,7 @@ func ParseDistanceFeedback(topic string, payload []byte) (string, float64, bool)
 }
 
 // USVData 对应无人艇发布到 usv/{usvId}/telemetry 的 JSON 报文。
+// Speed 字段的原始单位是节（kn），Position 输出统一换算成米/秒（m/s）。
 // 调用方：Subscriber.handleMessage 在收到 MQTT 消息后解析它。
 // 会调用：Position 将合法报文转换成 HTTP 接口已有的 location.Position。
 type USVData struct {
@@ -114,14 +115,16 @@ func (d USVData) Validate() error {
 // 调用方：Subscriber.handleMessage。
 // 会调用：无，只做字段映射；RobotName 使用 topic 解析出的设备名。
 func (d USVData) Position() location.Position {
+	speedKnots := d.Speed
 	return location.Position{
-		RobotName: d.USVID,
-		Lat:       d.Lat,
-		Lng:       d.Lng,
-		Heading:   location.Float(d.Heading),
-		Speed:     location.Float(d.Speed),
-		Battery:   location.Float(d.Battery),
-		Status:    d.Status,
+		RobotName:  d.USVID,
+		Lat:        d.Lat,
+		Lng:        d.Lng,
+		Heading:    location.Float(d.Heading),
+		Speed:      location.Float(speedKnots * KnotsToMetersPerSecond),
+		Battery:    location.Float(d.Battery),
+		Status:     d.Status,
+		SpeedKnots: location.Float(speedKnots),
 	}
 }
 

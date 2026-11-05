@@ -135,7 +135,9 @@ func mergeFeedback(position *Position, previous Position) {
 	position.RollRate = previous.RollRate
 	position.Altitude = previous.Altitude
 	position.Heave = previous.Heave
-	position.SpeedKnots = previous.SpeedKnots
+	if position.SpeedKnots == nil {
+		position.SpeedKnots = previous.SpeedKnots
+	}
 	position.SatelliteCount = previous.SatelliteCount
 	position.GNSSSolutionStatus = previous.GNSSSolutionStatus
 	position.ControlMode = previous.ControlMode

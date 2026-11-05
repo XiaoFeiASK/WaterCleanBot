@@ -14,9 +14,9 @@ import {
   Gauge,
   LayoutDashboard,
   List,
+  LocateFixed,
   MapPinned,
   Menu,
-  Navigation,
   PanelLeftClose,
   Plus,
   Power,
@@ -84,6 +84,7 @@ const AMAP_KEY = import.meta.env.VITE_MAP_API_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const DEFAULT_DEVICE_ID = 'USV-001';
 const MAP_BOAT_FOCUS_ZOOM = 17;
+const KNOTS_TO_METERS_PER_SECOND = 0.514444;
 const DEMO_TEST_TRACKS = Object.freeze([DEMO_TEST_TRACK]);
 const DEMO_TEST_POINTS_BY_ID = Object.freeze({ [DEMO_TEST_TRACK.id]: DEMO_TEST_TRACK_POINTS });
 const ACTIVE_PAGE_STORAGE_KEY = 'watercleanbot.activePage';
@@ -329,6 +330,29 @@ function formatHeading(heading) {
 
 function formatSpeed(speed) {
   return typeof speed === 'number' && Number.isFinite(speed) ? `${speed.toFixed(1)} m/s` : '暂无数据';
+}
+
+function getSpeedValues(position) {
+  const speedMetersPerSecond = typeof position?.speed === 'number' && Number.isFinite(position.speed) ? position.speed : null;
+  const speedKnots = typeof position?.speedKnots === 'number' && Number.isFinite(position.speedKnots)
+    ? position.speedKnots
+    : speedMetersPerSecond == null ? null : speedMetersPerSecond / KNOTS_TO_METERS_PER_SECOND;
+  return { speedKnots, speedMetersPerSecond };
+}
+
+export function formatTelemetrySpeed(position, unit = 'kn') {
+  const { speedKnots, speedMetersPerSecond } = getSpeedValues(position);
+  const value = unit === 'mps' ? speedMetersPerSecond : speedKnots;
+  if (value == null) return '暂无数据';
+  return `${value.toFixed(1)} ${unit === 'mps' ? 'm/s' : '节'}`;
+}
+
+function shouldStartTelemetryCollapsed() {
+  try {
+    return window.matchMedia('(max-width: 760px)').matches;
+  } catch {
+    return false;
+  }
 }
 
 function formatCoordinates(position) {
@@ -931,7 +955,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
             focusBoat();
           }}
         >
-          <Navigation size={22} strokeWidth={2.1} aria-hidden="true" />
+          <LocateFixed size={24} strokeWidth={2.2} aria-hidden="true" />
         </button>
       )}
     </>
@@ -1425,6 +1449,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [loadedTrackIds, setLoadedTrackIds] = useState({});
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);
   const [tracksExpanded, setTracksExpanded] = useState(false);
+  const [telemetryCollapsed, setTelemetryCollapsed] = useState(shouldStartTelemetryCollapsed);
+  const [speedUnit, setSpeedUnit] = useState('kn');
   const [tracksLoading, setTracksLoading] = useState(false);
   const [tracksError, setTracksError] = useState('');
   const [trackAction, setTrackAction] = useState('');
@@ -2201,35 +2227,74 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             {showShoreline && hasShorelineLayer(1, 0) && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && hasShorelineLayer(3) && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
           </div>
-          <div className="device-distance-overlay" aria-label="设备实时状态">
-            <div className="telemetry-primary">
-              <span>本次航程</span>
-              <strong>{formatDistanceKm(position?.distanceKm)}</strong>
+          <div className={`device-distance-overlay ${telemetryCollapsed ? 'telemetry-collapsed' : 'telemetry-expanded'}`} aria-label="设备实时状态">
+            <div className="telemetry-head">
+              <button
+                className="telemetry-collapse-toggle"
+                type="button"
+                aria-label={telemetryCollapsed ? '展开设备实时状态' : '收起设备实时状态'}
+                aria-expanded={!telemetryCollapsed}
+                aria-controls="device-telemetry-body"
+                onClick={() => setTelemetryCollapsed((collapsed) => !collapsed)}
+              >
+                <span>设备实时状态</span>
+                <ChevronDown className="telemetry-collapse-chevron" size={16} aria-hidden="true" />
+              </button>
+              {telemetryCollapsed && (
+                <div className="telemetry-collapse-summary">
+                  <button
+                    className="telemetry-collapse-speed"
+                    type="button"
+                    title="点击切换节 / m/s"
+                    aria-label={`航速 ${formatTelemetrySpeed(position, speedUnit)}，点击切换为${speedUnit === 'kn' ? 'm/s' : '节'}`}
+                    disabled={getSpeedValues(position).speedKnots == null && getSpeedValues(position).speedMetersPerSecond == null}
+                    onClick={() => setSpeedUnit((unit) => unit === 'kn' ? 'mps' : 'kn')}
+                  >
+                    {formatTelemetrySpeed(position, speedUnit)}
+                  </button>
+                  <span>{formatBattery(position?.battery)}</span>
+                </div>
+              )}
             </div>
-            <div className="telemetry-primary">
-              <span>控制状态</span>
-              <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
-            </div>
-            <LocationCoordinates position={position} />
-            <div className="telemetry-item">
-              <span>航向</span>
-              <strong>{formatHeading(position?.heading)}</strong>
-            </div>
-            <div className="telemetry-item">
-              <span>航速</span>
-              <strong>{formatSpeed(position?.speed)}</strong>
-            </div>
-            <div className="telemetry-item">
-              <span>电池电量</span>
-              <strong>{formatBattery(position?.battery)}</strong>
-            </div>
-            <div className="telemetry-item telemetry-throttle">
-              <span>左油门反馈</span>
-              <strong>{position?.leftThrottle != null ? `${position.leftThrottle}%` : '--'}</strong>
-            </div>
-            <div className="telemetry-item telemetry-throttle">
-              <span>右油门反馈</span>
-              <strong>{position?.rightThrottle != null ? `${position.rightThrottle}%` : '--'}</strong>
+            <div className="telemetry-body" id="device-telemetry-body" hidden={telemetryCollapsed}>
+              <div className="telemetry-primary">
+                <span>本次航程</span>
+                <strong>{formatDistanceKm(position?.distanceKm)}</strong>
+              </div>
+              <div className="telemetry-primary">
+                <span>控制状态</span>
+                <strong>{CONTROL_MODE_LABELS[position?.controlMode] || '等待反馈'}</strong>
+              </div>
+              <LocationCoordinates position={position} />
+              <div className="telemetry-item">
+                <span>航向</span>
+                <strong>{formatHeading(position?.heading)}</strong>
+              </div>
+              <div className="telemetry-item telemetry-speed">
+                <span>航速</span>
+                <button
+                  className="telemetry-speed-toggle"
+                  type="button"
+                  title="点击切换节 / m/s"
+                  aria-label={`航速 ${formatTelemetrySpeed(position, speedUnit)}，点击切换为${speedUnit === 'kn' ? 'm/s' : '节'}`}
+                  disabled={getSpeedValues(position).speedKnots == null && getSpeedValues(position).speedMetersPerSecond == null}
+                  onClick={() => setSpeedUnit((unit) => unit === 'kn' ? 'mps' : 'kn')}
+                >
+                  {formatTelemetrySpeed(position, speedUnit)}
+                </button>
+              </div>
+              <div className="telemetry-item">
+                <span>电池电量</span>
+                <strong>{formatBattery(position?.battery)}</strong>
+              </div>
+              <div className="telemetry-item telemetry-throttle">
+                <span>左油门反馈</span>
+                <strong>{position?.leftThrottle != null ? `${position.leftThrottle}%` : '--'}</strong>
+              </div>
+              <div className="telemetry-item telemetry-throttle">
+                <span>右油门反馈</span>
+                <strong>{position?.rightThrottle != null ? `${position.rightThrottle}%` : '--'}</strong>
+              </div>
             </div>
           </div>
           {planningMode && (

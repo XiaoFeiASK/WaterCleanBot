@@ -8,7 +8,8 @@ import (
 	"github.com/XiaoFeiASK/WaterCleanBot/internal/location"
 )
 
-const knotsToMetersPerSecond = 0.514444
+// KnotsToMetersPerSecond 是国际海里/小时到米/秒的换算系数。
+const KnotsToMetersPerSecond = 0.514444
 
 // ParseNavigationFeedback 解析艇端 [18,P1,...,P13] 导航反馈。
 // P1/P2 分别是经度、纬度，P11 是节；Position.Speed 统一换算为米/秒。
@@ -54,7 +55,7 @@ func ParseNavigationFeedback(topic string, payload []byte) (location.Position, b
 		Lng:                location.Float(lng),
 		Lat:                location.Float(lat),
 		Heading:            location.Float(heading),
-		Speed:              location.Float(speedKnots * knotsToMetersPerSecond),
+		Speed:              location.Float(speedKnots * KnotsToMetersPerSecond),
 		HeadingRate:        &headingRate,
 		Pitch:              &pitch,
 		PitchRate:          &pitchRate,

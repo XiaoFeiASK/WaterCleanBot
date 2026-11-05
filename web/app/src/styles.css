@@ -221,7 +221,23 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .online-map-card,
 .route-table-card { overflow: hidden; border: 1px solid rgba(19,38,41,.1); border-radius: 18px; background: rgba(255,253,246,.9); box-shadow: 0 10px 24px rgba(11,36,41,.05); }
 .online-map-toolbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid rgba(19,38,41,.1); background: rgba(255,253,246,.94); }
-.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 12px; width: min(360px, calc(100% - 32px)); padding: 15px 16px; border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; }
+.device-distance-overlay { position: absolute; top: 16px; right: 16px; z-index: 6; width: min(360px, calc(100% - 32px)); border: 1px solid rgba(19,38,41,.14); border-radius: 14px; color: var(--muted); background: rgba(255,253,246,.95); box-shadow: 0 12px 28px rgba(11,36,41,.16); backdrop-filter: blur(8px); font-size: 11px; overflow: hidden; }
+.device-distance-overlay.telemetry-collapsed { width: auto; max-width: calc(100% - 32px); }
+.telemetry-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px 8px 12px; }
+.device-distance-overlay:not(.telemetry-collapsed) .telemetry-head { padding-bottom: 8px; border-bottom: 1px solid rgba(19,38,41,.1); }
+.telemetry-collapse-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 0; border: 0; color: #36545a; background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
+.telemetry-collapse-toggle:hover { color: var(--teal-dark); }
+.telemetry-collapse-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+.telemetry-collapse-chevron { flex: 0 0 auto; transition: transform .18s ease; }
+.telemetry-collapsed .telemetry-collapse-chevron { transform: rotate(180deg); }
+.telemetry-collapse-summary { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: #38565c; font-size: 11px; font-weight: 750; white-space: nowrap; }
+.telemetry-collapse-summary > span { color: var(--muted); }
+.telemetry-collapse-speed, .telemetry-speed-toggle { padding: 0; border: 0; color: var(--teal-dark); background: transparent; font: inherit; font-weight: 850; white-space: nowrap; cursor: pointer; text-decoration: underline dotted rgba(8,114,111,.5); text-underline-offset: 3px; }
+.telemetry-collapse-speed:hover, .telemetry-speed-toggle:hover { color: #075a57; text-decoration-style: solid; }
+.telemetry-collapse-speed:focus-visible, .telemetry-speed-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 3px; }
+.telemetry-collapse-speed:disabled, .telemetry-speed-toggle:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.telemetry-body { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 12px; padding: 11px 16px 15px; }
+.telemetry-body[hidden] { display: none; }
 .telemetry-primary { grid-column: span 3; display: grid; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid rgba(19,38,41,.1); }
 .telemetry-primary span, .telemetry-item span { color: var(--muted); font-size: 11px; }
 .telemetry-primary strong { color: var(--teal-dark); font-size: 19px; line-height: 1.1; }
@@ -1028,7 +1044,10 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
   .map-frame, .location-map { min-height: 360px; height: 360px; }
   .fleet-map-frame, .fleet-map, .fleet-map-frame .map-empty { min-height: 390px; height: 390px; }
   .route-planning-toolbar { left: 10px; right: 10px; bottom: 10px; padding: 11px 12px; align-items: flex-start; flex-direction: column; }
-  .device-distance-overlay { top: 10px; right: 10px; width: min(250px, calc(100% - 20px)); padding: 11px 12px; gap: 8px 10px; }
+  .device-distance-overlay { top: 10px; right: 10px; width: min(250px, calc(100% - 20px)); }
+  .device-distance-overlay.telemetry-collapsed { width: auto; max-width: calc(100% - 20px); }
+  .telemetry-head { padding: 7px 9px 7px 10px; }
+  .telemetry-body { padding: 9px 12px 12px; gap: 8px 10px; }
   .telemetry-primary strong { font-size: 17px; }
   .route-planning-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .route-planning-actions button { min-height: 38px; }
@@ -1769,19 +1788,17 @@ h1 { color: var(--ink); font-size: clamp(30px, 3.8vw, 46px); font-weight: 850; l
   width: 48px;
   height: 48px;
   padding: 0;
-  border: 1px solid rgba(255,255,255,.38);
-  border-radius: 50%;
-  color: #fff;
-  background: rgba(11,34,39,.62);
-  box-shadow: 0 8px 22px rgba(6,22,26,.3);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(19,38,41,.14);
+  border-radius: 14px;
+  color: #111;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(6,22,26,.26);
   cursor: pointer;
   transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
-.map-locate-boat:hover { border-color: rgba(255,255,255,.78); background: rgba(8,31,36,.82); transform: translateY(-1px); }
+.map-locate-boat:hover { border-color: rgba(19,38,41,.28); background: #fff; transform: translateY(-1px); }
 .map-locate-boat:active { transform: scale(.95); }
-.map-locate-boat:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
-.map-locate-boat svg { transform: translate(-1px, 1px); }
+.map-locate-boat:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
 
 .tracking-map-button {
   position: absolute;

@@ -13,7 +13,7 @@ func TestParseNavigationFeedback(t *testing.T) {
 	if position.RobotName != "USV-001" || *position.Lng != 106.3975 || *position.Lat != 29.9087 || *position.Heading != 135 {
 		t.Fatalf("unexpected position: %+v", position)
 	}
-	if *position.Speed != 4.2*knotsToMetersPerSecond || position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
+	if *position.Speed != 4.2*KnotsToMetersPerSecond || position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
 		t.Fatalf("unexpected speed mapping: %+v", position)
 	}
 	if position.SatelliteCount == nil || *position.SatelliteCount != 18 || position.GNSSSolutionStatus == nil || *position.GNSSSolutionStatus != 4 {
@@ -51,6 +51,22 @@ func TestParseUSVDataAcceptsNaNBatteryAndMissingTimestamp(t *testing.T) {
 	}
 	if data.Timestamp <= 0 {
 		t.Fatalf("Timestamp = %d, want generated receive timestamp", data.Timestamp)
+	}
+}
+
+func TestParseUSVDataConvertsKnotsToMetersPerSecond(t *testing.T) {
+	payload := []byte(`{"lat":29.9087,"lng":106.3975,"heading":135.0,"speed":4.2,"battery":88,"status":0}`)
+
+	data, err := ParseUSVData("usv/USV-001/telemetry", payload)
+	if err != nil {
+		t.Fatalf("ParseUSVData returned error: %v", err)
+	}
+	position := data.Position()
+	if position.Speed == nil || *position.Speed != 4.2*KnotsToMetersPerSecond {
+		t.Fatalf("Speed = %v, want knots converted to m/s", position.Speed)
+	}
+	if position.SpeedKnots == nil || *position.SpeedKnots != 4.2 {
+		t.Fatalf("SpeedKnots = %v, want original 4.2", position.SpeedKnots)
 	}
 }
 
