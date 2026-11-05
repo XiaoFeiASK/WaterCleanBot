@@ -29,28 +29,28 @@ describe('last known location display', () => {
   it('keeps last coordinates when updates stop and does not refresh their age from status feedback', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
-    const position = { lat: 31.2, lng: 121.4, positionUpdatedAtMs: Date.now(), receivedAtMs: Date.now() };
+    const position = { lat: 31.28822445, lng: 121.42776104, positionUpdatedAtMs: Date.now(), receivedAtMs: Date.now() };
     const { rerender } = render(<LocationCoordinates position={position} />);
-    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.2000, 121.4000');
+    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.28822445, 121.42776104');
     expect(screen.getByText(/最近定位/)).toBeTruthy();
     act(() => vi.advanceTimersByTime(35000));
     expect(screen.getByText(/最后有效位置（非实时）/)).toBeTruthy();
     const lastLocationText = screen.getByLabelText('设备经纬度').textContent;
     rerender(<LocationCoordinates position={{ ...position, receivedAtMs: Date.now(), battery: 33 }} />);
     expect(screen.getByLabelText('设备经纬度').textContent).toBe(lastLocationText);
-    rerender(<LocationCoordinates position={{ ...position, positionUpdatedAtMs: Date.now(), lat: 31.3 }} />);
+    rerender(<LocationCoordinates position={{ ...position, positionUpdatedAtMs: Date.now(), lat: 31.30000001 }} />);
     expect(screen.getByText(/最近定位/)).toBeTruthy();
-    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.3000, 121.4000');
+    expect(screen.getByLabelText('设备经纬度').textContent).toContain('31.30000001, 121.42776104');
   });
 
   it('shows no location for an unknown or legacy zero fix and labels offline coordinates as historical', () => {
     const { rerender } = render(<LocationCoordinates position={{ lat: 0, lng: 0 }} />);
     expect(screen.getByText('尚无有效定位')).toBeTruthy();
-    expect(screen.queryByText('0.0000, 0.0000')).toBeNull();
+    expect(screen.queryByText('0, 0')).toBeNull();
     rerender(<LocationCoordinates position={{ lat: null, lng: null }} />);
     expect(screen.getByText('尚无有效定位')).toBeTruthy();
-    rerender(<LocationCoordinates position={{ lat: 31.2, lng: 121.4, positionUpdatedAtMs: Date.now(), heartbeatStatus: 'offline' }} />);
+    rerender(<LocationCoordinates position={{ lat: 31.28822445, lng: 121.42776104, positionUpdatedAtMs: Date.now(), heartbeatStatus: 'offline' }} />);
     expect(screen.getByText(/最后有效位置（非实时）/)).toBeTruthy();
-    expect(screen.getByText('31.2000, 121.4000')).toBeTruthy();
+    expect(screen.getByText('31.28822445, 121.42776104')).toBeTruthy();
   });
 });

@@ -261,7 +261,7 @@ function formatNumber(value, digits = 4) {
 }
 
 function formatCoordinateNumber(value) {
-  return formatNumber(value, 4);
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '暂无数据';
 }
 
 function formatBattery(value) {
