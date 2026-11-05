@@ -10,6 +10,7 @@ import {
   reverseImportedRoute,
   validateShorelineFiles,
   withImportedRouteSpeeds,
+  withImportedRoutePointEdits,
   withoutImportedRoute,
 } from './shorelines';
 
@@ -199,6 +200,24 @@ describe('public shoreline rendering', () => {
     const isolated = getImportedRoutes({ center: { ...route, points: route.points.map((point) => ({ ...point, reference_can_connect_previous: false })) } })[0];
     expect(isolated.lengthMeters).toBe(0);
     expect(isolated.durationSeconds).toBe(0);
+  });
+
+  it('removes selected imported route points and keeps the remaining connection metadata valid', () => {
+    const files = fullFiles();
+    const original = structuredClone(files);
+    const edited = withImportedRoutePointEdits(files, 'left', [2, 3, 4, 5], [1]);
+    expect(edited.left.point_count).toBe(3);
+    expect(edited.left.points.map((point) => point.point_id)).toEqual([1, 3, 4]);
+    expect(edited.left.points.map((point) => point.speed_knots)).toEqual([2, 4, 5]);
+    expect(edited.left.points[1]).toMatchObject({
+      point_id: 3,
+      reference_segment_id: 2,
+      reference_can_connect_previous: false,
+      map_section: 2,
+    });
+    expect(edited.left.points[2]).toMatchObject({ point_id: 4, reference_can_connect_previous: false });
+    expect(validateShorelineFiles(edited).left.points).toHaveLength(3);
+    expect(files).toEqual(original);
   });
 
   it('deletes only the selected imported route and preserves shoreline and sibling routes', () => {

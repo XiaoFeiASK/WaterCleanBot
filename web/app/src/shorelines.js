@@ -228,6 +228,41 @@ export function withImportedRouteSpeeds(files, key, speeds) {
   };
 }
 
+// 删除航点时同步更新点数和连接关系，避免被删除点前后仍被当作相邻航段。
+export function withImportedRoutePointEdits(files, key, speeds, removedIndexes = []) {
+  if (!['left', 'center', 'right'].includes(key)) throw new Error('只能编辑导入的航线文件');
+  const document = files?.[key];
+  if (!document?.points?.length || speeds.length !== document.points.length) throw new Error('公共航线数据已变化，请重新加载');
+  if (removedIndexes.length === 0) return withImportedRouteSpeeds(files, key, speeds);
+  const removed = new Set(removedIndexes);
+  const points = document.points.filter((_, index) => !removed.has(index));
+  if (points.length < 2) throw new Error('航线至少保留 2 个航点');
+  const keptIndexes = document.points
+    .map((_, index) => index)
+    .filter((index) => !removed.has(index));
+
+  return {
+    ...files,
+    [key]: {
+      ...document,
+      point_count: points.length,
+      points: points.map((point, index) => {
+        const originalIndex = keptIndexes[index];
+        const previousOriginalIndex = index > 0 ? keptIndexes[index - 1] : null;
+        const previousPoint = previousOriginalIndex == null ? null : document.points[previousOriginalIndex];
+        return {
+          ...point,
+          speed_knots: speeds[originalIndex],
+          reference_can_connect_previous: Boolean(previousPoint)
+            && point.reference_can_connect_previous === true
+            && point.reference_segment_id === previousPoint.reference_segment_id
+            && (key === 'center' || point.map_section === previousPoint.map_section),
+        };
+      }),
+    },
+  };
+}
+
 // 逆转只改变展示和下发顺序，最后一点成为新的第一点。
 export function reverseImportedRoute(route) {
   let seq = 1;

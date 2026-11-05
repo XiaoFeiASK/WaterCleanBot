@@ -113,14 +113,20 @@ describe('tracking button', () => {
     await waitFor(() => expect(onTrackingStatsChange).toHaveBeenCalledWith('start', testRoute));
   });
 
-  it('blocks start without a dispatched route while keeping end available', () => {
+  it('starts tracking without a dispatched route and skips battery tracking', async () => {
     const onToast = vi.fn();
-    render(<TrackingButton deviceId="USV-001" onToast={onToast} />);
+    const onTrackingStatsChange = vi.fn();
+    sendRobotCommand.mockResolvedValue({ protocol: [24, 1] });
+    render(<TrackingButton deviceId="USV-001" onToast={onToast} onTrackingStatsChange={onTrackingStatsChange} />);
     expect(trackingStart().disabled).toBe(false);
     expect(trackingStop().disabled).toBe(false);
     fireEvent.click(trackingStart());
-    expect(onToast).toHaveBeenCalledWith('请先下发一条航线，再开始循迹');
-    expect(window.confirm).not.toHaveBeenCalled();
+    expect(window.confirm).toHaveBeenCalledWith('确认开始循迹吗？');
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
+      command: 'TRACKING', value: 1, values: { TRACKING: 1 }, ttlMs: 800,
+    }));
+    expect(onTrackingStatsChange).not.toHaveBeenCalled();
+    expect(onToast).toHaveBeenCalledWith(`开始循迹指令已发布 ${JSON.stringify([24, 1])}`, 'success');
   });
 
   it('rolls back the battery baseline when the tracking publish fails', async () => {

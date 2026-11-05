@@ -72,7 +72,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withImportedRouteSpeeds, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withImportedRoutePointEdits, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -349,7 +349,7 @@ export function formatTelemetrySpeed(position, unit = 'kn') {
 
 function shouldStartTelemetryCollapsed() {
   try {
-    return window.matchMedia('(max-width: 760px)').matches;
+    return window.matchMedia('(max-width: 1100px), (pointer: coarse)').matches;
   } catch {
     return false;
   }
@@ -1459,6 +1459,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [routeAction, setRouteAction] = useState('');
   const [editingRouteId, setEditingRouteId] = useState('');
   const [editedRouteSpeeds, setEditedRouteSpeeds] = useState([]);
+  const [removedRoutePointIndexes, setRemovedRoutePointIndexes] = useState([]);
   const [bulkRouteSpeed, setBulkRouteSpeed] = useState('1.0');
   const [trackingStats, setTrackingStats] = useState({});
   const [lastDispatchedRoute, setLastDispatchedRoute] = useState(null);
@@ -1882,13 +1883,32 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   function startEditingRoute(route) {
     setEditingRouteId(route.id);
     setEditedRouteSpeeds(route.points.map((point) => String(point.speedKnots)));
+    setRemovedRoutePointIndexes([]);
     setBulkRouteSpeed(String(route.points[0]?.speedKnots ?? '1.0'));
   }
 
   function startEditingImportedRoute(route) {
     setEditingRouteId(route.id);
     setEditedRouteSpeeds(route.points.map((point) => String(point.speedKnots)));
+    setRemovedRoutePointIndexes([]);
     setBulkRouteSpeed(String(route.points[0]?.speedKnots ?? '1.0'));
+  }
+
+  function cancelEditingRoute() {
+    setEditingRouteId('');
+    setRemovedRoutePointIndexes([]);
+  }
+
+  function toggleEditingRoutePoint(index, pointCount) {
+    if (removedRoutePointIndexes.includes(index)) {
+      setRemovedRoutePointIndexes((current) => current.filter((item) => item !== index));
+      return;
+    }
+    if (pointCount - removedRoutePointIndexes.length <= 2) {
+      onToast?.('航线至少保留 2 个航点');
+      return;
+    }
+    setRemovedRoutePointIndexes((current) => [...current, index]);
   }
 
   function validateEditedRouteSpeeds() {
@@ -1900,14 +1920,23 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     return speeds;
   }
 
+  function getEditedRoutePoints(route, speeds) {
+    const points = route.points
+      .map((point, index) => ({ ...point, speedKnots: speeds[index] }))
+      .filter((_, index) => !removedRoutePointIndexes.includes(index));
+    if (points.length < 2) {
+      onToast?.('航线至少保留 2 个航点');
+      return null;
+    }
+    return points;
+  }
+
   async function saveEditedRoute(route) {
     if (!routeDeviceId || isRouteBusy) return;
     const speeds = validateEditedRouteSpeeds();
     if (!speeds) return;
-    const points = route.points.map((point, index) => ({
-      ...point,
-      speedKnots: speeds[index],
-    }));
+    const points = getEditedRoutePoints(route, speeds);
+    if (!points) return;
 
     setRouteAction(`edit:${route.id}`);
     try {
@@ -1917,8 +1946,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
         points: points.map(({ lng, lat, speedKnots }) => ({ lng, lat, speedKnots })),
       });
       setRoutes((currentRoutes) => currentRoutes.map((current) => current.id === route.id ? updatedRoute : current));
-      setEditingRouteId('');
-      onToast?.('航线速度已更新', 'success');
+      cancelEditingRoute();
+      onToast?.(removedRoutePointIndexes.length ? '航点与速度已更新' : '航线速度已更新', 'success');
     } catch (error) {
       onToast?.(getRouteErrorMessage(error));
     } finally {
@@ -1934,10 +1963,12 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
 
     setRouteAction(`edit:${route.id}`);
     try {
-      const files = withImportedRouteSpeeds(dataset.files, route.sourceKey, speeds);
+      const files = withImportedRoutePointEdits(dataset.files, route.sourceKey, speeds, removedRoutePointIndexes);
       await shorelineStore.update({ [route.sourceKey]: files[route.sourceKey] }, dataset.revision);
-      setEditingRouteId('');
-      onToast?.(`${route.name}速度已更新，公共修改已保存`, 'success');
+      cancelEditingRoute();
+      onToast?.(removedRoutePointIndexes.length
+        ? `${route.name}航点与速度已更新，公共修改已保存`
+        : `${route.name}速度已更新，公共修改已保存`, 'success');
     } catch (error) {
       if (error.status === 409) {
         void shorelineStore.reload().catch(() => {});
@@ -2212,12 +2243,14 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             onMapPoint={addDraftRoutePoint}
             onRoutePointMove={isRouteBusy ? undefined : moveDraftRoutePoint}
           />
-          <TrackingButton
-            deviceId={routeDeviceId}
-            route={resolveTrackingRoute()}
-            onTrackingStatsChange={changeTrackingStats}
-            onToast={onToast}
-          />
+          {!planningMode && (
+            <TrackingButton
+              deviceId={routeDeviceId}
+              route={resolveTrackingRoute()}
+              onTrackingStatsChange={changeTrackingStats}
+              onToast={onToast}
+            />
+          )}
           <div className="map-layer-legend" aria-label="地图图层图例">
             {trackLines.map((trackLine) => (
               <span key={trackLine.id}><i className="legend-line" style={{ backgroundColor: trackLine.color }} />{trackLine.name}</span>
@@ -2449,9 +2482,24 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                           <legend>{route.name} 航点速度（节，公共保存）</legend>
                           <div className="route-speed-editor-points">
                             {route.points.map((point, index) => (
-                              <label key={`${route.sourceKey}-${point.pointId ?? index}`}>
+                              <label
+                                key={`${route.sourceKey}-${point.pointId ?? index}`}
+                                className={removedRoutePointIndexes.includes(index) ? 'route-speed-point-removed' : ''}
+                              >
                                 <span>航点 {index + 1}</span>
-                                <input aria-label={`${route.name} 航点 ${index + 1} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                                <input aria-label={`${route.name} 航点 ${index + 1} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} disabled={removedRoutePointIndexes.includes(index)} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                                <button
+                                  className="route-speed-point-remove"
+                                  type="button"
+                                  aria-label={removedRoutePointIndexes.includes(index) ? `恢复${route.name} 航点 ${index + 1}` : `删除${route.name} 航点 ${index + 1}`}
+                                  title={removedRoutePointIndexes.includes(index) ? '恢复此航点' : '删除此航点'}
+                                  disabled={isRouteBusy}
+                                  onClick={() => toggleEditingRoutePoint(index, route.points.length)}
+                                >
+                                  {removedRoutePointIndexes.includes(index)
+                                    ? <Plus size={13} aria-hidden="true" />
+                                    : <X size={13} aria-hidden="true" />}
+                                </button>
                               </label>
                             ))}
                           </div>
@@ -2468,8 +2516,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                                 setEditedRouteSpeeds(route.points.map(() => String(speed)));
                               }}>一键更换</button>
                             </label>
-                            <button type="button" onClick={() => setEditingRouteId('')} disabled={isRouteBusy}>取消</button>
-                            <button type="button" onClick={() => saveEditedImportedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存速度'}</button>
+                            <button type="button" onClick={cancelEditingRoute} disabled={isRouteBusy}>取消</button>
+                            <button type="button" onClick={() => saveEditedImportedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存'}</button>
                           </div>
                         </fieldset>
                       </td>
@@ -2500,9 +2548,24 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                           <legend>{getRouteDisplayName(route)} 航点速度（节）</legend>
                           <div className="route-speed-editor-points">
                             {route.points.map((point, index) => (
-                              <label key={point.seq}>
+                              <label
+                                key={point.seq}
+                                className={removedRoutePointIndexes.includes(index) ? 'route-speed-point-removed' : ''}
+                              >
                                 <span>航点 {point.seq}</span>
-                                <input aria-label={`${getRouteDisplayName(route)} 航点 ${point.seq} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                                <input aria-label={`${getRouteDisplayName(route)} 航点 ${point.seq} 速度（节）`} type="number" min="0.1" max="100" step="0.1" value={editedRouteSpeeds[index] ?? ''} disabled={removedRoutePointIndexes.includes(index)} onChange={(event) => setEditedRouteSpeeds((current) => current.map((speed, speedIndex) => speedIndex === index ? event.target.value : speed))} />
+                                <button
+                                  className="route-speed-point-remove"
+                                  type="button"
+                                  aria-label={removedRoutePointIndexes.includes(index) ? `恢复${getRouteDisplayName(route)} 航点 ${point.seq}` : `删除${getRouteDisplayName(route)} 航点 ${point.seq}`}
+                                  title={removedRoutePointIndexes.includes(index) ? '恢复此航点' : '删除此航点'}
+                                  disabled={isRouteBusy}
+                                  onClick={() => toggleEditingRoutePoint(index, route.points.length)}
+                                >
+                                  {removedRoutePointIndexes.includes(index)
+                                    ? <Plus size={13} aria-hidden="true" />
+                                    : <X size={13} aria-hidden="true" />}
+                                </button>
                               </label>
                             ))}
                           </div>
@@ -2519,8 +2582,8 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                                 setEditedRouteSpeeds(route.points.map(() => String(speed)));
                               }}>一键更换</button>
                             </label>
-                            <button type="button" onClick={() => setEditingRouteId('')} disabled={isRouteBusy}>取消</button>
-                            <button type="button" onClick={() => saveEditedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存速度'}</button>
+                            <button type="button" onClick={cancelEditingRoute} disabled={isRouteBusy}>取消</button>
+                            <button type="button" onClick={() => saveEditedRoute(route)} disabled={isRouteBusy}>{routeAction === `edit:${route.id}` ? '保存中' : '保存'}</button>
                           </div>
                         </fieldset>
                       </td>

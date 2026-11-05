@@ -227,7 +227,7 @@ describe('planning state and persistence', () => {
     expect(screen.getByText('2026-11-04-17-10', { selector: 'td' })).toBeTruthy();
     fireEvent.click(within(row.closest('tr')).getByRole('button', { name: '编辑', exact: true }));
     fireEvent.change(screen.getByRole('spinbutton', { name: '2026-11-04-17-10 航点 2 速度（节）' }), { target: { value: '4.2' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存', exact: true }));
 
     await waitFor(() => expect(updateRobotRoute).toHaveBeenCalledWith('USV-001', 'R-001', {
       type: '自定航线', coordinateSystem: 'GCJ02',
@@ -261,12 +261,48 @@ describe('planning state and persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: '一键更换', exact: true }));
     expect(screen.getByRole('spinbutton', { name: '2026-11-04-12-00 航点 1 速度（节）' }).value).toBe('4.2');
     expect(screen.getByRole('spinbutton', { name: '2026-11-04-12-00 航点 2 速度（节）' }).value).toBe('4.2');
-    fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存', exact: true }));
     await waitFor(() => expect(updateRobotRoute).toHaveBeenCalledWith('USV-001', route.id, {
       type: '自定航线', coordinateSystem: 'GCJ02',
       points: [
         { lng: 121.41, lat: 31.21, speedKnots: 4.2 },
         { lng: 121.42, lat: 31.22, speedKnots: 4.2 },
+      ],
+    }));
+  });
+
+  it('removes a route point from the editor and saves only the remaining points', async () => {
+    window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
+    const route = {
+      id: 'R-002', robotName: 'USV-001', type: '自定航线', coordinateSystem: 'GCJ02',
+      createdAt: '2026-11-04T09:20:00Z',
+      lengthMeters: 300, durationSeconds: 150,
+      points: [
+        { seq: 1, lng: 121.41, lat: 31.21, speedKnots: 2 },
+        { seq: 2, lng: 121.42, lat: 31.22, speedKnots: 3 },
+        { seq: 3, lng: 121.43, lat: 31.23, speedKnots: 4 },
+      ],
+    };
+    fetchRobotRoutes.mockResolvedValue([route]);
+    updateRobotRoute.mockImplementation(async (_robot, _id, payload) => ({
+      ...route,
+      ...payload,
+      points: payload.points.map((point, index) => ({ ...point, seq: index + 1 })),
+    }));
+    render(<MemoryRouter><App /></MemoryRouter>);
+    await act(async () => streamHandlers.onSnapshot([position]));
+    const row = await screen.findByText('2026-11-04-17-20', { selector: 'td' });
+    fireEvent.click(within(row.closest('tr')).getByRole('button', { name: '编辑', exact: true }));
+    const removeSecond = screen.getByRole('button', { name: '删除2026-11-04-17-20 航点 2' });
+    fireEvent.click(removeSecond);
+    expect(screen.getByRole('button', { name: '恢复2026-11-04-17-20 航点 2' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '保存', exact: true }));
+
+    await waitFor(() => expect(updateRobotRoute).toHaveBeenCalledWith('USV-001', 'R-002', {
+      type: '自定航线', coordinateSystem: 'GCJ02',
+      points: [
+        { lng: 121.41, lat: 31.21, speedKnots: 2 },
+        { lng: 121.43, lat: 31.23, speedKnots: 4 },
       ],
     }));
   });
@@ -455,7 +491,7 @@ describe('imported route visibility', () => {
       fireEvent.change(screen.getByRole('spinbutton', { name: `${name} 一键替换速度（节）` }), { target: { value: '4.2' } });
       fireEvent.click(screen.getByRole('button', { name: '一键更换', exact: true }));
       expect(screen.getByRole('spinbutton', { name: `${name} 航点 1 速度（节）` }).value).toBe('4.2');
-      fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
+      fireEvent.click(screen.getByRole('button', { name: '保存', exact: true }));
       await waitFor(() => expect(updateShoreline).toHaveBeenLastCalledWith(expect.objectContaining({
         [key]: expect.objectContaining({
           points: [
@@ -467,7 +503,7 @@ describe('imported route visibility', () => {
     }
   });
 
-  it('does not publish tracking until a route has been dispatched', async () => {
+  it('publishes tracking without a dispatched route and skips battery tracking', async () => {
     window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
     const route = {
       id: '20261104-120000.000000', robotName: 'USV-001', type: '自定航线', coordinateSystem: 'GCJ02',
@@ -478,12 +514,15 @@ describe('imported route visibility', () => {
       ],
     };
     fetchRobotRoutes.mockResolvedValue([route]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<MemoryRouter><App /></MemoryRouter>);
     await act(async () => streamHandlers.onSnapshot([position]));
     await screen.findByText('2026-11-04-12-00', { selector: 'td' });
     fireEvent.click(screen.getByRole('button', { name: '开始循迹' }));
-    await waitFor(() => expect(updateRouteTracking).not.toHaveBeenCalled());
-    expect(sendRobotCommand).not.toHaveBeenCalled();
+    await waitFor(() => expect(sendRobotCommand).toHaveBeenLastCalledWith('USV-001', {
+      command: 'TRACKING', value: 1, values: { TRACKING: 1 }, ttlMs: 800,
+    }));
+    expect(updateRouteTracking).not.toHaveBeenCalled();
   });
 
   it('keeps the start-bound route when another route is dispatched before ending', async () => {
@@ -530,7 +569,7 @@ describe('imported route visibility', () => {
     edited.files.center.points = edited.files.center.points.map((point) => ({ ...point, speed_knots: 4.2 }));
     updateShoreline.mockResolvedValue(edited);
     fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '编辑', exact: true }));
-    fireEvent.click(screen.getByRole('button', { name: '保存速度' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存', exact: true }));
     await waitFor(() => expect(updateShoreline).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('button', { name: '结束循迹' }));

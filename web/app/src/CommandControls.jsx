@@ -96,6 +96,7 @@ export function TrackingButton({ deviceId, route, onTrackingStatsChange, onToast
   const [busyByDevice, setBusyByDevice] = useState({});
   const [completion, setCompletion] = useState(null);
   const pendingTargets = useRef(new Set());
+  const startedRoutes = useRef({});
   const enabled = enabledByDevice[deviceId] === true;
   const busy = busyByDevice[deviceId] === true;
 
@@ -104,39 +105,40 @@ export function TrackingButton({ deviceId, route, onTrackingStatsChange, onToast
       onToast?.('请先查询需要控制的设备');
       return;
     }
-    if (value && !route) {
-      onToast?.('请先下发一条航线，再开始循迹');
-      return;
-    }
     if (pendingTargets.current.has(deviceId)) return;
     const target = deviceId;
-    if (!value && !route) {
-      onToast?.('当前没有已绑定的循迹航线');
-      return;
-    }
+    // 循迹指令不依赖已下发航线；只有记录耗电时才需要绑定航线。
+    const startedRoute = startedRoutes.current[target];
+    const trackingRoute = value
+      ? (route || null)
+      : (Object.prototype.hasOwnProperty.call(startedRoutes.current, target) ? startedRoute : (route || null));
     if (!confirmAction(`确认${value ? '开始' : '结束'}循迹吗？`)) return;
     let statsUpdated = false;
     pendingTargets.current.add(target);
     setBusyByDevice((current) => ({ ...current, [target]: true }));
     try {
-      const stat = await onTrackingStatsChange?.(value ? 'start' : 'end', route);
-      statsUpdated = true;
+      const stat = trackingRoute
+        ? await onTrackingStatsChange?.(value ? 'start' : 'end', trackingRoute)
+        : null;
+      statsUpdated = Boolean(trackingRoute);
       const result = await sendRobotCommand(target, {
         command: 'TRACKING',
         value,
         values: { TRACKING: value },
         ttlMs: 800,
       });
+      if (value) startedRoutes.current[target] = trackingRoute;
       setEnabledByDevice((current) => ({ ...current, [target]: value === 1 }));
       if (value === 0) {
-        const nextCompletion = createTrackingCompletion(stat, route);
+        const nextCompletion = createTrackingCompletion(stat, trackingRoute);
         if (nextCompletion) setCompletion(nextCompletion);
+        delete startedRoutes.current[target];
       }
       onToast?.(`${value ? '开始' : '结束'}循迹指令已发布 ${JSON.stringify(result.protocol)}`, 'success');
     } catch (error) {
       if (statsUpdated) {
         try {
-          await onTrackingStatsChange?.('cancel', route);
+          await onTrackingStatsChange?.('cancel', trackingRoute);
         } catch {
           // 保留最初的指令下发错误，便于用户判断是否需要重试。
         }
@@ -160,7 +162,7 @@ export function TrackingButton({ deviceId, route, onTrackingStatsChange, onToast
             className="tracking-map-action"
             type="button"
             aria-label="开始循迹"
-            title="按航线开始循迹 [24,1]；已发布状态不代表设备反馈"
+            title="开始循迹 [24,1]；已发布状态不代表设备反馈"
             aria-pressed={enabled}
             disabled={!deviceId || busy}
             onClick={() => sendTracking(1)}
