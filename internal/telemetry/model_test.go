@@ -21,6 +21,17 @@ func TestParseNavigationFeedback(t *testing.T) {
 	}
 }
 
+func TestParseNavigationFeedbackPreservesCoordinatePrecision(t *testing.T) {
+	payload := []byte(`[18,121.430129355,31.287822523666666,148.4294,0,0,0,0,0,0,0,1.085,0,1]`)
+	position, ok := ParseNavigationFeedback("usv/USV-001/webfeedback", payload)
+	if !ok {
+		t.Fatal("ParseNavigationFeedback rejected valid payload")
+	}
+	if *position.Lng != 121.430129355 || *position.Lat != 31.287822523666666 {
+		t.Fatalf("coordinate precision changed: lng=%v lat=%v", *position.Lng, *position.Lat)
+	}
+}
+
 func TestParseNavigationFeedbackRejectsInvalidPayload(t *testing.T) {
 	tests := [][]byte{
 		[]byte(`[18,106.3975,null,135,0,0,0,0,0,0,0,4.2,18,4]`),

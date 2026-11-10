@@ -261,7 +261,7 @@ function formatNumber(value, digits = 4) {
 }
 
 function formatCoordinateNumber(value) {
-  return formatNumber(value, 4);
+  return formatNumber(value, 6);
 }
 
 function formatBattery(value) {
@@ -477,6 +477,16 @@ const FLEET_MARKER_BOAT_SVG = [
   '</svg>',
 ].join('');
 
+const FLEET_MARKER_SIZE = Object.freeze({ width: 128, height: 88 });
+const COMPACT_FLEET_MARKER_SIZE = Object.freeze({ width: 26, height: 26 });
+
+// AMap 自定义内容的 offset 以左上角为基准。实时船位用居中锚点让船体中心
+// 压在真实坐标上，列表地图仍用底部中心锚点让水波落在坐标上。
+export function getFleetMarkerOffset(compact = false) {
+  const { width, height } = compact ? COMPACT_FLEET_MARKER_SIZE : FLEET_MARKER_SIZE;
+  return { x: -width / 2, y: compact ? -height / 2 : -height };
+}
+
 const fleetHeadingAngles = new Map();
 
 function normalizeFleetHeading(heading) {
@@ -545,7 +555,11 @@ function updateFleetMarkerContent(content, position) {
 export function createFleetMarkerContent(position, onClick, options = {}) {
   const marker = document.createElement('div');
   marker.className = 'fleet-map-marker';
-  if (options.compact) marker.classList.add('fleet-map-marker-compact');
+  if (options.compact) {
+    marker.classList.add('fleet-map-marker-compact');
+    marker.style.width = `${COMPACT_FLEET_MARKER_SIZE.width}px`;
+    marker.style.height = `${COMPACT_FLEET_MARKER_SIZE.height}px`;
+  }
   if (onClick) marker.classList.add('fleet-map-marker-clickable');
   if (onClick) {
     marker.style.pointerEvents = 'auto';
@@ -734,11 +748,12 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
           markerContentRef.current = null;
         } else if (!markerRef.current) {
           markerContentRef.current = createFleetMarkerContent(position, boatClickHandler, { compact: true });
+          const markerOffset = getFleetMarkerOffset(true);
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
             content: markerContentRef.current,
-            offset: new AMap.Pixel(-18, -44),
+            offset: new AMap.Pixel(markerOffset.x, markerOffset.y),
             clickable: Boolean(boatClickHandler),
           });
           if (!boatClickHandler) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
@@ -1029,6 +1044,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
         }
 
         const activeNames = new Set();
+        const markerOffset = getFleetMarkerOffset(false);
         positions.forEach((position) => {
           const markerKey = position.robotName;
           const mapPosition = wgs84ToGcj02(position);
@@ -1048,7 +1064,7 @@ function FleetMap({ positions, onOpenDeviceDetail }) {
             map: mapRef.current,
             position: nextPosition,
             content: markerContent,
-            offset: new AMap.Pixel(-64, -88),
+            offset: new AMap.Pixel(markerOffset.x, markerOffset.y),
           });
           markersRef.current.set(markerKey, { marker, content: markerContent });
         });

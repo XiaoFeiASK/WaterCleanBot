@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { createFleetMarkerContent, getPerceptionRouteMapPath, getPlanningPreviewMapPoints } from './App';
+import { createFleetMarkerContent, getFleetMarkerOffset, getPerceptionRouteMapPath, getPlanningPreviewMapPoints } from './App';
 
 const perceptionPoints = [
   { lng: 121.4296045, lat: 31.2889969 },
@@ -69,5 +69,14 @@ describe('fleet marker content', () => {
     const content = createFleetMarkerContent({ robotName: 'USV-001', heading: 90 }, undefined, { compact: true });
     expect(content.classList.contains('fleet-map-marker-compact')).toBe(true);
     expect(content.querySelector('.fleet-map-marker-icon').style.bottom).toBe('');
+  });
+
+  it('anchors markers on the reported coordinate after icon resizing', () => {
+    expect(getFleetMarkerOffset(false)).toEqual({ x: -64, y: -88 });
+    expect(getFleetMarkerOffset(true)).toEqual({ x: -13, y: -13 });
+
+    const content = createFleetMarkerContent({ robotName: 'USV-001', heading: 90 }, undefined, { compact: true });
+    expect(content.style.width).toBe('26px');
+    expect(content.style.height).toBe('26px');
   });
 });
