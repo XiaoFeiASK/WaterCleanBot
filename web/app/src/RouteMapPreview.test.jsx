@@ -54,6 +54,8 @@ describe('fleet marker content', () => {
     content.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(onBoatClick).toHaveBeenCalledWith('USV-001');
     expect(content.getAttribute('role')).toBe('button');
+    expect(content.style.pointerEvents).toBe('auto');
+    expect(content.querySelector('.fleet-map-marker-icon').style.pointerEvents).toBe('auto');
   });
 
   it('still rotates the boat icon to the reported heading', () => {

@@ -548,6 +548,8 @@ export function createFleetMarkerContent(position, onClick, options = {}) {
   if (options.compact) marker.classList.add('fleet-map-marker-compact');
   if (onClick) marker.classList.add('fleet-map-marker-clickable');
   if (onClick) {
+    marker.style.pointerEvents = 'auto';
+    marker.style.cursor = 'pointer';
     marker.setAttribute('role', 'button');
     marker.setAttribute('tabindex', '0');
     marker.setAttribute('aria-label', `${position.robotName}，点击查看设备实时状态`);
@@ -565,6 +567,10 @@ export function createFleetMarkerContent(position, onClick, options = {}) {
 
   const icon = document.createElement('div');
   icon.className = 'fleet-map-marker-icon';
+  if (onClick) {
+    icon.style.pointerEvents = 'auto';
+    icon.style.cursor = 'pointer';
+  }
 
   const pulse = document.createElement('div');
   pulse.className = 'fleet-map-marker-pulse';
