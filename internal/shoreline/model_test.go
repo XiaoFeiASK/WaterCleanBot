@@ -106,9 +106,18 @@ func TestValidateFilesAllowsEachFileIndependently(t *testing.T) {
 	}
 }
 
+func TestValidateFilesAllowsFilesFromDifferentSessions(t *testing.T) {
+	files := fullTestFiles()
+	files.Left = raw(strings.Replace(string(files.Left), "bundle-a", "bundle-b", 1))
+	if _, err := ValidateFiles(files); err != nil {
+		t.Fatalf("ValidateFiles rejected files from different sessions: %v", err)
+	}
+}
+
 func TestMergeFilesReplacesOnlyUploadedFile(t *testing.T) {
 	current := fullTestFiles()
-	updatedCenter := raw(strings.Replace(string(testReference("center")), `"longitude_deg":121.4`, `"longitude_deg":121.41`, 1))
+	uploadedCenter := strings.Replace(string(testReference("center")), `"longitude_deg":121.4`, `"longitude_deg":121.41`, 1)
+	updatedCenter := raw(strings.Replace(uploadedCenter, "bundle-a", "bundle-b", 1))
 	merged, err := MergeFiles(current, Files{Center: updatedCenter})
 	if err != nil {
 		t.Fatalf("MergeFiles rejected independent upload: %v", err)
@@ -130,7 +139,6 @@ func TestValidateFilesRejectsInvalidBundles(t *testing.T) {
 		{name: "schema version", edit: func(f *Files) {
 			f.Shoreline = raw(strings.Replace(string(f.Shoreline), `"schema_version":3`, `"schema_version":2`, 1))
 		}},
-		{name: "mixed session", edit: func(f *Files) { f.Left = raw(strings.Replace(string(f.Left), "bundle-a", "bundle-b", 1)) }},
 		{name: "wrong reference side", edit: func(f *Files) { f.Right = raw(strings.Replace(string(f.Right), `"side":0`, `"side":1`, 1)) }},
 		{name: "illegal coordinate", edit: func(f *Files) {
 			f.Shoreline = raw(strings.Replace(string(f.Shoreline), `"longitude_deg":121.4`, `"longitude_deg":181`, 1))

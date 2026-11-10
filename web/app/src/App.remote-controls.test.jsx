@@ -143,7 +143,7 @@ describe('actuator state labels and control mode', () => {
     for (const label of ['控制状态', '明轮电源', '翻盖电缸', '推出电缸', '传送带', '左滚刷', '右滚刷', '垃圾清理']) {
       expect(control(label)).toHaveTextContent(label === '控制状态' ? '当前模式' : '当前状态');
     }
-    expect(control('船坞释放')).toHaveTextContent('点击循环一次');
+    expect(control('船坞释放')).toHaveTextContent('点击释放一次');
 
     fireEvent.click(control('明轮电源'));
     await waitFor(() => expect(sendRobotCommand).toHaveBeenCalledWith('USV-001', expect.objectContaining({
@@ -167,7 +167,7 @@ describe('actuator state labels and control mode', () => {
       expect(within(control(label)).queryByText('点击执行一次')).toBeNull();
       expect(within(control(label)).queryByText('点击切换')).toBeNull();
     }
-    expect(within(control('船坞释放')).getByText('点击循环一次')).toBeTruthy();
+    expect(within(control('船坞释放')).getByText('点击释放一次')).toBeTruthy();
     expect(within(control('船坞释放')).queryByText('当前状态')).toBeNull();
   });
 

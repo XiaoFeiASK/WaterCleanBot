@@ -343,8 +343,9 @@ h1 { margin-bottom: 8px; color: #fff8e8; font-size: clamp(28px, 4vw, 42px); line
 .route-table button:disabled { text-decoration: none; opacity: .45; }
 .route-table .route-table-danger { color: var(--red); }
 .route-type-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border: 1px solid transparent; border-radius: 999px; font-size: 11px; font-weight: 900; white-space: nowrap; }
-.route-type-standard { color: #0b6f66; background: #dff3ef; border-color: #b9e1d9; }
-.route-type-perception { color: #624500; background: #fff0b8; border-color: #f0cf68; }
+.route-type-shoreline { color: #0b6f66; background: #dff3ef; border-color: #b9e1d9; }
+.route-type-centerline { color: #624500; background: #fff0b8; border-color: #f0cf68; }
+.route-type-custom { color: #135f80; background: #e2f5fc; border-color: #b7e4f2; }
 .route-table-row-perception { background: rgba(255,201,40,.1); }
 .route-table-row-perception:hover { background: rgba(255,201,40,.17) !important; }
 .route-table-local-note { margin-left: 2px; color: #7a5b00; font-size: 12px; font-weight: 900; }

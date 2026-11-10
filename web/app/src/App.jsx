@@ -72,7 +72,7 @@ import { getRoleName } from './roles';
 import { DockEjectButton, requestRemoteSwitchConfirmation, TrackingButton } from './CommandControls';
 import { getTrackColor, mergeTrackPoints, selectAllTrackIds, shouldAppendLivePoint, toTrackMapPoints } from './tracks';
 import ShorelineManager, { ShorelineWarnings, usePublicShoreline } from './ShorelineManager';
-import { getImportedRoutes, getRouteTypeLabel, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withImportedRoutePointEdits, withoutImportedRoute } from './shorelines';
+import { getImportedRoutes, getRouteTypeLabel, getRouteTypeTone, getShorelineSections, getShorelineSession, getShorelineWarnings, reverseImportedRoute, withImportedRoutePointEdits, withoutImportedRoute } from './shorelines';
 import DeviceConnectionIndicator from './DeviceConnectionIndicator';
 import './fleet.css';
 
@@ -228,8 +228,7 @@ const navGroups = [
   {
     label: '设备管理',
     items: [
-      { id: 'devices', label: '设备列表', icon: List },
-      { id: 'device-detail', label: '设备详情', icon: Settings2 },
+      { id: 'device-detail', label: '设备列表', icon: List },
     ],
   },
   {
@@ -248,7 +247,8 @@ const pageNames = Object.fromEntries(
 );
 
 function getStoredActivePage() {
-  const storedPage = window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY);
+  const storedValue = window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY);
+  const storedPage = storedValue === 'devices' ? 'device-detail' : storedValue;
   return storedPage && pageNames[storedPage] ? storedPage : 'dashboard';
 }
 
@@ -548,7 +548,16 @@ export function createFleetMarkerContent(position, onClick, options = {}) {
   if (options.compact) marker.classList.add('fleet-map-marker-compact');
   if (onClick) marker.classList.add('fleet-map-marker-clickable');
   if (onClick) {
+    marker.setAttribute('role', 'button');
+    marker.setAttribute('tabindex', '0');
+    marker.setAttribute('aria-label', `${position.robotName}，点击查看设备实时状态`);
     marker.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onClick(position.robotName);
+    });
+    marker.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
       event.stopPropagation();
       onClick(position.robotName);
     });
@@ -591,7 +600,7 @@ function getAverage(values) {
   return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
 }
 
-export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = EMPTY_MAP_SECTIONS, importedRoutes = EMPTY_MAP_SECTIONS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove }) {
+export function LocationMap({ position, centerSeq, planningMode = false, draftRoutePoints = EMPTY_MAP_SECTIONS, pendingRoutePoint = null, previewRoutePoints = EMPTY_MAP_SECTIONS, trackLines = EMPTY_MAP_SECTIONS, perceptionRoutePoints = EMPTY_MAP_SECTIONS, importedRoutes = EMPTY_MAP_SECTIONS, showShoreline = false, shorelineSections = EMPTY_MAP_SECTIONS, shorelineFitSeq = 0, onMapPoint, onRoutePointMove, onBoatClick }) {
   const mapNode = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -712,24 +721,25 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
           markerContentRef.current = null;
         }
 
+        const boatClickHandler = typeof onBoatClick === 'function' ? () => onBoatClick() : undefined;
         if (!hasBoatPosition) {
           safelyRemoveMarker(markerRef.current);
           markerRef.current = null;
           markerContentRef.current = null;
         } else if (!markerRef.current) {
-          markerContentRef.current = createFleetMarkerContent(position, undefined, { compact: true });
+          markerContentRef.current = createFleetMarkerContent(position, boatClickHandler, { compact: true });
           markerRef.current = new AMap.Marker({
             map: mapRef.current,
             position: nextPosition,
             content: markerContentRef.current,
             offset: new AMap.Pixel(-18, -44),
-            clickable: false,
+            clickable: Boolean(boatClickHandler),
           });
-          scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
+          if (!boatClickHandler) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         } else {
           markerRef.current.setPosition(nextPosition);
           markerContentRef.current = updateFleetMarkerContent(markerContentRef.current, position);
-          scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
+          if (!boatClickHandler) scheduleFleetMarkerHitAreaDisable(markerContentRef.current);
         }
 
         if (mapClickHandlerRef.current && typeof mapRef.current.off === 'function') {
@@ -854,7 +864,7 @@ export function LocationMap({ position, centerSeq, planningMode = false, draftRo
       cancelled = true;
       window.clearTimeout(resizeTimer);
     };
-  }, [position, centerSeq, planningMode, trackLines, perceptionRoutePoints, importedRoutes, showShoreline, shorelineSections, shorelineFitSeq, onMapPoint]);
+  }, [position, centerSeq, planningMode, trackLines, perceptionRoutePoints, importedRoutes, showShoreline, shorelineSections, shorelineFitSeq, onMapPoint, onBoatClick]);
 
   // 航点覆盖物独立于实时船位更新，避免遥测刷新中断拖动。
   useEffect(() => {
@@ -1311,7 +1321,7 @@ function LocationPanel({ deviceId, setDeviceId, position, fleetPositions, loadin
     <section className="location-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">设备详情</p>
+          <p className="eyebrow">设备列表</p>
           <h2>{position?.robotName || deviceId || '未选择设备'}</h2>
         </div>
         <DeviceConnectionIndicator position={position} />
@@ -1450,6 +1460,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);
   const [tracksExpanded, setTracksExpanded] = useState(false);
   const [telemetryCollapsed, setTelemetryCollapsed] = useState(shouldStartTelemetryCollapsed);
+  const [telemetryVisible, setTelemetryVisible] = useState(false);
   const [speedUnit, setSpeedUnit] = useState('kn');
   const [tracksLoading, setTracksLoading] = useState(false);
   const [tracksError, setTracksError] = useState('');
@@ -1477,6 +1488,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
   const [showShorelineManager, setShowShorelineManager] = useState(false);
   const [shorelinePreview, setShorelinePreview] = useState(null);
   const [shorelineFitSeq, setShorelineFitSeq] = useState(0);
+  const toggleTelemetry = useCallback(() => setTelemetryVisible((visible) => !visible), []);
   const previewVisibilityRef = useRef(null);
   const shorelineFiles = shorelinePreview || shorelineStore.dataset?.files;
   const shorelineSections = useMemo(() => getShorelineSections(shorelineFiles), [shorelineFiles]);
@@ -1487,6 +1499,10 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
     .map((route) => route.sourceKey === reversedImportedRouteKey ? reverseImportedRoute(route) : route),
   [importedRoutes, shorelinePreview, previewImportedRouteId, reversedImportedRouteKey]);
   const hasShorelineLayer = (kind, side) => shorelineSections.some((section) => section.kind === kind && (side === undefined || section.side === side));
+
+  useEffect(() => {
+    setTelemetryVisible(false);
+  }, [routeDeviceId]);
 
   function cancelShorelinePreview() {
     setShorelinePreview(null);
@@ -2242,6 +2258,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             shorelineFitSeq={shorelineFitSeq}
             onMapPoint={addDraftRoutePoint}
             onRoutePointMove={isRouteBusy ? undefined : moveDraftRoutePoint}
+            onBoatClick={toggleTelemetry}
           />
           {!planningMode && (
             <TrackingButton
@@ -2260,7 +2277,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
             {showShoreline && hasShorelineLayer(1, 0) && <span><i className="legend-dot legend-dot-shoreline-right" />右岸边界</span>}
             {showShoreline && hasShorelineLayer(3) && <span><i className="legend-dot legend-dot-bridge" />桥孔边界</span>}
           </div>
-          <div className={`device-distance-overlay ${telemetryCollapsed ? 'telemetry-collapsed' : 'telemetry-expanded'}`} aria-label="设备实时状态">
+          {telemetryVisible && <div className={`device-distance-overlay ${telemetryCollapsed ? 'telemetry-collapsed' : 'telemetry-expanded'}`} aria-label="设备实时状态">
             <div className="telemetry-head">
               <button
                 className="telemetry-collapse-toggle"
@@ -2329,7 +2346,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <strong>{position?.rightThrottle != null ? `${position.rightThrottle}%` : '--'}</strong>
               </div>
             </div>
-          </div>
+          </div>}
           {planningMode && (
             <div className="route-planning-toolbar" role="region" aria-label="航线规划工具">
               <div>
@@ -2463,7 +2480,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <Fragment key={route.id}>
                   <tr className={`${route.sourceKey === 'center' ? 'route-table-row-perception' : ''} ${visibleImportedRoutes.some((item) => item.id === route.id) ? 'route-table-row-active' : ''}`}>
                     <td><strong>{route.name}</strong><small className="route-import-source">{route.filename} · {route.points.length} 点 · 平均 {route.speedMetersPerSecond.toFixed(1)} m/s · 公共</small></td>
-                    <td><span className={`route-type-badge route-type-${route.sourceKey === 'center' ? 'perception' : 'standard'}`}>{getRouteTypeLabel(route.type)}</span></td>
+                    <td><span className={`route-type-badge route-type-${getRouteTypeTone(route.type)}`}>{getRouteTypeLabel(route.type)}</span></td>
                     <td>{formatRouteLength(route.lengthMeters)}</td>
                     <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                     <td>{formatRouteBattery(trackingStats[`public:${route.sourceKey}`]?.batteryConsumedPercent)}</td>
@@ -2529,7 +2546,7 @@ function OnlineMapTab({ position, mapCenterSeq, onToast }) {
                 <Fragment key={route.id}>
                   <tr className={previewRouteId === route.id ? 'route-table-row-active' : ''}>
                     <td>{getRouteDisplayName(route)}</td>
-                    <td><span className="route-type-badge route-type-standard">{getRouteTypeLabel(route.type)}</span></td>
+                    <td><span className={`route-type-badge route-type-${getRouteTypeTone(route.type)}`}>{getRouteTypeLabel(route.type)}</span></td>
                     <td>{formatRouteLength(route.lengthMeters)}</td>
                     <td>{formatRouteDurationSeconds(route.durationSeconds)}</td>
                     <td>{formatRouteBattery(trackingStats[`planned:${route.id}`]?.batteryConsumedPercent)}</td>
@@ -2948,9 +2965,7 @@ export function RemoteControlPanel({ position, onToast }) {
         <div>
           <p className="eyebrow">指令下发</p>
           <h2>设备指令下发</h2>
-          <p className="remote-subtitle">指令对象与当前在线地图设备保持一致；后端接入后由系统封装并下发指令。</p>
         </div>
-        <span className="status-badge status-pending">MQTT 下发</span>
       </div>
 
       <div className="command-console">
@@ -2964,7 +2979,7 @@ export function RemoteControlPanel({ position, onToast }) {
           <section className="command-section throttle-card">
             <div className="remote-card-header">
               <Gauge size={18} />
-              <div><strong>双油门</strong><span>后退 / 停止 / 前进</span></div>
+              <div><strong>油门点动</strong><span>后退 / 停止 / 前进</span></div>
             </div>
             <div className="throttle-list">
               {REMOTE_THROTTLE_COMMANDS.map((command) => (
@@ -3345,8 +3360,6 @@ function App() {
     onSelectDevice: (deviceName) => requestLocation(deviceName),
     onToast: showToast,
   };
-  const detailTitle = position?.robotName || activeDeviceId || deviceId || '未选择设备';
-
   const pageContent = activePage === 'dashboard' ? (
     <Dashboard
       fleetPositions={fleetPositions}
@@ -3366,10 +3379,7 @@ function App() {
       />
     </>
   ) : activePage === 'device-detail' ? (
-    <>
-      <div className="page-intro"><div><p className="eyebrow">设备管理</p><h1>设备详情 - {detailTitle}</h1><p className="page-description">按分类查看设备位置、摄像头、清洁区域、船坞控制和巡查数据。</p></div></div>
-      <LocationPanel {...locationProps} />
-    </>
+    <LocationPanel {...locationProps} />
   ) : (
     <EmptyModule title={pageNames[activePage] || '页面'} />
   );

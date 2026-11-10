@@ -25,6 +25,7 @@ const position = {
 };
 
 let streamHandlers;
+let markerContents;
 
 class Events {
   listeners = new Map();
@@ -36,6 +37,7 @@ class Events {
 }
 
 beforeEach(() => {
+  markerContents = [];
   window.localStorage.clear();
   window.localStorage.setItem('watercleanbot.activePage', 'device-detail');
   window.matchMedia = vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
@@ -51,7 +53,15 @@ beforeEach(() => {
     Map: class extends Events { constructor() { super(); this.resize = vi.fn(); this.destroy = vi.fn(); this.setCenter = vi.fn(); } },
     TileLayer: { Satellite: class {}, RoadNet: class {} },
     Pixel: class {},
-    Marker: class extends Events { constructor() { super(); this.setMap = vi.fn(); this.setPosition = vi.fn(); } },
+    Marker: class extends Events {
+      constructor(options = {}) {
+        super();
+        this.options = options;
+        this.setMap = vi.fn();
+        this.setPosition = vi.fn();
+        if (options.content) markerContents.push(options.content);
+      }
+    },
     Polyline: class { constructor() { this.setMap = vi.fn(); } },
   };
 });
@@ -63,12 +73,15 @@ afterEach(() => {
 });
 
 describe('device telemetry overlay', () => {
-  it('collapses, expands, and toggles speed between knots and m/s', async () => {
+  it('stays hidden until the boat is clicked, then collapses, expands, and toggles speed', async () => {
     window.matchMedia.mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() });
     render(<MemoryRouter><App /></MemoryRouter>);
     await vi.waitFor(() => expect(streamHandlers).toBeTruthy());
     act(() => streamHandlers.onSnapshot([position]));
+    await waitFor(() => expect(markerContents.length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: '展开设备实时状态' })).toBeNull();
 
+    fireEvent.click(markerContents.find((content) => content.classList.contains('fleet-map-marker')));
     const expandButton = await screen.findByRole('button', { name: '展开设备实时状态' });
     expect(document.getElementById('device-telemetry-body').hidden).toBe(true);
     const compactSpeed = screen.getByRole('button', { name: /航速 2.0 节，点击切换为m\/s/ });
@@ -81,11 +94,14 @@ describe('device telemetry overlay', () => {
     expect(screen.getByRole('button', { name: /航速 1.0 m\/s，点击切换为节/ })).toBeTruthy();
   });
 
-  it('keeps the overlay expanded by default on desktop and formats values', async () => {
+  it('shows the overlay expanded after clicking the boat on desktop and formats values', async () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     await vi.waitFor(() => expect(streamHandlers).toBeTruthy());
     act(() => streamHandlers.onSnapshot([position]));
+    await waitFor(() => expect(markerContents.length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: '收起设备实时状态' })).toBeNull();
 
+    fireEvent.click(markerContents.find((content) => content.classList.contains('fleet-map-marker')));
     await waitFor(() => expect(screen.getByRole('button', { name: '收起设备实时状态' })).toBeTruthy());
     const telemetryBody = document.getElementById('device-telemetry-body');
     expect(telemetryBody.hidden).toBe(false);

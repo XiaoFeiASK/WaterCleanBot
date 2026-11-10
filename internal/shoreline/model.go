@@ -96,7 +96,6 @@ func absent(raw json.RawMessage) bool {
 // ValidateFiles validates the display contract without rewriting safety metadata or coordinates.
 func ValidateFiles(files Files) (Files, error) {
 	result := files
-	var sessionID string
 	for _, entry := range []struct {
 		name string
 		raw  *json.RawMessage
@@ -121,11 +120,6 @@ func ValidateFiles(files Files) (Files, error) {
 		}
 		if doc.Valid == nil || !*doc.Valid || (doc.State != "completed" && doc.State != "partial") {
 			return invalid("仅接受有效的 completed 或 partial 数据")
-		}
-		if sessionID == "" {
-			sessionID = doc.SessionID
-		} else if sessionID != doc.SessionID {
-			return invalid("session_id 不一致，不能混用不同组数据")
 		}
 		count := 0
 		if entry.name == "shoreline" {

@@ -227,7 +227,7 @@ export function DockEjectButton({ deviceId, onToast }) {
     >
       <span className="critical-control-copy">
         <span className="critical-control-icon" aria-hidden="true"><Anchor size={22} /></span>
-        <span><strong>船坞释放</strong><small>{busy ? '指令下发中…' : '点击循环一次'}</small></span>
+        <span><strong>船坞释放</strong><small>{busy ? '指令下发中…' : '点击释放一次'}</small></span>
       </span>
       <span className={`dock-eject-indicator ${indicatorActive ? 'is-active' : ''}`} title={indicatorActive ? '指示灯已点亮，剩余 10 秒' : '待机'} aria-label={indicatorActive ? '船坞释放指示灯已点亮' : '船坞释放指示灯待机'} />
       <span className="switch-state dock-eject-action">{busy ? '下发中' : '释放'}<ArrowUpRight size={16} aria-hidden="true" /></span>

@@ -18,10 +18,23 @@ export const ROUTE_TYPE_LABELS = Object.freeze({
   legacy: '自定航线',
 });
 
+export const ROUTE_TYPE_COLORS = Object.freeze({
+  shoreline: '#2fb97d',
+  centerline: '#ffc928',
+  custom: '#38bdf8',
+});
+
 export function getRouteTypeLabel(value) {
   if (value === ROUTE_TYPE_LABELS.shoreline || value === '规划航线') return ROUTE_TYPE_LABELS.shoreline;
   if (value === ROUTE_TYPE_LABELS.centerline || value === '感知航线') return ROUTE_TYPE_LABELS.centerline;
   return ROUTE_TYPE_LABELS.custom;
+}
+
+export function getRouteTypeTone(value) {
+  const label = getRouteTypeLabel(value);
+  if (label === ROUTE_TYPE_LABELS.shoreline) return 'shoreline';
+  if (label === ROUTE_TYPE_LABELS.centerline) return 'centerline';
+  return 'custom';
 }
 
 function requireValue(condition, message) {
@@ -36,7 +49,6 @@ function validCoordinate(point) {
 // Validate only the display contract; preserve original navigation and accuracy fields.
 export function validateShorelineFiles(files) {
   const normalized = {};
-  let session;
   for (const { key, label } of SHORELINE_FILE_TYPES) {
     const data = files?.[key];
     const check = (condition, message) => requireValue(condition, `${label}：${message}`);
@@ -46,8 +58,6 @@ export function validateShorelineFiles(files) {
     check(data.schema_version === 3 && data.datum === 'WGS84'
       && typeof data.session_id === 'string' && data.session_id.trim(), '需要 schema_version=3、WGS84 和 session_id');
     check(data.valid === true && ['completed', 'partial'].includes(data.state), '仅接受有效的 completed 或 partial 数据');
-    check(session === undefined || session === data.session_id, 'session_id 不一致，不能混用不同组数据');
-    session = data.session_id;
     let count = 0;
     if (key === 'shoreline') {
       check(Array.isArray(data.contours) && data.contours.length > 0 && data.points == null
@@ -184,7 +194,7 @@ export function getImportedRoutes(files) {
       return {
         id: `imported-${key}`, sourceKey: key, filename, name: label,
         type: key === 'center' ? ROUTE_TYPE_LABELS.centerline : ROUTE_TYPE_LABELS.shoreline, coordinateSystem: 'WGS84',
-        color: key === 'center' ? '#ffc928' : key === 'left' ? '#ff963b' : '#36c7f4',
+        color: key === 'center' ? ROUTE_TYPE_COLORS.centerline : ROUTE_TYPE_COLORS.shoreline,
         points, segments, lengthMeters,
         speedMetersPerSecond: points.length > 0
           ? points.reduce((sum, point) => sum + point.speedMetersPerSecond, 0) / points.length

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFleetMarkerContent, getPerceptionRouteMapPath, getPlanningPreviewMapPoints } from './App';
 
 const perceptionPoints = [
@@ -46,6 +46,14 @@ describe('fleet marker content', () => {
     expect(content.querySelector('.fleet-map-marker-details')).toBeNull();
     expect(content.querySelector('.fleet-map-marker-name')).toBeNull();
     expect(content.querySelector('.fleet-map-marker-battery')).toBeNull();
+  });
+
+  it('opens the live status panel when the boat marker is clicked', () => {
+    const onBoatClick = vi.fn();
+    const content = createFleetMarkerContent({ robotName: 'USV-001', heading: 90 }, onBoatClick);
+    content.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onBoatClick).toHaveBeenCalledWith('USV-001');
+    expect(content.getAttribute('role')).toBe('button');
   });
 
   it('still rotates the boat icon to the reported heading', () => {

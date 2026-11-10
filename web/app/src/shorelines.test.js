@@ -94,16 +94,16 @@ describe('public shoreline validation', () => {
     expect(Object.keys(validateShorelineFiles(fullFiles()))).toEqual(['shoreline', 'left', 'center', 'right']);
   });
 
-  it('accepts the v3 partial state but rejects recording, failed, invalid, and mixed sessions', () => {
+  it('accepts the v3 partial state and files from different sessions but rejects recording, failed, and invalid data', () => {
     expect(() => validateShorelineFiles({ shoreline: shorelineDocument({ state: 'partial' }) })).not.toThrow();
     for (const state of ['recording', 'failed']) {
       expect(() => validateShorelineFiles({ shoreline: shorelineDocument({ state }) })).toThrow();
     }
     expect(() => validateShorelineFiles({ shoreline: shorelineDocument({ valid: false }) })).toThrow();
-    expect(() => validateShorelineFiles({
+    expect(validateShorelineFiles({
       shoreline: shorelineDocument(),
       left: referenceDocument('left', { session_id: 'bundle-b' }),
-    })).toThrow(/session_id/);
+    })).toHaveProperty('left');
   });
 
   it('accepts independent route files and rejects incorrect file types, duplicate files, illegal coordinates, and overlarge input', async () => {
@@ -154,9 +154,9 @@ describe('public shoreline rendering', () => {
   it('turns the three waypoint files into separately styled routes with numbered, disconnected segments', () => {
     const routes = getImportedRoutes(fullFiles());
     expect(routes.map(({ sourceKey, type, color }) => [sourceKey, type, color])).toEqual([
-      ['left', '智能岸线', '#ff963b'],
+      ['left', '智能岸线', '#2fb97d'],
       ['center', '智能中线', '#ffc928'],
-      ['right', '智能岸线', '#36c7f4'],
+      ['right', '智能岸线', '#2fb97d'],
     ]);
     expect(routes.map(({ segments }) => segments.map((segment) => segment.length))).toEqual([
       [2, 1, 1], [2, 1, 1], [2, 1, 1],
@@ -236,9 +236,9 @@ describe('public shoreline rendering', () => {
     expect(route.segments.flat().map(({ seq }) => seq)[0]).toBe(1);
   });
 
-  it('merges one uploaded file while retaining the other official files', () => {
+  it('merges one uploaded file from a different session while retaining the other official files', () => {
     const files = fullFiles();
-    const replacement = referenceDocument('center', { point_count: 4, session_id: 'bundle-a' });
+    const replacement = referenceDocument('center', { point_count: 4, session_id: 'bundle-b' });
     const merged = mergeShorelineFiles(files, { center: replacement });
     expect(merged.shoreline).toEqual(files.shoreline);
     expect(merged.left).toEqual(files.left);

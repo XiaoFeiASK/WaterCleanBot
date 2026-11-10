@@ -214,7 +214,7 @@ describe('dock eject action', () => {
   it('shows one-shot guidance without a current-state label', () => {
     render(<DockEjectButton deviceId="USV-001" />);
     const button = screen.getByRole('button', { name: /船坞释放/ });
-    expect(within(button).getByText('点击循环一次')).toBeTruthy();
+    expect(within(button).getByText('点击释放一次')).toBeTruthy();
     expect(within(button).queryByText('当前状态')).toBeNull();
   });
 

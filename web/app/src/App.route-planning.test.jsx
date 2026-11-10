@@ -422,8 +422,7 @@ describe('imported route visibility', () => {
     fireEvent.click(within(routeRow('中心感知航线')).getByRole('button', { name: '查看', exact: true }));
     await waitFor(() => expect(importedMarkers()).toHaveLength(2));
     expect(activeLine('#ffc928')).toBeDefined();
-    expect(activeLine('#ff963b')).toBeUndefined();
-    expect(activeLine('#36c7f4')).toBeUndefined();
+    expect(activeLine('#2fb97d')).toBeUndefined();
 
     fireEvent.click(boundaryButton);
     await waitFor(() => expect(activeLine('#38ef9a')).toBeUndefined());
@@ -433,7 +432,7 @@ describe('imported route visibility', () => {
     expect(importedMarkers()).toHaveLength(2);
 
     fireEvent.click(within(routeRow('左岸航线')).getByRole('button', { name: '查看', exact: true }));
-    await waitFor(() => expect(activeLine('#ff963b')).toBeDefined());
+    await waitFor(() => expect(activeLine('#2fb97d')).toBeDefined());
     expect(activeLine('#ffc928')).toBeUndefined();
     expect(importedMarkers()).toHaveLength(2);
     fireEvent.click(within(routeRow('左岸航线')).getByRole('button', { name: '取消查看', exact: true }));
